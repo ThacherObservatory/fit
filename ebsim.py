@@ -69,10 +69,19 @@ def do_model_fit(clobber=False,nwalkers=100,burnsteps=100,mcmcsteps=100,
 
 def make_model_data(m1=0.7,m2=0.35,r1=0.7,r2=0.5,ecc=0.02,omega=30.0,inc=88.5,
                     period=4.123456789, t0=2454833.0,int=60.0,
-                    q1a=0.8,q2a=0.2,q1b=0.2,q2b=0.8,J=0.3,L3=0.03, vsys=20.0,
+                    q1a=0.8,q2a=0.2,q1b=0.2,q2b=0.8,J=0.3,L3=0.03,vsys=20.0,
                     gravitydark=False,reflection=False,ellipsoidal=False,
-                    roemer=True):
+                    roemer=True,sigphot=0.0,sigRV=0.0):
 
+    """
+    Limit simulated light curve data to be around primary and secondary eclipses
+
+    Sample 10 to 40 RV points randomly
+
+    Inject noise: Kepler data typically 0.0003
+    
+    """
+    
     global variables,ebpar0,bjd
     global fitlighttravel,usegravdark,usereflection,integration
 
@@ -445,7 +454,7 @@ def get_model_info(limbmodel='quad',errfac=3,network=None,L3=0.0):
     if network == None:
         path = '/Users/jonswift/Astronomy/EBs/PhilFit/'
     if network == 'doug':
-        path = './'
+        path = '/home/douglas/Astronomy/Resources/'
         
 # Check if data exists
 #    test = isthere(kic,short=False,network=None,clip=False,running=running)
