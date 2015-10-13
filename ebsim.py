@@ -1,5 +1,7 @@
 # TO DO:
 #-------
+# Reconfigure code for parallelization.
+
 
 import sys,math,pdb,time,glob,re,os,eb,emcee
 import numpy as np
