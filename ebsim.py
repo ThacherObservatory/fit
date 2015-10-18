@@ -1,5 +1,6 @@
 # TO DO:
 #-------
+# Reconfigure fitting procedure to take as input ebpar0 and data
 # Reconfigure code for parallelization.
 
 import sys,math,pdb,time,glob,re,os,eb,emcee
