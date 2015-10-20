@@ -1,3 +1,7 @@
+# TO DO:
+#-------
+# - What EXACTLY does "spFrac1" represent???
+
 import sys,math,pdb,time,glob,re,os,eb,emcee
 import numpy as np
 import matplotlib.pyplot as plt
@@ -5,12 +9,11 @@ import constants as c
 import scipy as sp
 import robust as rb
 from scipy.io.idl import readsav
-from length import *
-from stellar import *
+from length import length
 from kepler_tools import *
 import pyfits as pf
 from statsmodels.nonparametric.kernel_density import KDEMultivariate as KDE
-
+from stellar import rt_from_m, flux2mag, mag2flux
 
 #----------------------------------------------------------------------
 # GET_PATH
@@ -135,24 +138,17 @@ def isthere(ebin,short=False,network=None,clip=False,running=False):
 
 
 
-def lcprep(mag=14.0):
-        
-    return
-
-
-
-def get_eb_info(kicin,short=False,limbmodel='quad',running=False,eclipse=False,errfac=3,
-                network=None,L3=0.0):
+def get_eb_info(kicin,short=False,limbmodel='quad',errfac=3,network=None,L3=0.0):
 
 
     """
     ----------------------------------------------------------------------
     get_eb_info:
     -------------
-    Get lightcurve and preliminary transit parameters for EB. Also set a
+    Get lightcurve and a priori parameters for EB. Also set a
     bunch of global variables to be used by eb fitting routines.
     
-    Must run this routine first before fitting
+    This routine must be run before fitting
 
     example:
     --------
@@ -367,7 +363,6 @@ def get_eb_info(kicin,short=False,limbmodel='quad',running=False,eclipse=False,e
     colors = kic_colors(kic)
     kpmag = colors["kepmag"][0]
 
-
 # Eclipse information
     einfo = np.loadtxt(path+'Refine/'+str(kic)+'.out',delimiter=',')
     period0 = einfo[1]
@@ -406,8 +401,9 @@ def get_eb_info(kicin,short=False,limbmodel='quad',running=False,eclipse=False,e
               'GD1':0.32, 'Ref1':0.4, 'GD2':0.32, 'Ref2':0.4, 'Rot1':prot/period0,
               'ecosw':ecosw0, 'esinw':esinw0, 'Period':period0, 't01':ephem1, 't02':ephem2, 
               'et01':ephem1, 'et02':eephem2, 'dt12':dt12, 'tdur1':dur1, 'tdur2':dur2, 
-              'mag0':kpmag,'vsys':vsys, 'Mstar1':Mstar1/c.Msun, 'Mstar2':Mstar2/c.Msun,'ktot':ktot, 'L3':L3,
-              'Period':period0, 'ePeriod':eperiod0, 'integration':integration}
+              'mag0':kpmag,'vsys':vsys, 'Mstar1':Mstar1/c.Msun, 'Mstar2':Mstar2/c.Msun,
+              'ktot':ktot, 'L3':L3,'Period':period0, 'ePeriod':eperiod0,
+              'integration':integration}
 
     return ebpar0
 
@@ -437,6 +433,7 @@ def get_lc_data(kic,short=False,quarter=None,exclude=None,
     lcm = np.array([data['time'],mag,e_mag])
     
     return lcf,lcm
+
 
 
 def get_rv_data(kic,network=None):
@@ -504,7 +501,7 @@ def eclipse_times(lcf,info):
 # SELECT_ECLIPSE
 #----------------------------------------------------------------------
 
-def select_eclipse(enum,info,durfac=5.0,gfrac =0.9,fbuf=1.2,order=3,despot=False,
+def select_eclipse(enum,info,durfac=2.25,gfrac=0.9,fbuf=1.2,order=3,despot=False,
                    maxchi=False,thin=1,plot=True):
 
     """
@@ -544,9 +541,9 @@ def select_eclipse(enum,info,durfac=5.0,gfrac =0.9,fbuf=1.2,order=3,despot=False
     tpiter = eclipse_times(lcf,info)
     
     tref = tpiter[index]
-    tsec = tref + dt12
+    trefsec = tref + dt12
 
-    keep, = np.where( (t >= (tref - durfac*tdur1)) & (t <= tsec + durfac*tdur2))
+    keep, = np.where( (t >= (tref - durfac*tdur1)) & (t <= trefsec + durfac*tdur2))
       
     if length(keep) > 0:
         tsnip = t[keep]
@@ -561,11 +558,12 @@ def select_eclipse(enum,info,durfac=5.0,gfrac =0.9,fbuf=1.2,order=3,despot=False
         return {'status':-1}      
            
     if plot:
-        plt.ion()
         plt.figure(99)
         plt.clf()
         plt.plot(tsnip,xsnip/nsnip,'ko')
-
+        plt.xlabel('BKJD (days)')
+        plt.ylabel('Relative Flux')
+        
 # Identify regions of interest in the snippet
     binds, = np.where(tsnip < (tref - fbuf*tdur1))
     bct = length(binds)
@@ -575,14 +573,14 @@ def select_eclipse(enum,info,durfac=5.0,gfrac =0.9,fbuf=1.2,order=3,despot=False
     pct = length(pinds)
     
     minds, = np.where( (tsnip >= (tref + fbuf*tdur1)) &
-                       (tsnip <= (tsec - fbuf*tdur2)) )
+                       (tsnip <= (trefsec - fbuf*tdur2)) )
     mct = length(minds)
     
-    sinds, = np.where( (tsnip >= (tsec - fbuf*tdur2)) &
-                       (tsnip <= (tsec + fbuf*tdur2)) )
+    sinds, = np.where( (tsnip >= (trefsec - fbuf*tdur2)) &
+                       (tsnip <= (trefsec + fbuf*tdur2)) )
     sct = length(sinds)
     
-    einds, = np.where( (tsnip >= (tsec + fbuf*tdur2/2.0)) )
+    einds, = np.where( (tsnip >= (trefsec + fbuf*tdur2/2.0)) )
     ect = length(einds)
     
 
@@ -600,39 +598,42 @@ def select_eclipse(enum,info,durfac=5.0,gfrac =0.9,fbuf=1.2,order=3,despot=False
                      (tsnip <= (tref + durfac*tdur1)) )
     pct2 = length(pi)
 
-    si, =  np.where( (tsnip >= (tsec - durfac*tdur2)) &
-                     (tsnip <= (tsec + durfac*tdur2)) )
+    si, =  np.where( (tsnip >= (trefsec - durfac*tdur2)) &
+                     (tsnip <= (trefsec + durfac*tdur2)) )
     sct2 = length(si)
     
     pfiti = np.array(list((set(pi)-set(pinds))))
     sfiti = np.array(list((set(si)-set(sinds))))
 
-# Enforce at least 10 points outside of eclipse      
-    if length(pfiti) < 10 or length(sfiti) < 10:
+    # Enforce specified number of points outside of eclipse      
+    outmin = 8
+    if length(pfiti) < outmin or length(sfiti) < outmin:
         return {'status':-1}
       
     # Detrend Primary
     tpfit = tsnip[pfiti] - tref
     xpfit = xsnip[pfiti]
-    fit = np.polyfit(tpfit,xpfit,order)
-    fitcurve = np.polyval(fit,tsnip[pi]-tref)
-    rescurve = np.polyval(fit,tsnip[pfiti]-tref)
-    fm1 = np.polyval(fit,0)/nsnip
-    
-    if plot:
-        plt.plot(tsnip[pi],fitcurve/nsnip,'g',linewidth=2)
+    p_fit = np.polyfit(tpfit,xpfit,order)
+    fitcurve = np.polyval(p_fit,tsnip[pi]-tref)
+    rescurve = np.polyval(p_fit,tsnip[pfiti]-tref)
+    fm1 = np.polyval(p_fit,0)/nsnip
 
-# Despot only when spots are known to be on the primary OR seconday...
+    tprim = tsnip[pi]
+    xprim = xsnip[pi]
+    eprim = exsnip[pi]
+    ol1prim = fitcurve
+    if plot:
+        plt.plot(tprim,fitcurve/nsnip,'g',linewidth=2)
+
+# Do not use "despot" option... it does not work!
     if despot:
         sys.exit("Please don't use the 'despot' feature!")
 #        cont = fitcurve - nsnip
 #        xprim = (xsnip[pi] - cont)/(fitcurve - cont)
 #        eprim = np.zeros(length(pi))+np.std(xsnip[pfiti]/rescurve)
     else:
-        xprim = xsnip[pi]/fitcurve
-        eprim = np.zeros(length(pi))+np.std(xsnip[pfiti]/rescurve)
-
-    tprim = tsnip[pi]
+        xprim_cor = xsnip[pi]/fitcurve
+        eprim_cor = np.zeros(length(pi))+np.std(xsnip[pfiti]/rescurve)
 
     chisqp = np.sum(((xpfit-rescurve)**2/exsnip[pfiti]**2)/(np.float(length(pfiti))-np.float(order)-1))
 
@@ -643,25 +644,30 @@ def select_eclipse(enum,info,durfac=5.0,gfrac =0.9,fbuf=1.2,order=3,despot=False
     # Detrend Secondary
     tsfit = tsnip[sfiti] - tref
     xsfit = xsnip[sfiti]
-    fit = np.polyfit(tsfit,xsfit,order)
-    fitcurve = np.polyval(fit,tsnip[si]-tref)
-    rescurve = np.polyval(fit,tsnip[sfiti]-tref)
-    fm2 = np.polyval(fit,0)/nsnip
+    s_fit = np.polyfit(tsfit,xsfit,order)
+    fitcurve = np.polyval(s_fit,tsnip[si]-tref)
+    rescurve = np.polyval(s_fit,tsnip[sfiti]-tref)
+    fm2 = np.polyval(s_fit,0)/nsnip
 
+    tsec = tsnip[si]
+    xsec = xsnip[si]
+    esec = exsnip[si]
+    ol1sec = fitcurve
+
+    
     if plot:
-       plt.plot(tsnip[si],fitcurve/nsnip,'g',linewidth=2)
-       plt.savefig(get_path()+name+'/MCMC/E_'+str(enum)+'.png')
+        directory = path+'MCMC/singlefits/E'+str(enum)+'/'
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        plt.plot(tsnip[si],fitcurve/nsnip,'g',linewidth=2)
+        plt.title('Eclipse #'+str(enum))
+        plt.savefig(get_path()+name+'/MCMC/singlefits/E'+str(enum)+'/'+name+stag+'_E'+str(enum)+'.pdf')
 
     if despot:
         sys.exit("Please don't use the 'despot' feature!")
-#        cont = fitcurve - nsnip
-#        xs = (xsnip[si] + cont)/(fitcurve + cont)
-#        es = np.zeros(length(si))+np.std(xsnip[sfiti]/rescurve)
     else:
-        xs = xsnip[si]/fitcurve
-        es = np.zeros(length(si))+np.std(xsnip[sfiti]/rescurve)
-
-    ts = tsnip[si]
+        xsec_cor = xsnip[si]/fitcurve
+        esec_cor = np.zeros(length(si))+np.std(xsnip[sfiti]/rescurve)
 
     chisqs = np.sum(((xsfit-rescurve)**2/exsnip[sfiti]**2)/(np.float(length(sfiti))-np.float(order)-1))
 
@@ -679,407 +685,26 @@ def select_eclipse(enum,info,durfac=5.0,gfrac =0.9,fbuf=1.2,order=3,despot=False
 
     keep = np.array(list(binds[0::thin]) + list(pinds) + list(minds[0::thin]) + 
                     list(sinds) + list(einds[0::thin]))
-    tfit = tsnip[keep]
-    xfit = xsnip[keep]
-    efit = exsnip[keep]
+    tall = tsnip[keep]
+    xall = xsnip[keep]
+    eall = exsnip[keep]
 
-    xmag,exmag  = flux2mag(xfit/nsnip,ex/nsnip,colors['kepmag'][0],1)
+    xmag,exmag  = flux2mag(xall/nsnip,eall/nsnip,colors['kepmag'][0],1)
 
     status = 0
 
-    eclipse = {'time':tfit, 'flux':xfit, 'err':efit, 'mag':xmag, 'magerr':exmag,
+
+    eclipse = {'time':tall, 'flux':xall, 'err':eall, 'mag':xmag, 'magerr':exmag,
                'flev1':fm1, 'flev2':fm2, 'status':status, 
                'thin':thin, 'despot':despot, 'norm': nsnip, 'chisqp':chisqp, 'chisqs':chisqs, 
-               'tout':tout, 'xout':xout, 'exout':exout, 'enum':enum}
+               'tout':tout, 'xout':xout, 'exout':exout, 'enum':enum,
+               'tprim':tprim, 'xprim':xprim, 'eprim':eprim,
+               'xprim_cor':xprim_cor, 'eprim_cor': eprim_cor,
+               'xsec_cor':xsec_cor, 'esec_cor': esec_cor,
+               'tsec':tsec, 'xsec':xsec, 'esec':esec,
+               'pfit':p_fit, 'sfit':s_fit,'tref1':tref, 'tref2':trefsec}
   
     return eclipse
-
-
-#----------------------------------------------------------------------
-# SPOTMODEL
-#----------------------------------------------------------------------
-def spotmodel(x,phase):
-    """
-    spotmodel:
-    ----------
-    This is the model that the 'eb' routine uses to fit the out of eclipse
-    light variations. It is used here to preemptively see how well the out
-    of eclipse variations can be fit
-
-    # x[0] = period
-    # x[1] = sine amp
-    # x[2] = cosine amp
-    # x[3] = sine/cosine amp
-    # x[4] = sine squared and cosine squared amp
-    # x[5] = constant
-    """
-    w = 2.0*np.pi/x[0]
-    
-    model = x[1]*np.sin(w*phase) + x[2]*np.cos(w*phase) + x[3]*np.sin(w*phase)*np.cos(w*phase) + \
-        x[4]*( (np.sin(w*phase))**2 - (np.cos(w*phase))**2) + x[5]
-    
-    return model
-
-
-#----------------------------------------------------------------------
-# FIT_SPOTS
-#----------------------------------------------------------------------
-
-def fit_spots(eclipse,info,nwalkers=100,burnsteps=2000,mcmcsteps=2000,
-              clobber=False,write=True,thin=10):
-
-    """
-    fit_spots:
-    ----------
-    Used to fit the out of eclipse variations using the 'spotmodel' used by
-    'eb'. 
-
-    inputs:
-    -------
-    args:
-    "eclipse": dictionary of the eclipse pair that you want to fit
-    "info"   : the information dictionary for the given KIC
-    
-    kwargs:
-    "nwalkers" : number of walkers in the emcee fit
-    "burnsteps": number of steps in the burn-in
-    "mcmcsteps": number of steps in final MCMC sampling
-    "clobber"  : overwrite any existing fits for this eclipse
-    "write"    : write the chains to disk
-    "thin"     : thin the chains by this factor
-
-    example:
-    --------
-    bestvals, meds, modes, sigints, chisq = fit_spots(eclipse,info,nwalkers=100,
-    burnsteps=2000,mcmcsteps=2000,clobber=False,write=True,thin=10)
-    
-    """
-
-    global tsfit,phsfit,magsfit,emagsfit
-    global snw,sbs,smc
-    global prot,eprot
-
-    snw = nwalkers
-    sbs = burnsteps
-    smc = mcmcsteps 
-
-    enum = eclipse['enum']
-
-    prot = info['Rot1']
-    eprot = info['Rot1']*0.01
-
-    if eclipse['thin'] > 1:
-        thintag = '_thin'+str(eclipse['thin'])
-    else:
-        thintag = ''
-
-    directory = path+'MCMC/Spots/'
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-
-    colors = kic_colors(kic)
-
-    tsfit = eclipse['tout']
-
-    phsfit = foldtime(tsfit,period=info['Period'],t0=info['t01']-bjd)/info['Period']
-
-    magsfit,emagsfit = flux2mag(eclipse['xout'],eclipse['exout'],colors['kepmag'][0],eclipse['norm'])
-
-# Initial values
-    mm = np.array([np.min(magsfit),np.max(magsfit)])
-    amp = mm[1]-mm[0]
-    p0_0  = np.random.normal(prot,eprot,snw) # Period of rotation (in phase units)
-    p0_1  = np.random.normal(amp,amp*0.01,snw) # sine amp
-    p0_2  = np.random.normal(amp,amp*0.01,snw) # cosine amp
-    p0_3  = np.random.normal(amp,amp*0.01,snw) # sin/cos amp
-    p0_4  = np.random.normal(amp,amp*0.01,snw) # sin^2/cos^2 amp
-    p0_5  = np.random.normal(np.median(magsfit),np.median(magsfit)*0.01,snw) # constant
-    p0_init = np.array([p0_0,p0_1,p0_2,p0_3,p0_4,p0_5])
-
-# Names of variables
-    variables =['Prot','Sin','Cos','SinCos','Sin2-Cos2','constant']
-
-# Transpose array of initial guesses
-    p0 = np.array(p0_init).T
-    
-# Number of dimensions in the fit.
-    ndim = np.shape(p0)[1]
-
-    def lnprob(x):
-
-        # A[0] = period
-        # A[1] = sine amp
-        # A[2] = cosine amp
-        # A[3] = sine/cosine amp
-        # A[4] = sine squared and cosine squared amp
-        # A[5] = constant        
-        magmodel = spotmodel(x,phsfit)
-        
-        # Log Likelihood Vector
-        lfi = -1.0*(magmodel - magsfit)**2/(2.0*emagsfit**2)
-
-        # Log likelihood
-        lf = np.sum(lfi)
-
-        # Period prior
-        lf = lf - (x[0] - prot)**2/(2.0*(2.0*eprot)**2)
-
-        return lf
-
-
-# Do not redo MCMC unless clobber flag is set
-    done = os.path.exists(directory+name+stag+thintag+'_spots_'+variables[0]+'chain_E'+str(enum)+'.txt')
-    if done == True and clobber == False:
-        print "MCMC run already completed"
-        print "Read in chains"
-        lp = np.loadtxt(directory+name+stag+thintag+'_spots_lnprob_E'+str(enum)+'.txt')
-        c0 = np.loadtxt(directory+name+stag+thintag+'_spots_'+variables[0]+'chain_E'+str(enum)+'.txt')
-        c1 = np.loadtxt(directory+name+stag+thintag+'_spots_'+variables[1]+'chain_E'+str(enum)+'.txt')
-        c2 = np.loadtxt(directory+name+stag+thintag+'_spots_'+variables[2]+'chain_E'+str(enum)+'.txt')
-        c3 = np.loadtxt(directory+name+stag+thintag+'_spots_'+variables[3]+'chain_E'+str(enum)+'.txt')
-        c4 = np.loadtxt(directory+name+stag+thintag+'_spots_'+variables[4]+'chain_E'+str(enum)+'.txt')
-        c5 = np.loadtxt(directory+name+stag+thintag+'_spots_'+variables[5]+'chain_E'+str(enum)+'.txt')
-        chains = np.array([c0,c1,c2,c3,c4,c5]).T
-    else:
-# Set up MCMC sampler
-        print "... initializing emcee sampler"
-        tstart = time.time()
-        sampler = emcee.EnsembleSampler(snw, ndim, lnprob)
-
-#----------------------------------------------------------------------
-# Run burn-in
-#----------------------------------------------------------------------
-        print ""
-        print "Running burn-in with "+str(sbs)+" steps and "+str(snw)+" walkers"
-        pos, prob, state = sampler.run_mcmc(p0, sbs)
-        print done_in(tstart)
-    
-# Calculate G-R scale factor for each variable
-        Rs = GR_test(sampler.chain,variables=variables)
-        
-# Autorcorrelation times
-        for var in np.arange(ndim):
-            acout = "Autocorrelation time for "+variables[var]+" = {0:0.3f}"
-            print acout.format(sampler.acor[var])
-
-        afout = "Mean acceptance fraction: {0:0.3f}"
-        print afout.format(np.mean(sampler.acceptance_fraction))
-
-# Save burn in stats
-        burn = np.append(Rs,sampler.acor)
-        burn = np.append(burn,sampler.acceptance_fraction)
-        np.savetxt(directory+name+stag+thintag+'_spots_burnstats_E'+str(enum)+'.txt',burn)
-
-#----------------------------------------------------------------------
-# Reset sampler and run MCMC for reals
-#----------------------------------------------------------------------
-        print "... resetting sampler and running MCMC with "+str(smc)+" steps"
-        sampler.reset()
-        posf, probf, statef = sampler.run_mcmc(pos, smc)
-        print done_in(tstart)
-
- # Calculate G-R scale factor for each variable
-        Rs = GR_test(sampler.chain,variables=variables)
-
-# Autocorrelation times
-        for var in np.arange(ndim):
-            acout = "Autocorrelation time for "+variables[var]+" = {0:0.3f}"
-            print acout.format(sampler.acor[var])
-
-        afout = "Final mean acceptance fraction: {0:0.3f}"
-        print afout.format(np.mean(sampler.acceptance_fraction))
-
-        stats = np.append(Rs,sampler.acor)
-        stats = np.append(stats,sampler.acceptance_fraction)
-# Save final stats
-        np.savetxt(directory+name+stag+'_spots_finalstats_E'+str(enum)+'.txt',stats)
-
-# Write out chains to disk
-        if write:
-            print "Writing MCMC chains to disk"
-            lp = sampler.lnprobability.flatten()
-            np.savetxt(directory+name+stag+thintag+'_spots_lnprob_E'+str(enum)+'.txt',lp[0::thin])
-            for i in np.arange(len(variables)):
-                np.savetxt(directory+name+stag+thintag+'_spots_'+variables[i]+
-                           'chain_E'+str(enum)+'.txt',sampler.flatchain[0::thin,i])
-
-        lp = sampler.lnprobability.flatten()
-        chains = sampler.flatchain
-
-    
-    maxlike = np.max(lp)
-    imax = np.array([i for i, j in enumerate(lp) if j == maxlike])
-    if imax.size > 1:
-        imax = imax[0]
-
-    meds = np.zeros(ndim)
-    modes = np.zeros(ndim)
-    sigints = np.zeros(ndim)
-    bestvals = np.zeros(ndim)
-
-        
-    for i in range(ndim):
-        chain = chains[:,i]
-        bestvals[i] = chain[imax]
-        med,mode,interval,lo,hi = distparams(chain)
-        meds[i] = med ; modes[i] = mode ; sigints[i] = interval
-        print 'Best fit parameters for '+variables[i]        
-        out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-        print out.format(bestvals[i], med, mode, interval)
-        print ' '
-
-    phs = np.linspace(-0.5,0.5,1000)
-    model = spotmodel(bestvals,phs)
-    mcomp = spotmodel(bestvals,phsfit)
-    plt.ion()
-    plt.figure(101)
-    plt.clf()
-    plt.plot(phsfit,magsfit,'ko')
-
-    plt.plot(phs,model,'r-')
-    
-
-    dof = len(phsfit) - ndim - 1.0
-    chisq = np.sum(((mcomp-magsfit)/emagsfit)**2)/dof
-    out = 'Chi-square of fit: {0:.5f}'
-    print out.format(chisq)
-
-    plt.annotate(r'$\chi^2$ = %.5f' % chisq, xy=(0.97,0.8),
-                 ha="right",xycoords='axes fraction',fontsize='large')
-
-    plt.savefig(directory+name+stag+thintag+'_spots_E'+str(enum)+'.png')
-
-    return bestvals, meds, modes, sigints, chisq
-    
-
-
-def foldtime(time,period=1.0,t0=0.0):
-
-    """ 
-    ----------------------------------------------------------------------
-    foldtime:
-    ---------
-    Basic utility to fold time based on period and ephemeris
-
-    example:
-    --------
-    In[1]: ttm = foldtime(time,period=2.35884,t0=833.5123523)
-    ----------------------------------------------------------------------
-    """
-
-# Number of transits before t0 in data
-    npstart = np.round((t0 - np.min(time))/period)
-
-# Time of first transit in data
-    TT0 = t0 - npstart*period
-
-# Let cycle start 1/2 period before first transit
-    tcycle0 = TT0 - period/2.0
-
-# tcycle = 0 at 1/2 period before first transit
-    tcycle = (time - tcycle0) % period
-
-# Time to mid transit is 1/2 period from this starting point
-    tfold  = (tcycle - period/2.0)
-
-    return tfold
-
-
-def foldtime_pos(time,t0=0.0,period=1.0,phase=False):
-    """
-    foldtime_pos:
-    -------------
-    Return folded time with all positive values
-    """
-
-# Number of transits before t0 in data
-    npstart = np.round((t0 - np.min(time))/period)
-
-# Time of first transit in data
-    TT0 = t0 - npstart*period
-
-# Let cycle start at first transit
-    tcycle0 = TT0
-
-# tcycle = 0 at first transit
-
-    tcycle = (time - tcycle0) % period
-
-# Time to mid transit is tcycle
-    tfold  = tcycle
-
-    if phase:
-        tfold = tfold/period
-
-    return tfold
-
-
-
-def bin_lc(x,y,nbins=100):
-
-    """
-    ----------------------------------------------------------------------    
-    bin_lc:
-    -------
-    Utility to bin data and return standard deviation in each bin
-    
-    For visual aid in plots, mostly
-
-    example:
-    --------
-    tbin,fbin,errbin = bin_lc(ttm,flux,nbins=200)
-
-    """
-
-    n, I = np.histogram(x, bins=nbins)
-    sy, I = np.histogram(x, bins=nbins, weights=y)
-    sy2, I = np.histogram(x, bins=nbins, weights=y*y)
-    mean = sy / n
-    std = np.sqrt(sy2/n - mean*mean)
-
-    binvals = (I[1:] + I[:-1])/2
-    yvals = mean
-    yerr = std/np.sqrt(len(std))
-    
-    return binvals,yvals,yerr
-
-
-def qtou(q1,q2,limb='quad'):
-    if limb == 'quad':
-        try:
-            u1 =  2*np.sqrt(q1)*q2
-            u2 =  np.sqrt(q1)*(1-2*q2)
-        except:
-            u1 = np.nan
-            u2 = np.nan
-    if limb == 'sqrt':
-        try:
-            u1 = np.sqrt(q1)*(1-2*q2)
-            u2 = 2*np.sqrt(q1)*u2
-        except:
-            u1 = np.nan
-            u2 = np.nan            
-    return u1, u2
-
-
-def utoq(u1,u2,limb='quad'):
-    
-    if limb == 'quad':
-        try:
-            q1 = (u1+u2)**2
-            q2 = u1/(2.0*(u1+u2))
-        except:
-            q1 = np.nan
-            q2 = np.nan
-    if limb == 'sqrt':
-        try:
-            q1 = (u1+u2)**2
-            q2 = u2/(2*(u1+u2))
-        except:
-            q1 = np.nan
-            q2 = np.nan
-
-    return q1, q2
 
 
 
@@ -1129,10 +754,9 @@ def vec_to_params(x):
 
     To do:
     ------
-    Check if this is indeed correct! 
+    Check if this is indeed correct!!!!
 
     """
-#    pdb.set_trace()
     parm = np.zeros(eb.NPAR, dtype=np.double)
     # These are the basic parameters of the model.
     parm[eb.PAR_J]      =  x[0]  # J surface brightness ratio
@@ -1149,12 +773,12 @@ def vec_to_params(x):
         parm[eb.PAR_P] = x[variables == 'period'][0]
     except:
         parm[eb.PAR_P] = ebpar0["Period"]
-            
+        
     # T0
     try:
         parm[eb.PAR_T0] =  x[variables == 't0'][0]   # T0 (epoch of primary eclipse)
     except:
-        parm[eb.PAR_T0] = ebpar0['t0']-bjd
+        parm[eb.PAR_T0] = ebpar0['t01']-bjd
 
     # offset magnitude
     try:
@@ -1165,9 +789,9 @@ def vec_to_params(x):
         
     # Limb darkening paramters for star 1
     try:
-        qa1 = x[variables == 'qa1'][0]  
-        qb1 = x[variables == 'qb1'][0]  
-        a1, b1 = qtou(qa1,qb1)
+        q1a = x[variables == 'q1a'][0]  
+        q2a = x[variables == 'q2a'][0]  
+        a1, b1 = qtou(q1a,q2a,limb=limb)
         parm[eb.PAR_LDLIN1] = a1  # u1 star 1
         parm[eb.PAR_LDNON1] = b1  # u2 star 1
     except:
@@ -1177,9 +801,9 @@ def vec_to_params(x):
 
     # Limb darkening paramters for star 2
     try:
-        qa2 = x[variables == 'qa2'][0]  
-        qb2 = x[variables == 'qb2'][0]  
-        a2, b2 = qtou(qa2,qb2)
+        q1b = x[variables == 'q1b'][0]  
+        q2b = x[variables == 'q2b'][0]  
+        a2, b2 = qtou(q1b,q2b)
         parm[eb.PAR_LDLIN2] = a2  # u1 star 2
         parm[eb.PAR_LDNON2] = b2  # u2 star 2
     except:
@@ -1202,14 +826,6 @@ def vec_to_params(x):
         parm[eb.PAR_L3] = x[variables == 'L3'][0]
     except:
         parm[eb.PAR_L3] = ebpar0["L3"]
-
-#    esq = x[4]**2+x[5]**2
-#    roe = np.sqrt(1.0-esq)
-#    sini = np.sqrt(1.0-x[3]**2)
-#    qpo = 1.0+parm[eb.PAR_Q]
-#    gamma = vsys
-#    omega = 2.0*np.pi*(1.0 + gamma*1000/eb.LIGHT) / (period*86400.0)
-#    ktot = (eb.GMSUN*(mass1+mass2) * omega * sini)**(1.0/3.0) * roe / 1000.0
     
     # Light travel time coefficient.
     if fitlighttravel:        
@@ -1235,26 +851,34 @@ def vec_to_params(x):
     # Spot model
     try: 
         parm[eb.PAR_ROT1]   = x[variables == 'Rot1'][0] # rotation parameter (1 = sync.)
-        parm[eb.PAR_FSPOT1] = x[variables == 'spFrac1'][0]  # fraction of spots eclipsed
         parm[eb.PAR_OOE1O]  = x[variables == 'spBase1'][0]  # base spottedness out of eclipse
         parm[eb.PAR_OOE11A] = x[variables == 'spSin1'][0] # amplitude of sine component
         parm[eb.PAR_OOE11B] = x[variables == 'spCos1'][0] # amplitude of cosine component
         parm[eb.PAR_OOE12A] = x[variables == 'spSinCos1'][0] # amplitude of sincos cross term
-        parm[eb.PAR_OOE12B] = x[variables == 'spSqSinCos1'][0] # amplitude of sine squared cos squared term
+        parm[eb.PAR_OOE12B] = x[variables == 'spSqSinCos1'][0] # amplitude of sin^2 + cos^2 term
     except:
         pass
 
+    try:
+        parm[eb.PAR_FSPOT1] = x[variables == 'spFrac1'][0]  # fraction of spots eclipsed
+    except:
+        pass
+    
     try: 
         parm[eb.PAR_ROT2]   = x[variables == 'Rot2'][0] # rotation parameter (1 = sync.)
-        parm[eb.PAR_FSPOT2] = x[variables == 'spFrac2'][0]  # fraction of spots eclipsed
         parm[eb.PAR_OOE2O]  = x[variables == 'spBase2'][0]  # base spottedness out of eclipse
         parm[eb.PAR_OOE21A] = x[variables == 'spSin2'][0] # amplitude of sine component
         parm[eb.PAR_OOE21B] = x[variables == 'spCos2'][0] # amplitude of cosine component
         parm[eb.PAR_OOE22A] = x[variables == 'spSinCos2'][0] # amplitude of sincos cross term
-        parm[eb.PAR_OOE22B] = x[variables == 'spSqSinCos2'][0] # amplitude of sine squared cos squared term
+        parm[eb.PAR_OOE22B] = x[variables == 'spSqSinCos2'][0] # amplitude of sin^2+cos^2 term
     except:
         pass
 
+    try:
+        parm[eb.PAR_FSPOT2] = x[variables == 'spFrac2'][0]  # fraction of spots eclipsed
+    except:
+        pass
+    
 
     # OTHER NOTES:
     #
@@ -1289,14 +913,12 @@ def vec_to_params(x):
 #    print "Derived parameters:"
 #    for name, value, unit in zip(eb.dernames, vder, eb.derunits):
 #        print "{0:<10} {1:14.6f} {2}".format(name, value, unit)
-            
     return parm, vder
 
 
 
-
-def compute_eclipse(t,parm,vder=False,vsys=False,ktot=False,modelfac=21.0,fitrvs=False,
-                    primary=False,secondary=False,unsmooth=False):
+def compute_eclipse(t,parm,modelfac=11.0,fitrvs=False,tref=None,
+                    period=None,ooe1fit=None,ooe2fit=None,unsmooth=False):
 
     """
     ----------------------------------------------------------------------
@@ -1304,7 +926,6 @@ def compute_eclipse(t,parm,vder=False,vsys=False,ktot=False,modelfac=21.0,fitrvs
     --------------
     Function to compute eclipse light curve and RV data for given input model.
 
-  
     options:
     --------
 
@@ -1312,33 +933,62 @@ def compute_eclipse(t,parm,vder=False,vsys=False,ktot=False,modelfac=21.0,fitrvs
     ---------
             
     """
-    tmodel   = t
-
-    # Create array of time offset values that we will average over to account
-    # for integration time
-    dvec = np.linspace(-1*(modelfac-1)/2,(modelfac-1)/2,num=modelfac)
-    dvec *= integration/(np.float(modelfac)*24.0*3600.0)
     
-    # Expand t vector into an array of the same dimensions
-    ones = np.ones(len(tmodel))
-    darr = np.outer(dvec,ones)    
-    tarr = np.reshape(np.tile(tmodel,modelfac),(modelfac,len(tmodel)))
-
-    # Combine differential array and t array to get 
-    tdarr = darr + tarr
-
     if fitrvs:
         typ = np.empty_like(t, dtype=np.uint8)
         typ.fill(eb.OBS_VRAD1)        
-        rv = eb.model(parm, tmodel, typ)
+        rv = eb.model(parm, t, typ)
         return rv
-        
-    else:        
-        # Get magnitudes
-        typ = np.empty_like(tdarr, dtype=np.uint8)
-        typ.fill(eb.OBS_MAG)
-        yarr = eb.model(parm, tdarr, typ)
 
+    else:
+
+        if not tref or not period:
+            print "Must supply a reference time AND period for "\
+                +"calculation of a light curve"
+
+            
+        # Create array of time offset values that we will average over to account
+        # for integration time
+        dvec = np.linspace(-1*(modelfac-1)/2,(modelfac-1)/2,num=modelfac)
+        dvec *= integration/(np.float(modelfac)*24.0*3600.0)
+    
+        # Expand t vector into an array of the same dimensions
+        ones = np.ones(len(t))
+        darr = np.outer(dvec,ones)    
+        tarr = np.reshape(np.tile(t,modelfac),(modelfac,len(t)))
+        
+        # Combine differential array and time array to get "modelfac" number of
+        # time sequences
+        tdarr = darr + tarr
+
+        phiarr = foldtime(tdarr,t0=tref,period=period)/period
+
+        if (np.max(phiarr) - np.min(phiarr)) > 0.5:
+            phiarr[phiarr < 0] += 1.0
+        
+        # Compute ol1 and ol2 vectors if needed
+        if np.shape(ooe1fit):
+            ol1 = np.polyval(ooe1fit,phiarr)
+        else:
+            ol1 = None
+
+        if np.shape(ooe2fit):
+            ol2 = np.polyval(ooe2fit,phiarr)
+        else:
+            ol2 = None
+
+        typ = np.empty_like(tdarr, dtype=np.uint8)
+
+        # can use eb.OBS_LIGHT to get light output or
+        # eb.OBS_MAG to get mag output        
+        typ.fill(eb.OBS_LIGHT)
+        if length(ol1) == length(phiarr) and length(ol2) == length(phiarr):
+            yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI, ol1=ol1, ol2=ol2)
+        if length(ol1) == length(phiarr) and not length(ol2) == length(phiarr):
+            yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI, ol1=ol1)
+        if length(ol2) == length(phiarr) and not length(ol1) == length(phiarr):
+            yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI, ol2=ol2)
+            
         # Average over each integration time
         smoothmodel = np.sum(yarr,axis=0)/np.float(modelfac)
         model = yarr[(modelfac-1)/2,:]
@@ -1350,7 +1000,47 @@ def compute_eclipse(t,parm,vder=False,vsys=False,ktot=False,modelfac=21.0,fitrvs
             return smoothmodel
 
 
-def lnprob(x):
+
+def get_teffs_loggs(parm,vsys,ktot):
+
+    # Get physical parameters
+    ecosw = parm[eb.PAR_ECOSW]
+    esinw = parm[eb.PAR_ESINW]
+    cosi = parm[eb.PAR_COSI]
+    mrat = parm[eb.PAR_Q]
+    period = parm[eb.PAR_P]
+    rrat = parm[eb.PAR_RR]
+    rsum = parm[eb.PAR_RASUM]
+    sbr = parm[eb.PAR_J]
+    esq = ecosw * ecosw + esinw * esinw
+    roe = np.sqrt(1.0 - esq)
+    sini = np.sqrt(1.0 - cosi*cosi)
+    qpo = 1.0 + mrat
+    # Corrects for doppler shift of period
+    omega = 2.0*np.pi*(1.0 + vsys*1000.0/eb.LIGHT) / (period*86400.0)
+    tmp = ktot*1000.0 * roe
+    sma = tmp / (eb.RSUN*omega*sini)
+    mtot = tmp*tmp*tmp / (eb.GMSUN*omega*sini)
+    m1 = mtot / qpo
+    m2 = mrat * m1
+
+    r1 = sma*rsum/(1+rrat)
+    r2 = rrat*r1
+
+    # extra 100 because logg is in cgs!
+    logg1 = np.log10(100.0*eb.GMSUN*m1/(r1*eb.RSUN)**2)
+    
+    T1 = np.random.normal(4320,200,1)[0]
+        
+    # extra 100 because logg is in cgs!
+    logg2 = np.log10(100.0*eb.GMSUN*m2/(r2*eb.RSUN)**2)
+
+    # Assumes surface brightness ratio is effective temperature ratio to the 4th power
+    T2 = T1 * sbr**(1.0/4.0)
+
+    return T1,logg1,T2,logg2
+
+def lnprob_single(x):
 
     """
     ----------------------------------------------------------------------
@@ -1364,119 +1054,249 @@ def lnprob(x):
     """
 
     parm,vder = vec_to_params(x)
-
-#    print "stop in lnprob"
-#    pdb.set_trace()
+    
     vsys = x[-1]
-    qa1, qb1 = utoq(parm[eb.PAR_LDLIN1],parm[eb.PAR_LDNON1])
-    qa2, qb2 = utoq(parm[eb.PAR_LDLIN2],parm[eb.PAR_LDNON2])
+    ktot = x[-2]
 
-# Priors
-# Limb darkening
-    if qa1 > 1 or qa1 < 0 or qb1 > 1 or qb1 < 0 or np.isnan(qa1) or np.isnan(qb1):
+    if claret:
+        T1,logg1,T2,logg2 = get_teffs_loggs(parm,vsys,ktot)
+
+        u1a = ldc1func(T1,logg1)[0][0]
+        u2a = ldc2func(T1,logg1)[0][0]
+        
+        u1b = ldc1func(T2,logg2)[0][0]
+        u2b = ldc2func(T2,logg2)[0][0]
+        
+        q1a,q2a = utoq(u1a,u2a,limb=limb)        
+        q1b,q2b = utoq(u1b,u2b,limb=limb)
+        
+        parm[eb.PAR_LDLIN1] = u1a  # u1 star 1
+        parm[eb.PAR_LDNON1] = u2a  # u2 star 1
+        parm[eb.PAR_LDLIN2] = u1b  # u1 star 2
+        parm[eb.PAR_LDNON2] = u2b  # u2 star 2
+
+    elif fitlimb:
+        q1a = x[variables == 'q1a'][0]  
+        q2a = x[variables == 'q2a'][0]  
+        q1b = x[variables == 'q1b'][0]  
+        q2b = x[variables == 'q2b'][0]  
+        u1a = parm[eb.PAR_LDLIN1]
+        u2a = parm[eb.PAR_LDNON1]
+        u1b = parm[eb.PAR_LDLIN2]
+        u2b = parm[eb.PAR_LDNON2]
+    else:
+        q1a = 0.5 ; q2a = 0.5 ; q1b = 0.5 ; q2b = 0.5
+        u1a = 0 ; u2a = 0 ; u1b = 0 ; u2b = 0
+        
+    # Exclude conditions that give unphysical limb darkening parameters
+    if q1b > 1 or q1b < 0 or q2b > 1 or q2b < 0 or np.isnan(q1b) or np.isnan(q2b):
+        return -np.inf        
+    if q1a > 1 or q1a < 0 or q2a > 1 or q2a < 0 or np.isnan(q1a) or np.isnan(q2a):
+        return -np.inf        
+    
+    # Sometimes the gridding function fails
+    if np.isnan(u1a) or np.isnan(u2a) or np.isnan(u1b) or np.isnan(u2b):
         return -np.inf
 
-    if qa2 > 1 or qa2 < 0 or qb2 > 1 or qb2 < 0 or np.isnan(qa2) or np.isnan(qb2):
-        return -np.inf
-
+    # Priors
     if fitL3:
         if parm[eb.PAR_L3] > 1 or parm[eb.PAR_L3] < 0:
             return -np.inf
 
+    # Need to understand exactly what this parameter is!!
+    if fitsp1:
+        if parm[eb.PAR_FSPOT1] < 0 or parm[eb.PAR_FSPOT1] > 1:
+            return -np.inf
+        coeff1 = []
+        for i in range(fitorder+1):
+            coeff1 = np.append(coeff1,x[variables == 'c'+str(i)+'_1'])
+        
 ### Compute eclipse model for given input parameters ###
+
     massratio = parm[eb.PAR_Q]
     if not fitellipsoidal:
         parm[eb.PAR_Q] = 0.0
 
-    smoothmodel = compute_eclipse(tfit,parm)
+    # Primary eclipse
+    t0 = parm[eb.PAR_T0]
+    period = parm[eb.PAR_P]
+    tprim = fitdict['tprim']
+    norm = fitdict['norm']
+    xprim = fitdict['xprim']/norm
+    eprim = fitdict['eprim']/norm
 
+    sm1  = compute_eclipse(tprim,parm,fitrvs=False,tref=t0,period=period,ooe1fit=coeff1)
+
+    # Log Likelihood Vector
+    lfi1 = -1.0*(sm1 - xprim)**2/(2.0*eprim**2)
+
+    # Log likelihood
+    lf1 = np.sum(lfi1)
+
+    # Secondary eclipse
+    tsec = fitdict['tsec']
+    xsec = fitdict['xsec']/norm
+    esec = fitdict['esec']/norm
+
+    if fitsp1:
+        coeff2 = []
+        for i in range(fitorder+1):
+            coeff2 = np.append(coeff2,x[variables == 'c'+str(i)+'_2'])
+
+    sm2  = compute_eclipse(tsec,parm,fitrvs=False,tref=t0,period=period,ooe1fit=coeff2)
+    
+    # Log Likelihood Vector
+    lfi2 = -1.0*(sm2 - xsec)**2/(2.0*esec**2)
+    
+    # Log likelihood
+    lf2 = np.sum(lfi2)
+
+    lf = lf1+lf2
+
+    
+    # need this for the RVs!
     parm[eb.PAR_Q] = massratio
 
-# Log Likelihood Vector
-    lfi = -1.0*(smoothmodel - mfit)**2/(2.0*e_mfit**2)
-
-# Log likelihood
-    lf = np.sum(lfi)
-
     if fitrvs:
-        if (vsys > max(np.max(rvdata1[:,1]),np.max(rvdata2[:,1]))) or (vsys < min(np.min(rvdata1[:,1]),np.min(rvdata2[:,1]))): 
+        if (vsys > max(np.max(rvdata1[:,1]),np.max(rvdata2[:,1]))) or \
+           (vsys < min(np.min(rvdata1[:,1]),np.min(rvdata2[:,1]))): 
             return -np.inf
-        ktot = x[-2]
-        rvmodel1 = compute_eclipse(rvdata1[:,0],parm,vder=vder,fitrvs=True,vsys=vsys,ktot=ktot)
+        rvmodel1 = compute_eclipse(rvdata1[:,0],parm,fitrvs=True)
         k2 = ktot/(1+massratio)
         k1 = k2*massratio
         rv1 = rvmodel1*k1 + vsys
-        rvmodel2 = compute_eclipse(rvdata2[:,0],parm,vder=vder,fitrvs=True,vsys=vsys,ktot=ktot,secondary=True)
+        rvmodel2 = compute_eclipse(rvdata2[:,0],parm,fitrvs=True)
         rv2 = -1.0*rvmodel2*k2 + vsys
-        lf  = lf - np.sum((rv1 - rvdata1[:,1])**2/(2.0*rvdata1[:,2]))
-        lf  = lf - np.sum((rv2 - rvdata2[:,1])**2/(2.0*rvdata2[:,2]))
+        lfrv1 = -np.sum((rv1 - rvdata1[:,1])**2/(2.0*rvdata1[:,2]))
+        lfrv2 = -np.sum((rv2 - rvdata2[:,1])**2/(2.0*rvdata2[:,2]))
+        lfrv = lfrv1 + lfrv2
+        lf  += lfrv
 
+    debug = False
+    if debug:
+        print "Model parameters:"
+        for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
+            print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+
+        vder = eb.getvder(parm, vsys, ktot)
+        print "Derived parameters:"
+        for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
+            print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+
+        plt.ion()
+        plt.figure(91)
+        plt.clf()
+        plt.subplot(2, 2, 1)
+        plt.plot(tprim,xprim,'ko')
+        plt.plot(tprim,sm1,'ro')
+        tcomp = np.linspace(np.min(tprim),np.max(tprim),10000)
+        compmodel = compute_eclipse(tcomp,parm,fitrvs=False,tref=t0,period=period,ooe1fit=coeff1)
+        plt.plot(tcomp,compmodel,'r-')
+        plt.ylim(0.5,1.1)
+        chi1 = -1*lf1
+        plt.annotate(r'$\chi^2$ = %.0f' % chi1, [0.1,0.1],horizontalalignment='left',
+                     xycoords='axes fraction',fontsize='large')
+
+        plt.subplot(2, 2, 2)
+        plt.plot(tsec,xsec,'ko')
+        plt.plot(tsec,sm2,'ro')
+        tcomp = np.linspace(np.min(tsec),np.max(tsec),10000)
+        compmodel = compute_eclipse(tcomp,parm,fitrvs=False,tref=t0,period=period,ooe1fit=coeff2)
+        plt.plot(tcomp,compmodel,'r-')
+        plt.ylim(0.7,1.1)
+        chi2 = -1*lf2
+        plt.annotate(r'$\chi^2$ = %.0f' % chi2, [0.1,0.1],horizontalalignment='left',
+                     xycoords='axes fraction',fontsize='large')
+        
+        plt.subplot(2, 1, 2)
+        phi1 = foldtime(rvdata1[:,0],t0=t0,period=period)/period
+        plt.plot(phi1,rvdata1[:,1],'ko')
+        plt.plot(phi1,rv1,'kx')
+        tcomp = np.linspace(-0.5,0.5,10000)*period+t0
+        rvmodel1 = compute_eclipse(tcomp,parm,fitrvs=True)
+        k2 = ktot/(1+massratio)
+        k1 = k2*massratio
+        rvcomp1 = rvmodel1*k1 + vsys
+        plt.plot(np.linspace(-0.5,0.5,10000),rvcomp1,'k--')
+        plt.annotate(r'$\chi^2$ = %.0f' % -lfrv, [0.05,0.85],horizontalalignment='left',
+                     xycoords='axes fraction',fontsize='large')
+  
+        phi2 = foldtime(rvdata2[:,0],t0=t0,period=period)/period
+        plt.plot(phi2,rvdata2[:,1],'ro')
+        plt.plot(phi2,rv2,'rx')
+        tcomp = np.linspace(-0.5,0.5,10000)*period+t0
+        rvmodel2 = compute_eclipse(tcomp,parm,fitrvs=True)
+        rvcomp2 = -1.0*rvmodel2*k2 + vsys
+        plt.plot(np.linspace(-0.5,0.5,10000),rvcomp2,'r--')
+        plt.xlim(-0.5,0.5)
+        plt.suptitle('Eclipse Fit')
+
+        gamma = np.linspace(0,np.pi/2.0,1000,endpoint=True)
+        theta = gamma*180.0/np.pi
+        mu = np.cos(gamma)
+        Imu1 = 1.0 - u1a*(1.0 - mu) - u2a*(1.0 - mu)**2.0
+        Imu2 = 1.0 - u1b*(1.0 - mu) - u2b*(1.0 - mu)**2.0
+
+
+        plt.figure(92)
+        plt.clf()
+        label1 = '%.2f, ' % u1a + '%.2f' % u2a +' (Primary)'
+        label2 = '%.2f, ' % u1b + '%.2f' % u2b +' (Secondary)'
+        plt.plot(theta,Imu1,label=label1)
+        plt.plot(theta,Imu2,label=label2)
+        plt.ylim([0,1.0])
+        plt.xlabel(r"$\theta$ (degrees)",fontsize=18)
+        plt.ylabel(r"$I(\theta)/I(0)$",fontsize=18)
+        plt.annotate(r'$T_{\rm eff,1}$ = %.0f K' % T1, [0.16,0.6],horizontalalignment='left',
+                     xycoords='figure fraction',fontsize='large')
+        plt.annotate(r'$M_1$ = %.2f M$_\odot$' % m1, [0.16,0.55],horizontalalignment='left',
+                     xycoords='figure fraction',fontsize='large')
+        plt.annotate(r'$R_1$ = %.2f R$_\odot$' % r1, [0.16,0.5],horizontalalignment='left',
+                     xycoords='figure fraction',fontsize='large')
+        plt.annotate(r'$\log(g)_1$ = %.2f' % logg1, [0.16,0.45],horizontalalignment='left',
+                     xycoords='figure fraction',fontsize='large')
+
+        plt.annotate(r'$T_{\rm eff,2}$ = %.0f K' % T2, [0.16,0.35],horizontalalignment='left',
+                     xycoords='figure fraction',fontsize='large')
+        plt.annotate(r'$M_2$ = %.2f M$_\odot$' % m2, [0.16,0.3],horizontalalignment='left',
+                     xycoords='figure fraction',fontsize='large')
+        plt.annotate(r'$R_2$ = %.2f R$_\odot$' % r2, [0.16,0.25],horizontalalignment='left',
+                     xycoords='figure fraction',fontsize='large')
+        plt.annotate(r'$\log(g)_2$ = %.2f' % logg2, [0.16,0.2],horizontalalignment='left',
+                     xycoords='figure fraction',fontsize='large')
+        plt.title('Limb Darkening')
+        
+        plt.legend()
+
+        print q1a,q2a,q1b,q2b
+
+        pdb.set_trace()
+        
     return lf
 
 
-
-def residuals(inp):
-
-    """ 
-    ----------------------------------------------------------------------
-    resuduals:
-    ----------
-    Calculate residuals given an input model.
-    ----------------------------------------------------------------------
-    """
-
-# Input parameters
-    rprs = inp[0]
-    duration = inp[1]
-    impact = inp[2]
-    t0 = inp[3]
-    per = inp[4]
-
-# Limb darkening params
-
-    c1       = inp[5][0]
-    c2       = inp[5][1]
-    if limb == 'nlin':
-        c3 = inp[5][2]
-        c4 = inp[5][3]
-        ldc = [c1,c2,c3,c4]
-    else:
-        ldc = [c1,c2]
-
-
-# Compute model with zero t0
-    tmodel,smoothmodel = compute_trans(rprs,duration,impact,0.0,per,ldc)
-
-# Impose ephemeris offset in data folding    
-    tfit = foldtime(t,period=per,t0=pdata[0,3]+t0)
-    ffit = flux
-    efit = e_flux
-
-# Interpolate model at data values
-    s = np.argsort(tfit)
-    tfits = tfit[s]
-    ffits = ffit[s]    
-    cfunc = sp.interpolate.interp1d(tmodel,smoothmodel,kind='linear')
-    mfit = cfunc(tfits)
-    
-# Residuals
-    resid = ffits - mfit
-
-    return resid
-
-
-def do_single_fit(eclipse,info,nwalkers=500,burnsteps=1000,mcmcsteps=1000,clobber=False,
-                  fit_period=False,fit_limb=True,fit_rvs=True,fit_sp1=True,fit_L3=True,
-                  fit_sp2=False,full_spot=True,fit_ellipsoidal=False,fit_lighttravel=False,
-                  use_gravdark=False,use_reflection=False,write=True):
+def single_fit(eclipse,info,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
+               fit_period=False,fit_limb=False,fit_rvs=True,fit_sp1=True,fit_L3=False,
+               fit_sp2=False,full_spot=False,fit_ellipsoidal=False,fit_lighttravel=False,
+               use_gravdark=False,use_reflection=False,write=True,order=3,reduce=10,
+               claret_limb=False):
 
     import emcee
     global ndim, variables,tfit,mfit,e_mfit
     global nw, bs, mcs
-    global fitperiod, fitrvs, fitlimb, fitsp1, fitsp2, fullspot, fitellipsoidal, fitlighttravel, fitL3
+    global fitrvs, fitlimb, fitsp1, fitsp2, claret
+    global fullspot, fitellipsoidal, fitlighttravel, fitL3
     global usegravdark, usereflection
+    global fitdict, fitorder
 
-    fitperiod = fit_period
+    fitorder = order
+
+    fitdict = eclipse
+
+    claret = claret_limb
+    
+    thintag = '_thin'+str(fitdict['thin']) if fitdict['thin'] > 1 else ''
+
     fitrvs = fit_rvs
     fitlimb = fit_limb
     fitsp1 = fit_sp1
@@ -1491,24 +1311,10 @@ def do_single_fit(eclipse,info,nwalkers=500,burnsteps=1000,mcmcsteps=1000,clobbe
     nw = nwalkers
     bs = burnsteps
     mcs = mcmcsteps
-    
-    
-    # Break up dataset into primary/secondary eclipse pairs
-    dt12 = (ephem2-ephem1) % period0
-    tpe    = np.arange(-2000,2000,1) * period0 + ephem1 - bjd
 
-    tpiter = tpe[(tpe > np.min(lcm[0,:])) & (tpe+dt12 < np.max(lcm[0,:]))]
-    
-    tp = tpiter[enum]
-    
-    good = ((lcm[0,:] > tp - min(period0/4.0,period0-dt12+dur2/2.0)) & 
-            (lcm[0,:] < tp + dt12 + min(period0/4.0,period0-dt12-dur1/2.0)))
-        
-    tfit   = lcm[0,good]
-    mfit   = lcm[1,good]
-    e_mfit = lcm[2,good]
-    
-    directory = path+'MCMC/running/'
+    enum = fitdict['enum']
+
+    directory = path+'MCMC/singlefits/E'+str(enum)+'/'
     if not os.path.exists(directory):
         os.makedirs(directory)
 
@@ -1518,104 +1324,129 @@ def do_single_fit(eclipse,info,nwalkers=500,burnsteps=1000,mcmcsteps=1000,clobbe
     twomin = 2./(24.*60.)
     onesec = 1./(24.*60.*60.)
 
+#    bestvals, meds, modes, sigints, chisq = best_spotvals(fitdict,info,doprint=False,doplot=False)
+    
 # Initial chain values
     print ""
     print "Deriving starting values for chains"
     p0_0  = np.random.uniform(ebpar0['J']*0.5,ebpar0['J']*2.0,nw)             # surface brightness
-    p0_1  = np.random.uniform(ebpar0['Rsum_a']*0.9,ebpar0['Rsum_a']*1.1, nw)  # fractional radius
-    p0_2  = np.random.uniform(ebpar0['Rratio']*0.9,ebpar0['Rratio']*1.1, nw)  # radius ratio
+    p0_1  = np.random.uniform(ebpar0['Rsum_a']*0.5,ebpar0['Rsum_a']*2, nw)    # fractional radius
+    p0_2  = np.random.uniform(ebpar0['Rratio']*0.5,ebpar0['Rratio']*2, nw)    # radius ratio
     p0_3  = np.random.uniform(0,ebpar0['Rsum_a'], nw)                         # cos i
-    p0_4  = np.random.uniform(ebpar0['ecosw']*0.9,min(ebpar0['ecosw']*1.1,1), nw) # ecosw
-    p0_5  = np.random.uniform(ebpar0['esinw']*0.9,min(ebpar0['esinw']*1.1,1), nw) # esinw
-    p0_6  = np.random.normal(ebpar0['mag0'],0.001, nw)                        # mag zpt
-    p0_7  = np.random.normal(ebpar0['t0']-bjd,twomin,nw)                      # ephemeris
+    p0_4  = np.random.uniform(ebpar0['ecosw']*0.5,min(ebpar0['ecosw']*2,1), nw) # ecosw
+    p0_5  = np.random.uniform(ebpar0['esinw']*0.5,min(ebpar0['esinw']*2,1), nw) # esinw
+    p0_6  = np.random.normal(ebpar0['mag0'],0.1, nw)                          # mag zpt
+    p0_7  = np.random.normal(ebpar0['t01']-bjd,twomin,nw)                     # ephemeris
     p0_8  = np.random.normal(ebpar0['Period'],onesec,nw    )                  # Period
     p0_9  = np.random.uniform(0,1,nw)                                         # Limb darkening
     p0_10 = np.random.uniform(0,1,nw)                                         # Limb darkening
     p0_11 = np.random.uniform(0,1,nw)                                         # Limb darkening
     p0_12 = np.random.uniform(0,1,nw)                                         # Limb darkening
     p0_13 = np.abs(np.random.normal(ebpar0['Mratio'],0.05,nw))                # Mass ratio
-    p0_14 = np.random.uniform(0,0.2,nw)                                       # Third Light
-    p0_15 = np.random.uniform(ebpar0['Rot1']*0.5,ebpar0['Rot1']*2.0,nw)       # Stellar rotation
+    p0_14 = np.random.uniform(0,0.5,nw)                                       # Third Light
+    p0_15 = np.random.normal(ebpar0['Rot1'],0.001,nw)                         # Star 1 rotation
     p0_16 = np.random.uniform(0,1,nw)                                         # Fraction of spots eclipsed
-    p0_17 = np.random.normal(0,0.005,nw)                                      # base spottedness
-    p0_18 = np.random.normal(0,0.005,nw)                                      # Sin amplitude
-    p0_19 = np.random.normal(0,0.005,nw)                                      # Cos amplitude
-    p0_20 = np.random.normal(0,0.005,nw)                                      # SinCos amplitude
-    p0_21 = np.random.normal(0,0.005,nw)                                      # Cos^2-Sin^2 amplitude
-    p0_22 = np.random.uniform(ebpar0['Rot1']*0.5,ebpar0['Rot1']*2.0,nw)       # Stellar rotation
+    p0_17 = np.random.normal(0,0.001,nw)                                      # base spottedness
+    p0_18 = np.random.normal(0,0.0001,nw)                                     # Sin amplitude
+    p0_19 = np.random.normal(0,0.0001,nw)                                     # Cos amplitude
+    p0_20 = np.random.normal(0,0.0001,nw)                                     # SinCos amplitude
+    p0_21 = np.random.normal(0,0.0001,nw)                                     # Cos^2-Sin^2 amplitude
+    p0_22 = np.random.uniform(ebpar0['Rot1'],0.001,nw)                        # Star 2 rotation
     p0_23 = np.random.uniform(0,1,nw)                                         # Fraction of spots eclipsed
-    p0_24 = np.zeros(nw)                                                      # base spottedness
-    p0_25 = np.random.normal(0,0.005,nw)                                      # Sin amplitude
-    p0_26 = np.random.normal(0,0.005,nw)                                      # Cos amplitude
-    p0_27 = np.random.normal(0,0.005,nw)                                      # SinCos amplitude
-    p0_28 = np.random.normal(0,0.005,nw)                                      # Cos^2-Sin^2 amplitude
+    p0_24 = np.random.normal(0,0.001,nw)                                      # base spottedness
+    p0_25 = np.random.normal(0,0.001,nw)                                      # Sin amplitude
+    p0_26 = np.random.normal(0,0.001,nw)                                      # Cos amplitude
+    p0_27 = np.random.normal(0,0.001,nw)                                      # SinCos amplitude
+    p0_28 = np.random.normal(0,0.001,nw)                                      # Cos^2-Sin^2 amplitude
     p0_29 = np.abs(np.random.normal(ebpar0['ktot'],ebpar0['ktot']*0.2,nw))    # Total radial velocity amp
     p0_30 = np.random.normal(ebpar0['vsys'],5.0,nw)                           # System velocity
 
 
 # L3 at 14 ... 14 and beyond + 1
 
-    p0_init = np.array([p0_0,p0_1,p0_2,p0_3,p0_4,p0_5,p0_6,p0_7])
-    variables =["J","Rsum","Rratio","cosi","ecosw","esinw","magoff","t0"]
-    if fitperiod:
-        p0_init = np.append(p0_init,[p0_8],axis=0)
-        variables.append("period")
+#    p0_init = np.array([p0_0,p0_1,p0_2,p0_3,p0_4,p0_5,p0_6,p0_7])
+#    variables =["J","Rsum","Rratio","cosi","ecosw","esinw","magoff","t0"]
+
+    p0_init = np.array([p0_0,p0_1,p0_2,p0_3,p0_4,p0_5,p0_7])
+    variables =["J","Rsum","Rratio","cosi","ecosw","esinw","t0"]
+
+#    if fitperiod:
+#        p0_init = np.append(p0_init,[p0_8],axis=0)
+#        variables.append("period")
+
+    if fitlimb and claret:
+        sys.exit('Cannot fit for LD parameters and constrain them according to the other fit parameters!')
+
     if fitlimb:
         limb0 = np.array([p0_9,p0_10,p0_11,p0_12])
-        lvars = ["qa1", "qb1", "qa2", "qb2"]
+        lvars = ["q1a", "q2a", "q1b", "q2b"]
         p0_init = np.append(p0_init,limb0,axis=0)
         for var in lvars:
             variables.append(var)
-    if fitrvs:
-        p0_init = np.append(p0_init,[p0_13],axis=0)
-        variables.append('massratio')
 
     if fitL3:
         p0_init = np.append(p0_init,[p0_14],axis=0)
         variables.append('L3')
-        
 
     if fitsp1:
-        spot0 = np.array([p0_15,p0_16,p0_17,p0_18,p0_19])
-        spvars = ["Rot1","spFrac1","spBase1","spSin1","spCos1"]
-        p0_init = np.append(p0_init,spot0,axis=0)
-        for var in spvars:
-            variables.append(var)
-        if fullspot:
-            spot0 = np.array([p0_20,p0_21])
-            spvars = ["spSinCos1","spSqSinCos1"]
-            p0_init = np.append(p0_init,spot0,axis=0)
-            for var in spvars:
-                variables.append(var)
+        p0_init = np.append(p0_init,[p0_16],axis=0)
+        variables.append('spFrac1')
+        for i in range(fitorder+1):
+            p0_init = np.append(p0_init,[np.random.normal(0,0.05,nw)],axis=0)
+            variables.append('c'+str(i)+'_1')
+        for i in range(fitorder+1):
+            p0_init = np.append(p0_init,[np.random.normal(0,0.05,nw)],axis=0)
+            variables.append('c'+str(i)+'_2')
 
-    if fitsp2 and not fitsp1:
-        spot0 = np.array([p0_15,p0_16,p0_17,p0_18,p0_19])
-        spvars = ["Rot2","spFrac2","spBase2","spSin2","spCos2"]
-        p0_init = np.append(p0_init,spot0,axis=0)
-        for var in spvars:
-            variables.append(var)
-        if fullspot:
-            spot0 = np.array([p0_20,p0_21])
-            spvars = ["spSinCos2","spSqSinCos2"]
-            p0_init = np.append(p0_init,spot0,axis=0)
-            for var in spvars:
-                variables.append(var)
+    if fitsp2:
+        sys.exit('Not ready for this yet!')
 
-    if fitsp2 and fitsp1:
-        spot0 = np.array([p0_22,p0_23,p0_24,p0_25,p0_26])
-        spvars = ["Rot2","spFrac2","spBase2","spSin2","spCos2"]
-        p0_init = np.append(p0_init,spot0,axis=0)
-        for var in spvars:
-            variables.append(var)
-        if fullspot:
-            spot0 = np.array([p0_27,p0_28])
-            spvars = ["spSinCos2","spSqSinCos2"]
-            p0_init = np.append(p0_init,spot0,axis=0)
-            for var in spvars:
-                variables.append(var)
+    
+#    if fitsp1:
+#        sys.exit('conflicting inputs!')
+#        spot0 = np.array([p0_15,p0_16,p0_17,p0_18,p0_19])
+#        spvars = ["Rot1","spFrac1","spBase1","spSin1","spCos1"]
+#        p0_init = np.append(p0_init,spot0,axis=0)
+#        for var in spvars:
+#            variables.append(var)
+#        if fullspot:
+#            spot0 = np.array([p0_20,p0_21])
+#            spvars = ["spSinCos1","spSqSinCos1"]
+#            p0_init = np.append(p0_init,spot0,axis=0)
+#            for var in spvars:
+#                variables.append(var)
+
+#    if fitsp2 and not fitsp1:
+#        sys.exit('conflicting inputs!')
+#        spot0 = np.array([p0_15,p0_16,p0_17,p0_18,p0_19])
+#        spvars = ["Rot2","spFrac2","spBase2","spSin2","spCos2"]
+#        p0_init = np.append(p0_init,spot0,axis=0)
+#        for var in spvars:
+#            variables.append(var)
+#        if fullspot:
+#            spot0 = np.array([p0_20,p0_21])
+#            spvars = ["spSinCos2","spSqSinCos2"]
+#            p0_init = np.append(p0_init,spot0,axis=0)
+#            for var in spvars:
+#                variables.append(var)
+#
+#    if fitsp2 and fitsp1:
+#        sys.exit('conflicting inputs!')
+#        spot0 = np.array([p0_22,p0_23,p0_24,p0_25,p0_26])
+#        spvars = ["Rot2","spFrac2","spBase2","spSin2","spCos2"]
+#        p0_init = np.append(p0_init,spot0,axis=0)
+#        for var in spvars:
+#            variables.append(var)
+#        if fullspot:
+#            spot0 = np.array([p0_27,p0_28])
+#            spvars = ["spSinCos2","spSqSinCos2"]
+#            p0_init = np.append(p0_init,spot0,axis=0)
+#            for var in spvars:
+#                variables.append(var)
 
     if fitrvs:
+        p0_init = np.append(p0_init,[p0_13],axis=0)
+        variables.append('massratio')
         p0_init = np.append(p0_init,[p0_29],axis=0)
         variables.append('ktot')
         p0_init = np.append(p0_init,[p0_30],axis=0)
@@ -1629,12 +1460,16 @@ def do_single_fit(eclipse,info,nwalkers=500,burnsteps=1000,mcmcsteps=1000,clobbe
 # Number of dimensions in the fit.
     ndim = np.shape(p0)[1]
 
-
 # Do not redo MCMC unless clobber flag is set
-    done = os.path.exists(path+'MCMC/running/'+name+stag+'_Jchain_E'+str(enum)+'.txt')
+    done = os.path.exists(directory+name+stag+thintag+'_Jchain_E'+str(enum)+'.txt')
     if done == True and clobber == False:
         print "MCMC run already completed"
-        return 
+        return False,False,variables
+
+
+    def lnprob(x):
+        return lnprob_single(x)
+
 
 # Set up MCMC sampler
     print "... initializing emcee sampler"
@@ -1661,7 +1496,7 @@ def do_single_fit(eclipse,info,nwalkers=500,burnsteps=1000,mcmcsteps=1000,clobbe
 # Save burn in stats
     burn = np.append(Rs,sampler.acor)
     burn = np.append(burn,sampler.acceptance_fraction)
-    np.savetxt(path+'MCMC/'+name+stag+'_burnstats.txt',burn)
+    np.savetxt(directory+name+stag+thintag+'_burnstats_E'+str(enum)+'.txt',burn)
 
 # Reset sampler and run MCMC for reals
     print "getting pdfs for LD coefficients"
@@ -1683,254 +1518,597 @@ def do_single_fit(eclipse,info,nwalkers=500,burnsteps=1000,mcmcsteps=1000,clobbe
 
     stats = np.append(Rs,sampler.acor)
     stats = np.append(stats,sampler.acceptance_fraction)
-    np.savetxt(path+'MCMC/'+name+stag+'_finalstats.txt',stats)
+    np.savetxt(directory+name+stag+thintag+'_finalstats_E'+str(enum)+'.txt',stats)
 
 # Write out chains to disk
     if write:
         print "Writing MCMC chains to disk"
         lp = sampler.lnprobability.flatten()
-        np.savetxt(directory+name+stag+'_lnprob_E'+str(enum)+'.txt',lp)
+        np.savetxt(directory+name+stag+thintag+'_lnprob_E'+str(enum)+'.txt',lp[0::reduce])
         for i in np.arange(len(variables)):
-            np.savetxt(directory+name+stag+'_'+variables[i]+'chain_E'+str(enum)+'.txt',sampler.flatchain[:,i])
-        chains = sampler.flatchain
-        return
-    else:
-        return sampler.lnprobability.flatten(),sampler.flatchain,variables
+            np.savetxt(directory+name+stag+thintag+'_'+variables[i]+'chain_E'+str(enum)+'.txt',sampler.flatchain[0::reduce,i])
+
+
+    return sampler.lnprobability.flatten(),sampler.flatchain,variables
 
 
 
+def best_single_vals(eclipse,info,chains=False,lp=False,network=None,bindiv=20.0,
+                thin=False,frac=0.001,nbins=100,rpmax=1,
+                durmax=10,sigrange=5.0):
+
+    """
+    ----------------------------------------------------------------------
+    best_single_vals:
+    ---------
+    Find the best values from the 1-d posterior pdfs of a fit to a single
+    primary and secondary eclipse pair
+    ----------------------------------------------------------------------
+    """
     
+    import robust as rb
+    from scipy.stats.kde import gaussian_kde
+    import matplotlib as mpl
+    from plot_params import plot_params, plot_defaults
+    
+    plot_params(linewidth=1.5,fontsize=12)
 
-def fit_eclipse(nwalkers=250,burnsteps=1000,mcmcsteps=1000,clobber=False,
-                fit_period=True,fit_limb=True,fit_rvs=True,fit_sp1=False,fit_L3=True,
-                fit_sp2=False,full_spot=False,fit_ellipsoidal=False,fit_lighttravel=False,
-                use_gravdark=False,use_reflection=False):
+    nsamp = nw*mcs
+
+    ethin = eclipse['thin']
+    thintag = '_thin'+str(ethin) if ethin > 1 else ''
+
+    enum = eclipse['enum']
+    
+    # Use supplied chains or read from disk
+    if not np.shape(chains):
+        for i in np.arange(len(variables)):
+            try:
+                print "Reading MCMC chains for "+variables[i]
+                tmp = np.loadtxt(path+'MCMC/singlefits/E'+str(enum)+'/' \
+                                 +name+stag+thintag+'_'+variables[i]+'chain_E'+str(enum)+\
+                                 '.txt')
+                if i == 0:
+                    chains = np.zeros((len(tmp),len(variables)))
+
+                chains[:,i] = tmp
+            except:
+                print name+stag+thintag+'_'+variables[i]+'chain.txt does not exist on disk !'
+
+    if not np.shape(lp):
+        try:
+            print "Reading ln(prob) chain"
+            lp = np.loadtxt(path+'MCMC/singlefits/E'+str(enum)+'/'+name+stag+thintag+'_lnprob_E'+str(enum)+'.txt')
+        except:
+            print name+stag+thintag+'_lnprob_E'+str(enum)+'.txt does not exist. Exiting'
+            return
+
+#  Get maximum likelihood values
+    bestvals = np.zeros(len(variables))
+    meds = np.zeros(len(variables))
+    modes = np.zeros(len(variables))
+    onesigs = np.zeros(len(variables))
+
+    maxlike = np.max(lp)
+    imax = np.array([i for i, j in enumerate(lp) if j == maxlike])
+    if imax.size > 1:
+        imax = imax[0]
+    for i in np.arange(len(variables)):
+        bestvals[i] = chains[imax,i]
+        
+    if thin:
+        print "Thinning chains by a factor of "+str(thin)
+        nsamp /= thin
+        thinchains = np.zeros((nsamp,len(variables)))
+        for i in np.arange(len(variables)):
+            thinchains[:,i] = chains[0::thin,i]
+        lp = lp[0::thin]
+        chains = thinchains 
+
+    varnames = varnameconv(variables)
+
+# Primary Variables
+    priminds, = np.where((np.array(variables) == 'J') ^ (np.array(variables) =='Rsum') ^ 
+                         (np.array(variables) == 'Rratio') ^ (np.array(variables) == 'ecosw') ^ 
+                         (np.array(variables) == 'esinw') ^ (np.array(variables) == 'cosi'))
+
+    plt.ioff()
+    plt.figure(4,figsize=(8.5,11),dpi=300)    
+    plt.clf()
+    plotnum = 0
+    for i in priminds:
+        print ''
+        dist = chains[:,i]
+        med,mode,interval,lo,hi = distparams(dist)
+        meds[i] = med
+        modes[i] = mode
+        onesigs[i] = interval
+        minval = np.min(dist)
+        maxval = np.max(dist)
+        sigval = rb.std(dist)
+        maxval = med + sigrange*np.abs(hi-med)
+        minval = med - sigrange*np.abs(med-lo)
+        nb = np.ceil((maxval-minval) / (interval/bindiv))
+        print 'Best fit parameters for '+variables[i]        
+        out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+        print out.format(bestvals[i], med, mode, interval)
+        
+        # do plot
+        plotnum += 1
+        plt.subplot(len(priminds),1,plotnum)
+        print "Computing histogram of data"
+        pinds, = np.where((dist >= minval) & (dist <= maxval))
+        plt.hist(dist[pinds],bins=nb,normed=True)
+        #    plt.xlim([minval,maxval])
+#        plt.axvline(x=bestvals[i],color='r',linestyle='--')
+#        plt.axvline(x=medval,color='c',linestyle='--')
+        plt.xlabel(varnames[i])
+        plt.ylabel(r'$dP$')
+        if plotnum == 1:
+            plt.title('Parameter Distributions for KIC '+name)
+
+    plt.subplots_adjust(hspace=0.55)
+    plt.savefig(path+'MCMC/singlefits/E'+str(enum)+'/'+name+stag+thintag+
+                '_params1_E'+str(enum)+'.png', dpi=300)
+    plt.clf()
+
+
+
+
+# Second set of parameters
+#    secinds, = np.where((np.array(variables) == 't0') ^ (np.array(variables) =='q1a') ^ 
+#                        (np.array(variables) == 'q2a') ^ (np.array(variables) == 'q1b') ^ 
+#                        (np.array(variables) == 'q2b') ^ (np.array(variables) == 'massratio') ^ 
+#                        (np.array(variables) == 'ktot') ^ (np.array(variables) == 'vsys'))
+
+    secinds, = np.where((np.array(variables) == 't0') ^ (np.array(variables) == 'massratio') ^ 
+                        (np.array(variables) == 'ktot') ^ (np.array(variables) == 'vsys'))
+
+    plt.figure(5,figsize=(8.5,11),dpi=300)    
+    plt.clf()
+    plotnum = 0
+    for i in secinds:
+        print ''
+        if variables[i] == 't0':
+            dist   = (chains[:,i] - (ebpar0["t01"] - bjd))*3600.0
+            t0val = bestvals[i]
+            bestvals[i] = (t0val -(ebpar0["t01"] - bjd))*3600.0
+        else:
+            dist = chains[:,i]
+
+        med,mode,interval,lo,hi = distparams(dist)
+        meds[i] = med
+        modes[i] = mode
+        onesigs[i] = interval
+        minval = np.min(dist)
+        maxval = np.max(dist)
+        sigval = rb.std(dist)
+        maxval = med + sigrange*np.abs(hi-med)
+        minval = med - sigrange*np.abs(med-lo)
+        nb = np.ceil((maxval-minval) / (interval/bindiv))
+        print 'Best fit parameters for '+variables[i]        
+        out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+        print out.format(bestvals[i], med, mode, interval)
+        
+        # do plot
+        plotnum += 1
+        plt.subplot(len(secinds),1,plotnum)
+        print "Computing histogram of data"
+        pinds, = np.where((dist >= minval) & (dist <= maxval))
+        plt.hist(dist[pinds],bins=nb,normed=True)
+        #    plt.xlim([minval,maxval])
+#        plt.axvline(x=bestvals[i],color='r',linestyle='--')
+#        plt.axvline(x=medval,color='c',linestyle='--')
+        plt.xlabel(varnames[i])
+        plt.ylabel(r'$dP$')
+        if plotnum == 1:
+            plt.title('Parameter Distributions for KIC '+name)
+        if variables[i] == 't0':
+            plt.annotate(r'$t_0$ = %.6f BJD' % ebpar0["t01"], xy=(0.96,0.8),
+                         ha="right",xycoords='axes fraction',fontsize='large')
+            bestvals[i] = t0val
+
+    plt.subplots_adjust(hspace=0.55)
+    plt.savefig(path+'MCMC/singlefits/E'+str(enum)+'/'+name+stag+thintag+'_params2_E'+str(enum)+'.png', dpi=300)
+    plt.clf()
+
+# Third set of indices
+    thinds, = np.where((np.array(variables) == 'spFrac1') ^ (np.array(variables) == 'c0_1') ^
+                        (np.array(variables) =='c1_1') ^ (np.array(variables) == 'c2_1') ^
+                        (np.array(variables) == 'c3_1'))
+
+    plt.figure(5,figsize=(8.5,11),dpi=300)    
+    plt.clf()
+    plotnum = 0
+    for i in thinds:
+        print ''
+        dist = chains[:,i]
+
+        med,mode,interval,lo,hi = distparams(dist)
+        meds[i] = med
+        modes[i] = mode
+        onesigs[i] = interval
+        minval = np.min(dist)
+        maxval = np.max(dist)
+        sigval = rb.std(dist)
+        maxval = med + sigrange*np.abs(hi-med)
+        minval = med - sigrange*np.abs(med-lo)
+        nb = np.ceil((maxval-minval) / (interval/bindiv))
+        print 'Best fit parameters for '+variables[i]        
+        out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+        print out.format(bestvals[i], med, mode, interval)
+        
+        # do plot
+        plotnum += 1
+        plt.subplot(len(thinds),1,plotnum)
+        print "Computing histogram of data"
+        pinds, = np.where((dist >= minval) & (dist <= maxval))
+        plt.hist(dist[pinds],bins=nb,normed=True)
+        #    plt.xlim([minval,maxval])
+#        plt.axvline(x=bestvals[i],color='r',linestyle='--')
+#        plt.axvline(x=medval,color='c',linestyle='--')
+        plt.xlabel(varnames[i])
+        plt.ylabel(r'$dP$')
+        if plotnum == 1:
+            plt.title('Parameter Distributions for KIC '+name)
+
+    plt.subplots_adjust(hspace=0.55)
+    plt.savefig(path+'MCMC/singlefits/E'+str(enum)+'/'+name+stag+thintag+'_params3_E'+str(enum)+'.png', dpi=300)
+    plt.clf()
+
+# Fourth set of parameters
+    finds, = np.where((np.array(variables) == 'c0_2') ^ (np.array(variables) == 'c1_2') ^ 
+                        (np.array(variables) == 'c2_2') ^ (np.array(variables) == 'c3_2'))    
+
+    plt.figure(5,figsize=(8.5,11),dpi=300)    
+    plt.clf()
+    plotnum = 0
+    for i in finds:
+        print ''
+        dist = chains[:,i]
+
+        med,mode,interval,lo,hi = distparams(dist)
+        meds[i] = med
+        modes[i] = mode
+        onesigs[i] = interval
+        minval = np.min(dist)
+        maxval = np.max(dist)
+        sigval = rb.std(dist)
+        maxval = med + sigrange*np.abs(hi-med)
+        minval = med - sigrange*np.abs(med-lo)
+        nb = np.ceil((maxval-minval) / (interval/bindiv))
+        print 'Best fit parameters for '+variables[i]        
+        out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+        print out.format(bestvals[i], med, mode, interval)
+        
+        # do plot
+        plotnum += 1
+        plt.subplot(len(finds),1,plotnum)
+        print "Computing histogram of data"
+        pinds, = np.where((dist >= minval) & (dist <= maxval))
+        plt.hist(dist[pinds],bins=nb,normed=True)
+        #    plt.xlim([minval,maxval])
+#        plt.axvline(x=bestvals[i],color='r',linestyle='--')
+#        plt.axvline(x=medval,color='c',linestyle='--')
+        plt.xlabel(varnames[i])
+        plt.ylabel(r'$dP$')
+        if plotnum == 1:
+            plt.title('Parameter Distributions for KIC '+name)
+
+    plt.subplots_adjust(hspace=0.55)
+    plt.savefig(path+'MCMC/singlefits/E'+str(enum)+'/'+name+stag+thintag+'_params4_E'+str(enum)+'.png', dpi=300)
+    plt.clf()
+
+
+    plotnum = 0
+# For the remaining variables
+    allinds = np.array(list(priminds) + list(secinds) + list(thinds) + list(finds))
+    allinds = np.sort(allinds)
+    if len(allinds) < len(variables):
+        print "Starting plots for remaining variables"
+        plt.figure(6,figsize=(8.5,11),dpi=300)
+        vinds = np.arange(len(variables))
+        missedi = []
+        for vi in vinds:
+            try:
+                leni = len(np.where(vi == allinds)[0])
+                if leni == 0:
+                    missedi.append(vi)
+            except:
+                pass
+        for i in missedi:
+            print ''
+            dist   = chains[:,i]
+            if variables[i][0] == 'q':
+                minval = 0.0
+                maxval = 1.0
+            else:
+                sigval = rb.std(dist)
+                minval = np.min(dist) - sigval
+                maxval = np.max(dist) + sigval
+
+
+            med,mode,interval,lo,hi = distparams(dist)
+            meds[i] = med
+            modes[i] = mode
+            onesigs[i] = interval
+            minval = np.min(dist)
+            maxval = np.max(dist)
+            sigval = rb.std(dist)
+            maxval = med + sigrange*np.abs(hi-med)
+            minval = med - sigrange*np.abs(med-lo)
+            nb = np.ceil((maxval-minval) / (interval/bindiv))
+            print 'Best fit parameters for '+variables[i]        
+            out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+            print out.format(bestvals[i], med, mode, interval)
+            
+            # do plot
+            plotnum += 1
+            plt.subplot(len(missedi),1,plotnum)
+            print "Computing histogram of data"
+            pinds, = np.where((dist >= minval) & (dist <= maxval))
+            plt.hist(dist[pinds],bins=nb,normed=True)
+            #    plt.xlim([minval,maxval])
+#            plt.axvline(x=bestvals[i],color='r',linestyle='--')
+#            plt.axvline(x=medval,color='c',linestyle='--')
+            plt.xlabel(varnames[i])
+            plt.ylabel(r'$dP$')
+            if plotnum == 1:
+                plt.title('Parameter Distributions for KIC '+name)
+            
+        plt.subplots_adjust(hspace=0.55)
+        plt.savefig(path+'MCMC/singlefits/E'+str(enum)+'/'+name+stag+thintag+'_params5_E'+str(enum)+'.png', dpi=300)
+        plt.clf()
+ 
+   # calculate limb darkening parameters
+#    if limb == 'quad':
+#        ind1, = np.where(variables == 'q1a')
+#        ind2, = np.where(variables == 'q2a')        
+#        u1a,u2a =  qtou(bestvals[ind1],bestvals[ind2],limb=limb)
+#        ldc = [u1a,u2a]
+#        plot_limb_curves(ldc=ldc,limbmodel=limb,write=True,network=network)
+#        ind1, = np.where(variables == 'q1b')
+#        ind2, = np.where(variables == 'q2b')        
+#        u1a,u2a =  qtou(bestvals[ind1],bestvals[ind2],limb=limb)
+#        ldc = [u1a,u2a]
+#        plot_limb_curves(ldc=ldc,limbmodel=limb,write=True,network=network)
+#
+#
+#
+#    vals = [[bestvals],[meds],[modes],[onesigs]]
+
+    plot_single_model(bestvals,eclipse,tag='_MCMC')
+
+    f = open(path+'MCMC/singlefits/E'+str(enum)+'/'+name+stag+thintag+'_fitparams_E'+str(enum)+'.txt','w')
+    for i in np.arange(len(variables)):
+        outstr = []
+        fmt = []
+        outstr.append(variables[i])
+        outstr.append("{:.8f}".format(bestvals[i]))
+        outstr.append("{:.8f}".format(meds[i]))
+        outstr.append("{:.8f}".format(modes[i]))
+        outstr.append("{:.8f}".format(onesigs[i]))
+        f.write(', '.join(outstr)+'\n')
+        
+    f.closed
+
+    plot_defaults()
+
+    return bestvals
+
+
+def desired_params_from_fits(file=None):
+    file = '/Users/jonswift/Astronomy/EBs/outdata/10935310/MCMC/singlefits/Claret/E0/10935310_long_fitparams_E0.txt'
+
+    names,vars = np.loadtxt(file,delimiter=',',usecols=(0,1),
+                            dtype={'names':('name', 'value'),
+                                   'formats':('|S15',np.float)},
+                            unpack=True)
+    return
+
+def plot_single_model(vals,eclipse,markersize=5,smallmark=2,nbins=100,errorbars=False,durfac=5,enum=1,tag=''):
 
     """
-    fit_eclipse:
-    -----------
-    Fit a eclipse light curve with specified mcmc parameters return chains 
-    and log likelihood.
+    ----------------------------------------------------------------------
+    plot_model_single:
+    ------------------
+    Plot transit model given model params.
 
+    ----------------------------------------------------------------------
     """
-    import emcee
+    from matplotlib import gridspec
+    import matplotlib as mpl
+    from plot_params import plot_params, plot_defaults
 
-    global ndim, variables,tfit,mfit,e_mfit
-    global nw, bs, mcs
-    global fitperiod, fitrvs, fitlimb, fitsp1, fitsp2, fullspot, fitellipsoidal, fitlighttravel, fitL3
-    global usegravdark, usereflection
-
-    fitperiod = fit_period
-    fitrvs = fit_rvs
-    fitlimb = fit_limb
-    fitsp1 = fit_sp1
-    fitsp2 = fit_sp2
-    fullspot = full_spot
-    fitellipsoidal = fit_ellipsoidal
-    fitlighttravel = fit_lighttravel
-    fitL3 = fit_L3
-    usegravdark = use_gravdark
-    usereflection = use_reflection
-
-    nw = nwalkers
-    bs = burnsteps
-    mcs = mcmcsteps
-
-    tfit   = lcm[0,:]
-    mfit   = lcm[1,:]
-    e_mfit = lcm[2,:]
-
-
-    directory = path+'MCMC/'
+    plot_params(fontsize=10,linewidth=1.2)
+    
+    # Check for output directory   
+    directory = path+'MCMC/singlefits/'
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-    print ""
-    print "Starting MCMC fitting routine for "+name
+    parm,vder = vec_to_params(vals)
+    
+    
+    ethin = eclipse['thin']
+    thintag = '_thin'+str(ethin) if ethin > 1 else ''
+    enum = eclipse['enum']
+    
+    tag = '_E'+str(enum)
+    
+    vsys = vals[variables == 'vsys'][0]
+    ktot = vals[variables == 'ktot'][0]
 
-    twomin = 2./(24.*60.)
-    onesec = 1./(24.*60.*60.)
+    massratio = parm[eb.PAR_Q]
 
-
-# Initial chain values
-    print ""
-    print "Deriving starting values for chains"
-    p0_0  = np.random.uniform(ebpar0['J']*0.5,ebpar0['J']*2.0,nw)             # surface brightness
-    p0_1  = np.random.uniform(ebpar0['Rsum_a']*0.5,ebpar0['Rsum_a']*2.0, nw)  # fractional radius
-    p0_2  = np.random.uniform(ebpar0['Rratio']*0.5,ebpar0['Rratio']*2.0, nw)  # radius ratio
-    p0_3  = np.random.uniform(0,ebpar0['Rsum_a'], nw)                         # cos i
-    p0_4  = np.random.uniform(ebpar0['ecosw']*0.8,min(ebpar0['ecosw']*1.2,1), nw) # ecosw
-    p0_5  = np.random.uniform(ebpar0['esinw']*0.8,min(ebpar0['esinw']*1.2,1), nw) # esinw
-    p0_6  = np.random.normal(ebpar0['mag0'],0.001, nw)                        # mag zpt
-    p0_7  = np.random.normal(ebpar0['t0']-bjd,twomin,nw)                      # ephemeris
-    p0_8  = np.random.normal(ebpar0['Period'],onesec,nw    )                  # Period
-    p0_9  = np.random.uniform(0,1,nw)                                         # Limb darkening
-    p0_10 = np.random.uniform(0,1,nw)                                         # Limb darkening
-    p0_11 = np.random.uniform(0,1,nw)                                         # Limb darkening
-    p0_12 = np.random.uniform(0,1,nw)                                         # Limb darkening
-    p0_13 = np.abs(np.random.normal(ebpar0['Mratio'],0.5,nw))                 # Mass ratio
-    p0_14 = np.random.uniform(0,0.2,nw)                                       # Third Light
-    p0_15 = np.random.uniform(ebpar0['Rot1']*0.5,ebpar0['Rot1']*2.0,nw)       # Stellar rotation
-    p0_16 = np.random.uniform(0,1,nw)                                         # Fraction of spots eclipsed
-    p0_17 = np.zeros(nw)                                                      # base spottedness
-    p0_18 = np.random.normal(0,0.005,nw)                                      # Sin amplitude
-    p0_19 = np.random.normal(0,0.005,nw)                                      # Cos amplitude
-    p0_20 = np.random.normal(0,0.005,nw)                                      # SinCos amplitude
-    p0_21 = np.random.normal(0,0.005,nw)                                      # Cos^2-Sin^2 amplitude
-    p0_22 = np.random.uniform(ebpar0['Rot1']*0.5,ebpar0['Rot1']*2.0,nw)       # Stellar rotation
-    p0_23 = np.random.uniform(0,1,nw)                                         # Fraction of spots eclipsed
-    p0_24 = np.zeros(nw)                                                      # base spottedness
-    p0_25 = np.random.normal(0,0.005,nw)                                      # Sin amplitude
-    p0_26 = np.random.normal(0,0.005,nw)                                      # Cos amplitude
-    p0_27 = np.random.normal(0,0.005,nw)                                      # SinCos amplitude
-    p0_28 = np.random.normal(0,0.005,nw)                                      # Cos^2-Sin^2 amplitude
-    p0_29 = np.abs(np.random.normal(ebpar0['ktot'],ebpar0['ktot']*0.2,nw))    # Total radial velocity amp
-    p0_30 = np.random.normal(ebpar0['vsys'],5.0,nw)                           # System velocity
-
-
-# L3 at 14 ... 14 and beyond + 1
-
-    p0_init = np.array([p0_0,p0_1,p0_2,p0_3,p0_4,p0_5,p0_6,p0_7])
-    variables =["J","Rsum","Rratio","cosi","ecosw","esinw","magoff","t0"]
-    if fitperiod:
-        p0_init = np.append(p0_init,[p0_8],axis=0)
-        variables.append("period")
-    if fitlimb:
-        limb0 = np.array([p0_9,p0_10,p0_11,p0_12])
-        lvars = ["qa1", "qb1", "qa2", "qb2"]
-        p0_init = np.append(p0_init,limb0,axis=0)
-        for var in lvars:
-            variables.append(var)
-    if fitrvs:
-        p0_init = np.append(p0_init,[p0_13],axis=0)
-        variables.append('massratio')
-
-    if fitL3:
-        p0_init = np.append(p0_init,[p0_14],axis=0)
-        variables.append('L3')
+    if claret:
+        T1,logg1,T2,logg2 = get_teffs_loggs(parm,vsys,ktot)
         
+        u1a = ldc1func(T1,logg1)[0][0]
+        u2a = ldc2func(T1,logg1)[0][0]
+        
+        u1b = ldc1func(T2,logg2)[0][0]
+        u2b = ldc2func(T2,logg2)[0][0]
+        
+        q1a,q2a = utoq(u1a,u2a,limb=limb)        
+        q1b,q2b = utoq(u1b,u2b,limb=limb)
+        
+        parm[eb.PAR_LDLIN1] = u1a  # u1 star 1
+        parm[eb.PAR_LDNON1] = u2a  # u2 star 1
+        parm[eb.PAR_LDLIN2] = u1b  # u1 star 2
+        parm[eb.PAR_LDNON2] = u2b  # u2 star 2
+
+    elif fitlimb:
+        q1a = vals[variables == 'q1a'][0]  
+        q2a = vals[variables == 'q2a'][0]  
+        q1b = vals[variables == 'q1b'][0]  
+        q2b = vals[variables == 'q2b'][0]  
+        u1a = parm[eb.PAR_LDLIN1]
+        u2a = parm[eb.PAR_LDNON1]
+        u1b = parm[eb.PAR_LDLIN2]
+        u2b = parm[eb.PAR_LDNON2]
+
+    print "Model parameters:"
+    for vname, value, unit in zip(eb.parnames, parm, eb.parunits):
+        print "{0:<10} {1:14.6f} {2}".format(vname, value, unit)
+
+    print "Derived parameters:"
+    for vname, value, unit in zip(eb.dernames, vder, eb.derunits):
+        print "{0:<10} {1:14.6f} {2}".format(vname, value, unit)
+
+
+######################################################################
+# Light curve model
+######################################################################
+    if not fitellipsoidal:
+        parm[eb.PAR_Q] = 0.0        
+
+    # Phases of contact points
+    (ps, pe, ss, se) = eb.phicont(parm)
+
+    # Primary eclipse
+    t0 = parm[eb.PAR_T0]
+    period = parm[eb.PAR_P]
+    tprim = fitdict['tprim']
+    norm = fitdict['norm']
+    xprim = fitdict['xprim']/norm
+    eprim = fitdict['eprim']/norm
 
     if fitsp1:
-        spot0 = np.array([p0_15,p0_16,p0_17,p0_18,p0_19])
-        spvars = ["Rot1","spFrac1","spBase1","spSin1","spCos1"]
-        p0_init = np.append(p0_init,spot0,axis=0)
-        for var in spvars:
-            variables.append(var)
-        if fullspot:
-            spot0 = np.array([p0_20,p0_21])
-            spvars = ["spSinCos1","spSqSinCos1"]
-            p0_init = np.append(p0_init,spot0,axis=0)
-            for var in spvars:
-                variables.append(var)
+        coeff1 = []
+        for i in range(fitorder+1):
+            coeff1 = np.append(coeff1,vals[variables == 'c'+str(i)+'_1'])
 
-    if fitsp2 and not fitsp1:
-        spot0 = np.array([p0_15,p0_16,p0_17,p0_18,p0_19])
-        spvars = ["Rot2","spFrac2","spBase2","spSin2","spCos2"]
-        p0_init = np.append(p0_init,spot0,axis=0)
-        for var in spvars:
-            variables.append(var)
-        if fullspot:
-            spot0 = np.array([p0_20,p0_21])
-            spvars = ["spSinCos2","spSqSinCos2"]
-            p0_init = np.append(p0_init,spot0,axis=0)
-            for var in spvars:
-                variables.append(var)
+    model1  = compute_eclipse(tprim,parm,fitrvs=False,tref=t0,period=period,ooe1fit=coeff1)
 
-    if fitsp2 and fitsp1:
-        spot0 = np.array([p0_22,p0_23,p0_24,p0_25,p0_26])
-        spvars = ["Rot2","spFrac2","spBase2","spSin2","spCos2"]
-        p0_init = np.append(p0_init,spot0,axis=0)
-        for var in spvars:
-            variables.append(var)
-        if fullspot:
-            spot0 = np.array([p0_27,p0_28])
-            spvars = ["spSinCos2","spSqSinCos2"]
-            p0_init = np.append(p0_init,spot0,axis=0)
-            for var in spvars:
-                variables.append(var)
+    tcomp1 = np.linspace(np.min(tprim),np.max(tprim),10000)
+    compmodel1 = compute_eclipse(tcomp1,parm,fitrvs=False,tref=t0,period=period,ooe1fit=coeff1)
+        
+    phiprim  = foldtime(tprim,t0=t0,period=period)/period
+    phicomp1 = foldtime(tcomp1,t0=t0,period=period)/period
+
+
+    # Secondary eclipse
+    tsec = fitdict['tsec']
+    xsec = fitdict['xsec']/norm
+    esec = fitdict['esec']/norm
+
+    if fitsp1:
+        coeff2 = []
+        for i in range(fitorder+1):
+            coeff2 = np.append(coeff2,vals[variables == 'c'+str(i)+'_2'])
+
+    model2  = compute_eclipse(tsec,parm,fitrvs=False,tref=t0,period=period,ooe1fit=coeff2)
+
+    tcomp2 = np.linspace(np.min(tsec),np.max(tsec),10000)
+    compmodel2 = compute_eclipse(tcomp2,parm,fitrvs=False,tref=t0,period=period,ooe1fit=coeff2)
+        
+    phisec  = foldtime(tsec,t0=t0,period=period)/period
+    phisec[phisec < 0] += 1.0
+    
+    phicomp2 = foldtime(tcomp2,t0=t0,period=period)/period
+    phicomp2[phicomp2 < 0] += 1.0
+    
+    parm[eb.PAR_Q] = massratio
 
     if fitrvs:
-        p0_init = np.append(p0_init,[p0_29],axis=0)
-        variables.append('ktot')
-        p0_init = np.append(p0_init,[p0_30],axis=0)
-        variables.append("vsys")
+        rvmodel1 = compute_eclipse(rvdata1[:,0],parm,fitrvs=True)
+        k2 = ktot/(1+massratio)
+        k1 = k2*massratio
+        rv1 = rvmodel1*k1 + vsys
+        rvmodel2 = compute_eclipse(rvdata2[:,0],parm,fitrvs=True)
 
-    variables = np.array(variables)
-
-# Transpose array of initial guesses
-    p0 = np.array(p0_init).T
+# Does dof need another - 1 ???
+#    dof = np.float(len(tfit)) - np.float(len(variables))
+#    chisquare = np.sum((res/e_ffit)**2)/dof
     
-# Number of dimensions in the fit.
-    ndim = np.shape(p0)[1]
 
+#------------------------------
+# PLOT
 
-# Do not redo MCMC unless clobber flag is set
-    done = os.path.exists(path+'MCMC/'+name+stag+'_Jchain.txt')
-    if done == True and clobber == False:
-        print "MCMC run already completed"
-        return 
+# Primary eclipse
+    fig = plt.figure(109,dpi=300)
+    plt.clf()
+    plt.subplot(2, 2, 1)
+    plt.plot(phiprim,xprim,'ko')
+#    plt.plot(phiprim,model1,'rx')
+    plt.plot(phicomp1,compmodel1,'r-')
+    plt.axvline(x=ps-1.0,color='b',linestyle='--')
+    plt.axvline(x=pe,color='b',linestyle='--')
+    ymax = np.max(np.array(list(xprim)+list(compmodel1)))
+    ymin = np.min(np.array(list(xprim)+list(compmodel1)))
+    ytop = ymax + (ymax-ymin)*0.1
+    ybot = ymin - (ymax-ymin)*0.1
+    plt.ylim(ybot,ytop)
+    plt.ylabel('Flux (normalized)')
+    plt.xlabel('Phase')
+    plt.title('Primary Eclipse',fontsize=12)
 
-# Set up MCMC sampler
-    print "... initializing emcee sampler"
-    tstart = time.time()
-    sampler = emcee.EnsembleSampler(nw, ndim, lnprob)
+    plt.subplot(2, 2, 2)
+    plt.plot(phisec,xsec,'ko')
+#    plt.plot(phisec,model2,'xo')
+    plt.plot(phicomp2,compmodel2,'r-')
+    plt.axvline(x=ss,color='b',linestyle='--')
+    plt.axvline(x=se,color='b',linestyle='--')
+    ymax = np.max(np.array(list(xsec)+list(compmodel2)))
+    ymin = np.min(np.array(list(xsec)+list(compmodel2)))
+    ytop = ymax + (ymax-ymin)*0.1
+    ybot = ymin - (ymax-ymin)*0.1
+    plt.ylim(ybot,ytop)
+    plt.xlabel('Phase')
+    plt.title('Secondary Eclipse',fontsize=12)
 
+    
+    plt.subplot(2, 1, 2)
+    phi1 = foldtime(rvdata1[:,0],t0=t0,period=period)/period
+    plt.plot(phi1,rvdata1[:,1],'ko')
+#    plt.plot(phi1,rv1,'kx')
+    tcomp = np.linspace(-0.5,0.5,10000)*period+t0
+    rvmodel1 = compute_eclipse(tcomp,parm,fitrvs=True)
+    k2 = ktot/(1+massratio)
+    k1 = k2*massratio
+    rvcomp1 = rvmodel1*k1 + vsys
+    plt.plot(np.linspace(-0.5,0.5,10000),rvcomp1,'k--')
+    
+    phi2 = foldtime(rvdata2[:,0],t0=t0,period=period)/period
+    plt.plot(phi2,rvdata2[:,1],'ro')
+#    plt.plot(phi2,rv2,'rx')
+    tcomp = np.linspace(-0.5,0.5,10000)*period+t0
+    rvmodel2 = compute_eclipse(tcomp,parm,fitrvs=True)
+    rvcomp2 = -1.0*rvmodel2*k2 + vsys
+    plt.plot(np.linspace(-0.5,0.5,10000),rvcomp2,'r--')
+    plt.xlim(-0.5,0.5)
+    plt.ylabel('Radial Velocity (km/s)')
+    plt.xlabel('Phase')
 
-# Run burn-in
-    print ""
-    print "Running burn-in with "+str(bs)+" steps and "+str(nw)+" walkers"
-    pos, prob, state = sampler.run_mcmc(p0, bs)
-    print done_in(tstart)
+    plt.suptitle('Eclipse '+str(enum)+' Fitting Results',fontsize=14)
+    
+    plt.savefig(path+'MCMC/singlefits/E'+str(enum)+'/'+name+stag+thintag+'_MCMCfit_E'+str(enum)+'.png')
 
+    plot_defaults()
 
-# Calculate G-R scale factor for each variable
-    Rs = GR_test(sampler.chain,variables=variables)
-        
-    for var in np.arange(ndim):
-        acout = "Autocorrelation time for "+variables[var]+" = {0:0.3f}"
-        print acout.format(sampler.acor[var])
+    return # chisquare
 
-    afout = "Mean acceptance fraction: {0:0.3f}"
-    print afout.format(np.mean(sampler.acceptance_fraction))
-
-
-# Save burn in stats
-    burn = np.append(Rs,sampler.acor)
-    burn = np.append(burn,sampler.acceptance_fraction)
-    np.savetxt(path+'MCMC/'+name+stag+'_burnstats.txt',burn)
-
-# Reset sampler and run MCMC for reals
-    print "getting pdfs for LD coefficients"
-    print "... resetting sampler and running MCMC with "+str(mcs)+" steps"
-    sampler.reset()
-    posf, probf, statef = sampler.run_mcmc(pos, mcs)
-    print done_in(tstart)
-
- # Calculate G-R scale factor for each variable
-    Rs = GR_test(sampler.chain,variables=variables)
-
-# Autocorrelation times
-    for var in np.arange(ndim):
-        acout = "Autocorrelation time for "+variables[var]+" = {0:0.3f}"
-        print acout.format(sampler.acor[var])
-
-    afout = "Final mean acceptance fraction: {0:0.3f}"
-    print afout.format(np.mean(sampler.acceptance_fraction))
-
-    stats = np.append(Rs,sampler.acor)
-    stats = np.append(stats,sampler.acceptance_fraction)
-    np.savetxt(path+'MCMC/'+name+stag+'_finalstats.txt',stats)
-
-# Write out chains to disk
-    print "Writing MCMC chains to disk"
-    lp = sampler.lnprobability.flatten()
-    np.savetxt(path+'MCMC/'+name+stag+'_lnprob.txt',lp)
-    for i in np.arange(len(variables)):
-        np.savetxt(path+'MCMC/'+name+stag+'_'+variables[i]+'chain.txt',sampler.flatchain[:,i])
-
-    chains = sampler.flatchain
-
-    return 
 
 
 
@@ -1980,17 +2158,23 @@ def varnameconv(variables):
     varmatch = np.array(["J","Rsum","Rratio","cosi",
                          "ecosw","esinw",
                          "magoff","t0","period",
-                         "qa1", "qb1", "qa2", "qb2","massratio","L3",
+                         "q1a", "q2a", "q1b", "q2b","massratio","L3",
                          "Rot1","spFrac1","spBase1","spSin1","spCos1","spSinCos1","spSqSinCos1",
                          "Rot2","spFrac2","spBase2","spSin2","spCos2","spSinCos2","spSqSinCos2",
+                         "c0_1","c1_1","c2_1","c3_1","c4_1","c5_1",
+                         "c0_2","c1_2","c2_2","c3_2","c4_2","c5_2",
                          "ktot","vsys"])
 
     varnames = np.array(["Surf. Br. Ratio", r"$(R_1+R_2)/a$", r"$R_2/R_1$", r"$\cos i$", 
                          r"$e\cos\omega$",r"$e\sin\omega$",
                          r"$\Delta m_0$", r"$\Delta t_0$ (s)","$\Delta P$ (s)",
                          "$q_1^p$","$q_2^p$","$q_1^s$","$q_2^s$","$M_2/M_1$", "$L_3$",
-                         "$P_rot^p$","Sp. Frac. 1", "Sp. Base 1", "Sin Amp 1", "Cos Amp 1", "SinCos Amp 1", "Cos$^2$-Sin$^2$ Amp 1",
-                         "$P_rot^s$","Sp. Frac. 2", "Sp. Base 2", "Sin Amp 2", "Cos Amp 2", "SinCos Amp 2", "Cos$^2$-Sin$^2$ Amp 2",
+                         "$P_{rot}^p$","Sp. Frac. 1", "Sp. Base 1", "Sin Amp 1", "Cos Amp 1", "SinCos Amp 1", "Cos$^2$-Sin$^2$ Amp 1",
+                         "$P_{rot}^s$","Sp. Frac. 2", "Sp. Base 2", "Sin Amp 2", "Cos Amp 2", "SinCos Amp 2", "Cos$^2$-Sin$^2$ Amp 2",
+                         "$C_0$ (eclipse 1)","$C_1$ (eclipse 1)","$C_2$ (eclipse 1)",
+                         "$C_3$ (eclipse 1)","$C_4$ (eclipse 1)","$C_5$ (eclipse 1)",
+                         "$C_0$ (eclipse 2)","$C_1$ (eclipse 2)","$C_2$ (eclipse 2)",
+                         "$C_3$ (eclipse 2)","$C_4$ (eclipse 2)","$C_5$ (eclipse 2)",
                          r"$K_{\rm tot}$ (km/s)", r"$V_{\rm sys}$ (km/s)"])
 
     varvec = []
@@ -2004,1075 +2188,58 @@ def varnameconv(variables):
 
 
 
+def residuals_orig(inp):
 
-def bestvals(chains=False,lp=False,network=None,bindiv=10.0,thin=False,
-             frac=0.001,nbins=100,rpmax=1,durmax=10,sigrange=5.0):
-
-    """
+    """ 
     ----------------------------------------------------------------------
-    bestvals:
-    ---------
-    Find the best values from the 1-d posterior pdfs return best values 
-    and the posterior pdf for rp/rs
+    resuduals:
+    ----------
+    Calculate residuals given an input model.
     ----------------------------------------------------------------------
     """
-    
-    import robust as rb
-    from scipy.stats.kde import gaussian_kde
-    import matplotlib as mpl
 
-    mpl.rc('axes', linewidth=1)
-
-    nsamp = nw*mcs
-    
-# Use supplied chains or read from disk
-    if chains == False:
-        chains = np.zeros((nsamp,len(variables)))
-        for i in np.arange(len(variables)):
-            try:
-                print "Reading MCMC chains for "+variables[i]
-                tmp = np.loadtxt(path+'MCMC/'+name+stag+'_'+variables[i]+'chain.txt')
-                chains[:,i] = tmp
-            except:
-                print name+stag+'_'+variables[i]+'chain.txt does not exist on disk !'
-
-    if lp == False:
-        try:
-            print "Reading ln(prob) chain"
-            lp = np.loadtxt(path+'MCMC/'+name+stag+'_lnprob.txt')
-        except:
-            print "lnprob chain does not exist. Exiting"
-            return
-
-#  Get maximum likelihood values
-    bestvals = np.zeros(len(variables))
-    meds = np.zeros(len(variables))
-    modes = np.zeros(len(variables))
-    onesigs = np.zeros(len(variables))
-
-    maxlike = np.max(lp)
-    imax = np.array([i for i, j in enumerate(lp) if j == maxlike])
-    if imax.size > 1:
-        imax = imax[0]
-    for i in np.arange(len(variables)):
-        bestvals[i] = chains[imax,i]
-        
-    if thin:
-        print "Thinning chains by a factor of "+str(thin)
-        nsamp /= thin
-        thinchains = np.zeros((nsamp,len(variables)))
-        for i in np.arange(len(variables)):
-            thinchains[:,i] = chains[0::thin,i]
-        lp = lp[0::thin]
-        chains = thinchains 
-
-    upper = np.linspace(.69,.999,100)
-    lower = upper-0.6827
-
-    varnames = varnameconv(variables)
-
-# Primary Variables
-    priminds, = np.where((np.array(variables) == 'J') ^ (np.array(variables) =='Rsum') ^ 
-                         (np.array(variables) == 'Rratio') ^ (np.array(variables) == 'ecosw') ^ 
-                         (np.array(variables) == 'esinw') ^ (np.array(variables) == 'cosi'))
-
-    plt.figure(4,figsize=(8.5,11),dpi=300)    
-    plotnum = 0
-    for i in priminds:
-        print ''
-        dist   = chains[:,i]
-        minval = np.min(dist)
-        maxval = np.max(dist)
-        sigval = rb.std(dist)
-        s = np.linspace(minval-sigval,maxval+sigval,1000)
-        kde = gaussian_kde(dist)
-        print "Creating synthetic PDF with kernel density estimation for "+variables[i]
-        pdf = kde(s)
-        dist_c = np.cumsum(pdf)/np.sum(pdf)
-        func = sp.interpolate.interp1d(dist_c,s,kind='linear')
-        his = func(upper)
-        los = func(lower)
-        ind = np.argmin(his-los)
-        hi  = his[ind] 
-        lo  = los[ind] 
-        medval = np.median(dist)
-        mode = s[np.argmax(pdf)]
-        sigint =  np.abs(hi-lo)
-        meds[i] = medval
-        modes[i] = mode
-        onesigs[i] = sigint
-        maxval = medval + sigrange*sigval
-        minval = medval - sigrange*sigval
-        nb = np.ceil((maxval-minval) / (sigval/bindiv))
-        print 'Best fit parameters for '+variables[i]        
-        out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-        print out.format(bestvals[i], medval, mode, sigint)
-        
-        # do plot
-        plotnum += 1
-        plt.subplot(len(priminds),1,plotnum)
-        print "Computing histogram of data"
-        pinds, = np.where((dist >= minval) & (dist <= maxval))
-        plt.hist(dist[pinds],bins=nb,normed=True)
-        #    plt.xlim([minval,maxval])
-#        plt.axvline(x=bestvals[i],color='r',linestyle='--')
-#        plt.axvline(x=medval,color='c',linestyle='--')
-        plt.xlabel(varnames[i])
-        plt.ylabel(r'$dP$')
-        if plotnum == 1:
-            plt.title('Parameter Distributions for KIC '+name)
-
-    plt.subplots_adjust(hspace=0.55)
-    plt.savefig(path+'MCMC/'+name+stag+'_params1.png', dpi=300)
-    plt.clf()
-
-
-
-# Second set of parameters
-    secinds, = np.where((np.array(variables) == 't0') ^ (np.array(variables) =='period') ^ 
-                        (np.array(variables) == 'magoff') ^ (np.array(variables) == 'massratio') ^ 
-                        (np.array(variables) == 'ktot') ^ (np.array(variables) == 'vsys'))
-
-    plt.figure(5,figsize=(8.5,11),dpi=300)    
-    plotnum = 0
-    for i in secinds:
-        print ''
-        if variables[i] == 't0':
-            dist   = (chains[:,i] - (ebpar0["t0"] - bjd))*3600.0
-            t0val = bestvals[i]
-            bestvals[i] = (t0val -(ebpar0["t0"] - bjd))*3600.0
-        elif variables[i] == 'magoff':
-            dist   = (chains[:,i] - ebpar0["mag0"])
-            mval = bestvals[i]
-            bestvals[i] = mval - ebpar0["mag0"]
-        elif variables[i] == 'period':
-            dist   = (chains[:,i] - ebpar0["Period"])*3600.0
-            pval = bestvals[i]
-            bestvals[i] = (pval - ebpar0["Period"])*3600.0
-        else:
-            dist = chains[:,i]
-        minval = np.min(dist)
-        maxval = np.max(dist)
-        sigval = rb.std(dist)
-        s = np.linspace(minval-sigval,maxval+sigval,1000)
-        kde = gaussian_kde(dist)
-        print "Creating synthetic PDF with kernel density estimation for "+variables[i]
-        pdf = kde(s)
-        dist_c = np.cumsum(pdf)/np.sum(pdf)
-        func = sp.interpolate.interp1d(dist_c,s,kind='linear')
-        his = func(upper)
-        los = func(lower)
-        ind = np.argmin(his-los)
-        hi  = his[ind] 
-        lo  = los[ind] 
-        medval = np.median(dist)
-        mode = s[np.argmax(pdf)]
-        sigint =  np.abs(hi-lo)
-        meds[i] = medval
-        modes[i] = mode
-        onesigs[i] = sigint
-        maxval = medval + sigrange*sigval
-        minval = medval - sigrange*sigval
-        nb = np.ceil((maxval-minval) / (sigval/bindiv))
-        print 'Best fit parameters for '+variables[i]
-        out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-        print out.format(bestvals[i], medval, mode, sigint)
-        
-        # do plot
-        plotnum += 1
-        plt.subplot(len(secinds),1,plotnum)
-        print "Computing histogram of data"
-        pinds, = np.where((dist >= minval) & (dist <= maxval))
-        plt.hist(dist[pinds],bins=nb,normed=True)
-        #    plt.xlim([minval,maxval])
-#        plt.axvline(x=bestvals[i],color='r',linestyle='--')
-#        plt.axvline(x=medval,color='c',linestyle='--')
-        plt.xlabel(varnames[i])
-        plt.ylabel(r'$dP$')
-        if plotnum == 1:
-            plt.title('Parameter Distributions for KIC '+name)
-        if variables[i] == 't0':
-            plt.annotate(r'$t_0$ = %.6f BJD' % ebpar0["t0"], xy=(0.96,0.8),
-                         ha="right",xycoords='axes fraction',fontsize='large')
-            bestvals[i] = t0val
-        if variables[i] == 'period':
-            plt.annotate(r'$P$ = %.6f d' % ebpar0["Period"], xy=(0.96,0.8),
-                         ha="right",xycoords='axes fraction',fontsize='large')
-            bestvals[i] = pval
-        if variables[i] == 'magoff':
-            plt.annotate(r'$m_0$ = %.3f ' % ebpar0["mag0"], xy=(0.96,0.8),
-                         ha="right",xycoords='axes fraction',fontsize='large')
-            bestvals[i] = mval
-
-    plt.subplots_adjust(hspace=0.55)
-    plt.savefig(path+'MCMC/'+name+stag+'_params2.png', dpi=300)
-    plt.clf()
-
-
-    plotnum = 0
-# For the remaining variables
-    allinds = np.append(priminds,secinds)
-    allinds = np.sort(allinds)
-    if len(allinds) < len(variables):
-        print "Starting plots for remaining variables"
-        plt.figure(6,figsize=(8.5,11),dpi=300)
-        vinds = np.arange(len(variables))
-        missedi = []
-        for vi in vinds:
-            try:
-                leni = len(np.where(vi == allinds)[0])
-                if leni == 0:
-                    missedi.append(vi)
-            except:
-                pass
-        for i in missedi:
-            print ''
-            dist   = chains[:,i]
-            if variables[i][0] == 'q':
-                minval = 0.0
-                maxval = 1.0
-            else:
-                sigval = rb.std(dist)
-                minval = np.min(dist) - sigval
-                maxval = np.max(dist) + sigval
-            s = np.linspace(minval,maxval,1000)
-            kde = gaussian_kde(dist)
-            print "Creating synthetic PDF with kernel density estimation for "+variables[i]
-            pdf = kde(s)
-            dist_c = np.cumsum(pdf)/np.sum(pdf)
-            func = sp.interpolate.interp1d(dist_c,s,kind='linear')
-            his = func(upper)
-            # kludge to fix cases where pdf butts up against 0
-            try:
-                los = func(lower)
-            except:
-                los = np.zeros(len(lower))
-                los[10:] = func(lower[10:])                               
-            ind = np.argmin(his-los)
-            hi  = his[ind] 
-            lo  = los[ind] 
-            medval = np.median(dist)
-            mode = s[np.argmax(pdf)]
-            sigint =  np.abs(hi-lo)
-            meds[i] = medval
-            modes[i] = mode
-            onesigs[i] = sigint
-            maxval = medval + sigrange*sigval
-            minval = medval - sigrange*sigval
-            nb = np.ceil((maxval-minval) / (sigval/bindiv))
-            print 'Best fit parameters for '+variables[i]        
-            out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-            print out.format(bestvals[i], medval, mode, sigint)
-            
-            # do plot
-            plotnum += 1
-            plt.subplot(len(missedi),1,plotnum)
-            print "Computing histogram of data"
-            pinds, = np.where((dist >= minval) & (dist <= maxval))
-            plt.hist(dist[pinds],bins=nb,normed=True)
-            #    plt.xlim([minval,maxval])
-#            plt.axvline(x=bestvals[i],color='r',linestyle='--')
-#            plt.axvline(x=medval,color='c',linestyle='--')
-            plt.xlabel(varnames[i])
-            plt.ylabel(r'$dP$')
-            if plotnum == 1:
-                plt.title('Parameter Distributions for KIC '+name)
-            
-        plt.subplots_adjust(hspace=0.55)
-        plt.savefig(path+'MCMC/'+name+stag+'_params3.png', dpi=300)
-        plt.clf()
- 
-   # calculate limb darkening parameters
-#    if limb == 'quad':
-#        ind1, = np.where(variables == 'q1a')
-#        ind2, = np.where(variables == 'q2a')        
-#        u1a,u2a =  qtou(bestvals[ind1],bestvals[ind2],limb=limb)
-#        ldc = [u1a,u2a]
-#        plot_limb_curves(ldc=ldc,limbmodel=limb,write=True,network=network)
-#        ind1, = np.where(variables == 'q1b')
-#        ind2, = np.where(variables == 'q2b')        
-#        u1a,u2a =  qtou(bestvals[ind1],bestvals[ind2],limb=limb)
-#        ldc = [u1a,u2a]
-#        plot_limb_curves(ldc=ldc,limbmodel=limb,write=True,network=network)
-#
-#
-#
-#    vals = [[bestvals],[meds],[modes],[onesigs]]
-
-    plot_model(bestvals,tag='_MCMC')
-
-    f = open(path+'MCMC/'+name+stag+'_fitparams.txt','w')
-    for i in np.arange(len(variables)):
-        outstr = []
-        fmt = []
-        outstr.append(variables[i])
-        outstr.append("{:.8f}".format(bestvals[i]))
-        outstr.append("{:.8f}".format(meds[i]))
-        outstr.append("{:.8f}".format(modes[i]))
-        outstr.append("{:.8f}".format(onesigs[i]))
-        f.write(', '.join(outstr)+'\n')
-        
-    f.closed
-
-    return bestvals
-
-
-def plot_model(vals,short=False,tag='',markersize=5,smallmark=2,nbins=100,errorbars=False,durfac=5):
-
-    """
-    ----------------------------------------------------------------------
-    plot_model:
-    -----------
-    Plot transit model given model params.
-
-    ----------------------------------------------------------------------
-    """
-    from matplotlib import gridspec
-    import matplotlib as mpl
-
-
-    parm, vder = vec_to_params(vals)
-
-#    pdb.set_trace()
-    vsys = vals[-1]
-    ktot = vals[-2]
-
-    print "Model parameters:"
-    for vname, value, unit in zip(eb.parnames, parm, eb.parunits):
-        print "{0:<10} {1:14.6f} {2}".format(vname, value, unit)
-
-    print "Derived parameters:"
-    for vname, value, unit in zip(eb.dernames, vder, eb.derunits):
-        print "{0:<10} {1:14.6f} {2}".format(vname, value, unit)
-
-######################################################################
-# Light curve model
-######################################################################
-
-    # Phases of contact points
-    (ps, pe, ss, se) = eb.phicont(parm)
-
-    tfold = foldtime(lcf[0,:], period=parm[eb.PAR_P], t0=parm[eb.PAR_T0])
-
-# Check for output directory   
-    directory = path+'MCMC/'
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-
-    xmin1 =  (ps-1)*parm[eb.PAR_P]*durfac
-    xmax1 = pe*parm[eb.PAR_P]*durfac
-    tmodel1 = np.linspace(xmin1,xmax1,1000)+parm[eb.PAR_T0]
-    inds1, = np.where((tfold >= xmin1) & (tfold <= xmax1))
-    tfold1 = tfold[inds1]
-    fdata1 = lcf[1,inds1]
-    tcomp1 = tfold[inds1]+parm[eb.PAR_T0]
-
-    massratio = parm[eb.PAR_Q]
-
-    if not fitellipsoidal:
-        parm[eb.PAR_Q] = 0.0        
-    smoothmodel1 = compute_eclipse(tmodel1,parm)    
-    smoothcomp1  = compute_eclipse(tcomp1,parm)    
-    parm[eb.PAR_Q] = massratio
-
-    flux1,eflux1 = mag2flux(smoothmodel1,0.0,parm[eb.PAR_M0])
-    fcomp1,ecomp1 = mag2flux(smoothcomp1,0.0,parm[eb.PAR_M0])
-    res1 = lcf[1,inds1]-fcomp1
-
-
-    tfold = foldtime(lcf[0,:], period=parm[eb.PAR_P], t0=vder[eb.PAR_TSEC])
-    ds = (se-ss)/2.0
-    xmax2 = ds*durfac*parm[eb.PAR_P]
-    xmin2 = -1.0*xmax2
-    tmodel2 = np.linspace(xmin2,xmax2,1000)+vder[eb.PAR_TSEC]
-    inds2, = np.where((tfold >= xmin2) & (tfold <= xmax2))
-    tfold2 = tfold[inds2]
-    fdata2 = lcf[1,inds2]
-    tcomp2 = tfold[inds2]+vder[eb.PAR_TSEC]
-
-    if not fitellipsoidal:
-        parm[eb.PAR_Q] = 0.0        
-    smoothmodel2 = compute_eclipse(tmodel2,parm)    
-    smoothcomp2  = compute_eclipse(tcomp2,parm)    
-    parm[eb.PAR_Q] = massratio
-
-    flux2,eflux2 = mag2flux(smoothmodel2,0.0,parm[eb.PAR_M0])
-    fcomp2,ecomp2 = mag2flux(smoothcomp2,0.0,parm[eb.PAR_M0])
-    res2 = lcf[1,inds2]-fcomp2
-
-#------------------------------
-# PLOT
-
-# Primary eclipse
-    mpl.rc('axes', linewidth=1.5)
-    fs = 20
-    lw = 1.5
-    ms = 12
-#    ymin = 0.825
-#    ymax = 1.025
-    yrmin = -6
-    yrmax = 6
-    fig = plt.figure(99,figsize=(11,8.5),dpi=300)
-    plt.clf()
-    gs = gridspec.GridSpec(3, 2,wspace=0.05,hspace=0.05)
-    ax1 = plt.subplot(gs[0:2, 0])    
-    ax1.plot(tfold1*24.0,fdata1,'k.',linewidth=lw)
-    ax1.plot((tmodel1-parm[eb.PAR_T0])*24.0,flux1,'r-',linewidth=1)
-    ax1.set_xlim((xmin1*24.0,xmax1*24.0))
-    ymin,ymax = ax1.get_ylim()
-    ax1.yaxis.set_tick_params(length=5, width=lw, labelsize=fs-4)
-    ax1.xaxis.set_tick_params(length=5, width=lw, labelsize=fs-4)
-    ax1.set_xticklabels(())
-    ax1.set_ylabel('Relative Flux',fontsize=fs)
-    ax1.set_title('Primary Eclipse',fontsize=fs)
-    
-    ax2 = plt.subplot(gs[2, 0])
-    ax2.plot((tcomp1-parm[eb.PAR_T0])*24.0,res1*1000.0,'k.',linewidth=lw)
-    ax2.set_xlim((xmin1*24.0,xmax1*24.0))
-    ax2.set_ylim(yrmin,yrmax)
-    ax2.yaxis.set_tick_params(length=5, width=lw, labelsize=fs-4)
-    ax2.xaxis.set_tick_params(length=5, width=lw, labelsize=fs-4)
-    ax2.axhline(0,linestyle='-',color='r',linewidth=1)
-    ax2.set_ylabel(r'$O-C$ ($\times 1000$)',fontsize=fs)
-    ax2.set_xlabel('Time from Mid-Eclipse (h)',fontsize=fs)
-
-# Secondary eclipse
-    ax3 = plt.subplot(gs[0:2, 1])    
-    ax3.plot(tfold2*24.0,fdata2,'k.',linewidth=lw)
-    ax3.plot((tmodel2-vder[eb.PAR_TSEC])*24.0,flux2,'r-',linewidth=1)
-    ax3.set_xlim((xmin2*24.0,xmax2*24.0))
-    ax3.set_ylim(ymin,ymax)
-    ax3.yaxis.set_tick_params(length=5, width=lw, labelsize=fs-4)
-    ax3.xaxis.set_tick_params(length=5, width=lw, labelsize=fs-4)
-    ax3.set_xticklabels(())
-    ax3.set_yticklabels(())
-    ax3.set_title('Secondary Eclipse',fontsize=fs)
-    
-    ax4 = plt.subplot(gs[2, 1])
-    ax4.plot((tcomp2-vder[eb.PAR_TSEC])*24.0,res2*1000.0,'k.',linewidth=lw)
-    ax4.set_xlim((xmin2*24.0,xmax2*24.0))
-    ax4.set_ylim(yrmin,yrmax)
-    ax4.yaxis.set_tick_params(length=5, width=lw, labelsize=fs-4)
-    ax4.xaxis.set_tick_params(length=5, width=lw, labelsize=fs-4)
-    ax4.axhline(0,linestyle='-',color='r',linewidth=1)
-    ax4.set_xlabel('Time from Mid-Eclipse (h)',fontsize=fs)
-    ax4.set_yticklabels(())
-
-    plt.savefig(path+'MCMC/'+name+stag+'_LCfit'+tag+'.png', dpi=300)
-    plt.clf()
-
-
-######################################################################
-# RV model
-######################################################################
-    rvmodel1 = compute_eclipse(rvdata1[:,0],parm,vder=vder,fitrvs=True,vsys=vsys,ktot=ktot)
-    k2 = ktot/(1+massratio)
-    k1 = k2*massratio
-    rv1 = rvmodel1*k1 + vsys
-    tfold1 = foldtime_pos(rvdata1[:,0], period=parm[eb.PAR_P], t0=parm[eb.PAR_T0])
-    resrv1 = rvdata1[:,1] - rv1
-    
-    rvmodel2 = compute_eclipse(rvdata2[:,0],parm,vder=vder,fitrvs=True,vsys=vsys,ktot=ktot,secondary=True)
-    rv2 = -1.0*rvmodel2*k2 + vsys
-    tfold2 = foldtime_pos(rvdata2[:,0], period=parm[eb.PAR_P], t0=parm[eb.PAR_T0])
-    resrv2 = rvdata2[:,1] - rv2
-
-    rvtime = np.linspace(0,parm[eb.PAR_P],1000)+parm[eb.PAR_T0]
-    rvphase = (rvtime - parm[eb.PAR_T0])/parm[eb.PAR_P]
-    rvplt = compute_eclipse(rvtime,parm,vder=vder,fitrvs=True,vsys=vsys,ktot=ktot)
-    rvplt1 = rvplt*k1 + vsys
-    rvplt2 = -1.0*rvplt*k2 + vsys
-
-#    esq = parm[eb.PAR_ECOSW]*parm[eb.PAR_ECOSW] + parm[eb.PAR_ESINW]*parm[eb.PAR_ESINW]
-#    roe = np.sqrt(1.0-esq)
-#    sini = np.sqrt(1.0-parm[eb.PAR_COSI]*parm[eb.PAR_COSI])
-#    qpo = 1.0+parm[eb.PAR_Q]
-#    omega = 2.0*np.pi*(1.0 + vsys*1000.0/eb.LIGHT) / (parm[eb.PAR_P]*86400.0)
-#    tmp = ktot*1000.0 * roe
-#    mtot = tmp*tmp*tmp / (EB_GMSUN*omega*sini)#
-#    m1 = mtot / qpo
-#    m2 = massratio * m1
-
-    fs = 24
-    lw = 1.5
-    ms = 12
-    period = parm[eb.PAR_P]
-    ymax = np.max(np.array([rvplt1,rvplt2]))
-    ymin = np.min(np.array([rvplt1,rvplt2]))
-    yrange = ymax-ymin
- 
-    fig = plt.figure(101,figsize=(11,8.5),dpi=300)
-    plt.clf()
-    gs = gridspec.GridSpec(3, 1,wspace=0)
-    ax1 = plt.subplot(gs[0:2, 0])    
-    ax1.errorbar(tfold1/period,rvdata1[:,1],yerr=rvdata1[:,2],fmt='ko',linewidth=lw,markersize=ms)
-    ax1.errorbar(tfold2/period,rvdata2[:,1],yerr=rvdata2[:,2],fmt='ro',linewidth=lw,markersize=ms)
-    ax1.axhline(vsys,linestyle='--',color='k',linewidth=lw)
-    ax1.plot(rvphase,rvplt1,'k-',lw=lw)
-    ax1.plot(rvphase,rvplt2,'r-',lw=lw)
-    ax1.set_xlim(0,period/period)
-    ax1.set_ylim(ymin-0.1*yrange,ymax+0.1*yrange)
-    ax1.set_title('RV data and model for KIC '+name,fontsize=fs)
-#    mass1 = vder[eb.PAR_M1]
-#    ax1.annotate(r'$M_1 = %.3f$ M$_\odot$' % mass1, xy=(0.95,0.9), \
-#                     ha="right",xycoords='axes fraction',fontsize=fs)
-#    mass2 = vder[eb.PAR_M2]
-#    ax1.annotate(r'$M_2 = %.3f$ M$_\odot$' % mass2, xy=(0.95,0.83), \
-#                     ha="right",xycoords='axes fraction',fontsize=fs)
-    ax1.set_ylabel('Radial Velocity (km/s)',fontsize=fs)
-    ax1.yaxis.set_tick_params(length=10, width=lw, labelsize=fs-4)
-    ax1.yaxis.set_tick_params(length=5, width=lw, labelsize=fs-4)
-    ax1.xaxis.set_tick_params(length=10, width=lw, labelsize=fs-4)
-    ax1.xaxis.set_tick_params(length=10, width=lw, labelsize=fs-4)
-    ax1.set_xticklabels(())
-
-    ax2 = plt.subplot(gs[2, 0])
-    ax2.errorbar(tfold1/period,resrv1,yerr=rvdata1[:,2],fmt='ko',linewidth=lw,markersize=ms)
-    ax2.errorbar(tfold2/period,resrv2,yerr=rvdata2[:,2],fmt='ro',linewidth=lw,markersize=ms)
-    ax2.axhline(0,linestyle='--',color='k',lw=lw)
-    ax2.set_xlim(0,period/period)
-    ax2.set_ylabel('$O-C$ (km/s)',fontsize=fs)
-    ax2.set_xlabel('Orbital Phase',fontsize=fs)
-    ax2.yaxis.set_tick_params(length=10, width=lw, labelsize=fs-4)
-    ax2.yaxis.set_tick_params(length=5, width=lw, labelsize=fs-4)
-    ax2.xaxis.set_tick_params(length=10, width=lw, labelsize=fs-4)
-    ax2.xaxis.set_tick_params(length=10, width=lw, labelsize=fs-4)
- 
-    plt.savefig(path+'MCMC/'+name+stag+'_RVfit'+tag+'.png',dpi=300)
-    plt.clf()
-
-    return
-
-
-def single_bestvals(chains=False,lp=False,network=None,bindiv=10.0,thin=False,
-                    frac=0.001,nbins=100,rpmax=1,durmax=10,sigrange=5.0,enum=1):
-
-    """
-    ----------------------------------------------------------------------
-    single_bestvals:
-    ---------
-    Find the best values from the 1-d posterior pdfs return best values
-    ----------------------------------------------------------------------
-    """
-    
-    import robust as rb
-    from scipy.stats.kde import gaussian_kde
-    import matplotlib as mpl
-
-    mpl.rc('axes', linewidth=1)
-
-    nsamp = nw*mcs
-    
-# Use supplied chains or read from disk
-    if chains == False:
-        chains = np.zeros((nsamp,len(variables)))
-        for i in np.arange(len(variables)):
-            try:
-                print "Reading MCMC chains for "+variables[i]
-                tmp = np.loadtxt(path+'MCMC/running/'+name+stag+'_'+variables[i]+'chain_E'+str(enum)+'.txt')
-                chains[:,i] = tmp
-            except:
-                print name+stag+'_'+variables[i]+'chain_E'+str(enum)+'.txt does not exist on disk !'
-
-    if lp == False:
-        try:
-            print "Reading ln(prob) chain"
-            lp = np.loadtxt(path+'MCMC/running/'+name+stag+'_lnprob_E'+str(enum)+'.txt')
-        except:
-            print "lnprob chain does not exist. Exiting"
-            return
-
-#  Get maximum likelihood values
-    bestvals = np.zeros(len(variables))
-    meds = np.zeros(len(variables))
-    modes = np.zeros(len(variables))
-    onesigs = np.zeros(len(variables))
-
-    maxlike = np.max(lp)
-    imax = np.array([i for i, j in enumerate(lp) if j == maxlike])
-    if imax.size > 1:
-        imax = imax[0]
-    for i in np.arange(len(variables)):
-        bestvals[i] = chains[imax,i]
-        
-    if thin:
-        print "Thinning chains by a factor of "+str(thin)
-        nsamp /= thin
-        thinchains = np.zeros((nsamp,len(variables)))
-        for i in np.arange(len(variables)):
-            thinchains[:,i] = chains[0::thin,i]
-        lp = lp[0::thin]
-        chains = thinchains 
-
-    upper = np.linspace(.69,.999,100)
-    lower = upper-0.6827
-
-    varnames = varnameconv(variables)
-
-
-# Primary Variables
-    priminds, = np.where((np.array(variables) == 'J') ^ (np.array(variables) =='Rsum') ^ 
-                         (np.array(variables) == 'Rratio') ^ (np.array(variables) == 'ecosw') ^ 
-                         (np.array(variables) == 'esinw') ^ (np.array(variables) == 'cosi'))
-
-    plt.figure(4,figsize=(8.5,11),dpi=300)    
-    plotnum = 0
-    for i in priminds:
-        print ''
-        dist   = chains[:,i]
-        minval = np.min(dist)
-        maxval = np.max(dist)
-        sigval = rb.std(dist)
-        s = np.linspace(minval-sigval,maxval+sigval,1000)
-        kde = gaussian_kde(dist)
-        print "Creating synthetic PDF with kernel density estimation for "+variables[i]
-        pdf = kde(s)
-        dist_c = np.cumsum(pdf)/np.sum(pdf)
-        func = sp.interpolate.interp1d(dist_c,s,kind='linear')
-        his = func(upper)
-        los = func(lower)
-        ind = np.argmin(his-los)
-        hi  = his[ind] 
-        lo  = los[ind] 
-        medval = np.median(dist)
-        mode = s[np.argmax(pdf)]
-        sigint =  np.abs(hi-lo)
-        meds[i] = medval
-        modes[i] = mode
-        onesigs[i] = sigint
-        maxval = medval + sigrange*sigval
-        minval = medval - sigrange*sigval
-        nb = np.ceil((maxval-minval) / (sigval/bindiv))
-        print 'Best fit parameters for '+variables[i]        
-        out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-        print out.format(bestvals[i], medval, mode, sigint)
-        
-        # do plot
-        plotnum += 1
-        plt.subplot(len(priminds),1,plotnum)
-        print "Computing histogram of data"
-        pinds, = np.where((dist >= minval) & (dist <= maxval))
-        plt.hist(dist[pinds],bins=nb,normed=True)
-        #    plt.xlim([minval,maxval])
-#        plt.axvline(x=bestvals[i],color='r',linestyle='--')
-#        plt.axvline(x=medval,color='c',linestyle='--')
-        plt.xlabel(varnames[i])
-        plt.ylabel(r'$dP$')
-        if plotnum == 1:
-            plt.title('Parameter Distributions for KIC '+name)
-
-    plt.subplots_adjust(hspace=0.55)
-    plt.savefig(path+'MCMC/running/'+name+stag+'_params1_E'+str(enum)+'.png', dpi=300)
-    plt.clf()
-
-
-
-# Second set of parameters
-    secinds, = np.where((np.array(variables) == 't0') ^ (np.array(variables) =='period') ^ 
-                        (np.array(variables) == 'magoff') ^ (np.array(variables) == 'massratio') ^ 
-                        (np.array(variables) == 'ktot') ^ (np.array(variables) == 'vsys'))
-
-    plt.figure(5,figsize=(8.5,11),dpi=300)    
-    plotnum = 0
-    for i in secinds:
-        print ''
-        if variables[i] == 't0':
-            dist   = (chains[:,i] - (ebpar0["t0"] - bjd))*3600.0
-            t0val = bestvals[i]
-            bestvals[i] = (t0val -(ebpar0["t0"] - bjd))*3600.0
-        elif variables[i] == 'magoff':
-            dist   = (chains[:,i] - ebpar0["mag0"])
-            mval = bestvals[i]
-            bestvals[i] = mval - ebpar0["mag0"]
-        elif variables[i] == 'period':
-            dist   = (chains[:,i] - ebpar0["Period"])*3600.0
-            pval = bestvals[i]
-            bestvals[i] = (pval - ebpar0["Period"])*3600.0
-        else:
-            dist = chains[:,i]
-        minval = np.min(dist)
-        maxval = np.max(dist)
-        sigval = rb.std(dist)
-        s = np.linspace(minval-sigval,maxval+sigval,1000)
-        kde = gaussian_kde(dist)
-        print "Creating synthetic PDF with kernel density estimation for "+variables[i]
-        pdf = kde(s)
-        dist_c = np.cumsum(pdf)/np.sum(pdf)
-        func = sp.interpolate.interp1d(dist_c,s,kind='linear')
-        his = func(upper)
-        los = func(lower)
-        ind = np.argmin(his-los)
-        hi  = his[ind] 
-        lo  = los[ind] 
-        medval = np.median(dist)
-        mode = s[np.argmax(pdf)]
-        sigint =  np.abs(hi-lo)
-        meds[i] = medval
-        modes[i] = mode
-        onesigs[i] = sigint
-        maxval = medval + sigrange*sigval
-        minval = medval - sigrange*sigval
-        nb = np.ceil((maxval-minval) / (sigval/bindiv))
-        print 'Best fit parameters for '+variables[i]
-        out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-        print out.format(bestvals[i], medval, mode, sigint)
-        
-        # do plot
-        plotnum += 1
-        plt.subplot(len(secinds),1,plotnum)
-        print "Computing histogram of data"
-        pinds, = np.where((dist >= minval) & (dist <= maxval))
-        plt.hist(dist[pinds],bins=nb,normed=True)
-        #    plt.xlim([minval,maxval])
-#        plt.axvline(x=bestvals[i],color='r',linestyle='--')
-#        plt.axvline(x=medval,color='c',linestyle='--')
-        plt.xlabel(varnames[i])
-        plt.ylabel(r'$dP$')
-        if plotnum == 1:
-            plt.title('Parameter Distributions for KIC '+name)
-        if variables[i] == 't0':
-            plt.annotate(r'$t_0$ = %.6f BJD' % ebpar0["t0"], xy=(0.96,0.8),
-                         ha="right",xycoords='axes fraction',fontsize='large')
-            bestvals[i] = t0val
-        if variables[i] == 'period':
-            plt.annotate(r'$P$ = %.6f d' % ebpar0["Period"], xy=(0.96,0.8),
-                         ha="right",xycoords='axes fraction',fontsize='large')
-            bestvals[i] = pval
-        if variables[i] == 'magoff':
-            plt.annotate(r'$m_0$ = %.3f ' % ebpar0["mag0"], xy=(0.96,0.8),
-                         ha="right",xycoords='axes fraction',fontsize='large')
-            bestvals[i] = mval
-
-    plt.subplots_adjust(hspace=0.55)
-    plt.savefig(path+'MCMC/running/'+name+stag+'_params2_E'+str(enum)+'.png', dpi=300)
-    plt.clf()
-
-
-    plotnum = 0
-# For the remaining variables
-    allinds = np.append(priminds,secinds)
-    allinds = np.sort(allinds)
-    if len(allinds) < len(variables):
-        print "Starting plots for remaining variables"
-        plt.figure(6,figsize=(8.5,11),dpi=300)
-        vinds = np.arange(len(variables))
-        missedi = []
-        for vi in vinds:
-            try:
-                leni = len(np.where(vi == allinds)[0])
-                if leni == 0:
-                    missedi.append(vi)
-            except:
-                pass
-        for i in missedi:
-            print ''
-            dist   = chains[:,i]
-            if variables[i][0] == 'q':
-                minval = 0.0
-                maxval = 1.0
-            else:
-                sigval = rb.std(dist)
-                minval = np.min(dist) - sigval
-                maxval = np.max(dist) + sigval
-            s = np.linspace(minval,maxval,1000)
-            kde = gaussian_kde(dist)
-            print "Creating synthetic PDF with kernel density estimation for "+variables[i]
-            pdf = kde(s)
-            dist_c = np.cumsum(pdf)/np.sum(pdf)
-            func = sp.interpolate.interp1d(dist_c,s,kind='linear')
-            his = func(upper)
-            # kludge to fix cases where pdf butts up against 0
-            try:
-                los = func(lower)
-            except:
-                los = np.zeros(len(lower))
-                los[10:] = func(lower[10:])                               
-            ind = np.argmin(his-los)
-            hi  = his[ind] 
-            lo  = los[ind] 
-            medval = np.median(dist)
-            mode = s[np.argmax(pdf)]
-            sigint =  np.abs(hi-lo)
-            meds[i] = medval
-            modes[i] = mode
-            onesigs[i] = sigint
-            maxval = medval + sigrange*sigval
-            minval = medval - sigrange*sigval
-            nb = np.ceil((maxval-minval) / (sigval/bindiv))
-            print 'Best fit parameters for '+variables[i]        
-            out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-            print out.format(bestvals[i], medval, mode, sigint)
-            
-            # do plot
-            plotnum += 1
-            plt.subplot(len(missedi),1,plotnum)
-            print "Computing histogram of data"
-            pinds, = np.where((dist >= minval) & (dist <= maxval))
-            plt.hist(dist[pinds],bins=nb,normed=True)
-            #    plt.xlim([minval,maxval])
-#            plt.axvline(x=bestvals[i],color='r',linestyle='--')
-#            plt.axvline(x=medval,color='c',linestyle='--')
-            plt.xlabel(varnames[i])
-            plt.ylabel(r'$dP$')
-            if plotnum == 1:
-                plt.title('Parameter Distributions for KIC '+name)
-            
-        plt.subplots_adjust(hspace=0.55)
-        plt.savefig(path+'MCMC/running/'+name+stag+'_params3_E'+str(enum)+'.png', dpi=300)
-        plt.clf()
- 
-   # calculate limb darkening parameters
-#    if limb == 'quad':
-#        ind1, = np.where(variables == 'q1a')
-#        ind2, = np.where(variables == 'q2a')        
-#        u1a,u2a =  qtou(bestvals[ind1],bestvals[ind2],limb=limb)
-#        ldc = [u1a,u2a]
-#        plot_limb_curves(ldc=ldc,limbmodel=limb,write=True,network=network)
-#        ind1, = np.where(variables == 'q1b')
-#        ind2, = np.where(variables == 'q2b')        
-#        u1a,u2a =  qtou(bestvals[ind1],bestvals[ind2],limb=limb)
-#        ldc = [u1a,u2a]
-#        plot_limb_curves(ldc=ldc,limbmodel=limb,write=True,network=network)
-#
-#
-#
-#    vals = [[bestvals],[meds],[modes],[onesigs]]
-
-    chisquare = plot_model_single(bestvals,tag='_MCMC',enum=enum)
-
-    f = open(path+'MCMC/running/'+name+stag+'_fitparams.txt','w')
-    chistr = []
-    chistr.append('chisquare')
-    chistr.append("{:.5f}".format(chisquare))
-    f.write(', '.join(chistr)+'\n')
-    for i in np.arange(len(variables)):
-        outstr = []
-        fmt = []
-        outstr.append(variables[i])
-        outstr.append("{:.8f}".format(bestvals[i]))
-        outstr.append("{:.8f}".format(meds[i]))
-        outstr.append("{:.8f}".format(modes[i]))
-        outstr.append("{:.8f}".format(onesigs[i]))
-        f.write(', '.join(outstr)+'\n')
-    f.closed
-
-    return bestvals,chisquare,chains
-
-
-def get_eclipse(enum,mag=False):
-
-    if mag:
-        lc = lcm
+# Input parameters
+    rprs = inp[0]
+    duration = inp[1]
+    impact = inp[2]
+    t0 = inp[3]
+    per = inp[4]
+
+# Limb darkening params
+
+    c1       = inp[5][0]
+    c2       = inp[5][1]
+    if limb == 'nlin':
+        c3 = inp[5][2]
+        c4 = inp[5][3]
+        ldc = [c1,c2,c3,c4]
     else:
-        lc = lcf
+        ldc = [c1,c2]
 
-    dt12 = (ephem2-ephem1) % period0
-    tpe    = np.arange(-2000,2000,1) * period0 + ephem1 - bjd
 
-    tpiter = tpe[(tpe > np.min(lc[0,:])) & (tpe+dt12 < np.max(lc[0,:]))]
+# Compute model with zero t0
+    tmodel,smoothmodel = compute_trans(rprs,duration,impact,0.0,per,ldc)
+
+# Impose ephemeris offset in data folding    
+    tfit = foldtime(t,period=per,t0=pdata[0,3]+t0)
+    ffit = flux
+    efit = e_flux
+
+# Interpolate model at data values
+    s = np.argsort(tfit)
+    tfits = tfit[s]
+    ffits = ffit[s]    
+    cfunc = sp.interpolate.interp1d(tmodel,smoothmodel,kind='linear')
+    mfit = cfunc(tfits)
     
-    tp = tpiter[enum]
-    
-    good = ((lc[0,:] > tp - min(period0/4.0,period0-dt12+dur2/2.0)) & 
-            (lc[0,:] < tp + dt12 + min(period0/4.0,period0-dt12-dur1/2.0)))
-        
-    timevec   = lc[0,good]
-    photvec   = lc[1,good]
-    e_photvec = lc[2,good]
+# Residuals
+    resid = ffits - mfit
 
-    return timevec,photvec,e_photvec
-
-
-
-def plot_model_single(vals,markersize=5,smallmark=2,nbins=100,errorbars=False,durfac=5,enum=1,tag=''):
-
-    """
-    ----------------------------------------------------------------------
-    plot_model_single:
-    ------------------
-    Plot transit model given model params.
-
-    ----------------------------------------------------------------------
-    """
-    from matplotlib import gridspec
-    import matplotlib as mpl
-
-    tag += '_E'+str(enum)
-    tfit,ffit,e_ffit = get_eclipse(enum)
-
-    parm, vder = vec_to_params(vals)
-    
-    vsys = vals[variables == 'vsys'][0]
-    ktot = vals[variables == 'ktot'][0]
-
-    print "Model parameters:"
-    for vname, value, unit in zip(eb.parnames, parm, eb.parunits):
-        print "{0:<10} {1:14.6f} {2}".format(vname, value, unit)
-
-    print "Derived parameters:"
-    for vname, value, unit in zip(eb.dernames, vder, eb.derunits):
-        print "{0:<10} {1:14.6f} {2}".format(vname, value, unit)
-
-######################################################################
-# Light curve model
-######################################################################
-
-    # Phases of contact points
-    (ps, pe, ss, se) = eb.phicont(parm)
-
-# Check for output directory   
-    directory = path+'MCMC/running/'
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-
-    xmin = np.min(tfit)
-    xmax = np.max(tfit)
-    tmodel = np.linspace(xmin,xmax,1000)
-
-    massratio = parm[eb.PAR_Q]
-
-    if not fitellipsoidal:
-        parm[eb.PAR_Q] = 0.0        
-    smoothmodel = compute_eclipse(tmodel,parm)    
-    smoothcomp  = compute_eclipse(tfit,parm)    
-    parm[eb.PAR_Q] = massratio
-
-    flux,eflux = mag2flux(smoothmodel,0.0,parm[eb.PAR_M0])
-    fcomp,ecomp = mag2flux(smoothcomp,0.0,parm[eb.PAR_M0])
-    res = ffit - fcomp
-
-# Does dof need another - 1 ???
-    dof = np.float(len(tfit)) - np.float(len(variables))
-    chisquare = np.sum((res/e_ffit)**2)/dof
+    return resid
     
 
-#------------------------------
-# PLOT
-
-# Primary eclipse
-    mpl.rc('axes', linewidth=1.5)
-    fs = 15
-    lw = 1.5
-    ms = 12
-#    ymin = 0.825
-#    ymax = 1.025
-    yrmin = -6
-    yrmax = 6
-    fig = plt.figure(99,figsize=(11,8.5),dpi=300)
-    plt.clf()
-    gs = gridspec.GridSpec(3, 1,wspace=0.05,hspace=0.05)
-    ax1 = plt.subplot(gs[0:2, 0])    
-    ax1.plot(tfit,ffit,'k.',linewidth=lw)
-    ax1.plot(tmodel,flux,'r-',linewidth=1.5)
-    ax1.set_xlim((xmin,xmax))
-    ymin,ymax = ax1.get_ylim()
-    ax1.yaxis.set_tick_params(length=5, width=lw, labelsize=fs)
-    ax1.xaxis.set_tick_params(length=5, width=lw, labelsize=fs)
-    ax1.set_xticklabels(())
-    ax1.set_ylabel('Relative Flux',fontsize=fs)
-    ax1.set_title('Primary Eclipse')
-    
-    ax2 = plt.subplot(gs[2, 0])
-    ax2.plot(tfit,res*1000.0,'k.',linewidth=lw)
-    ax2.set_xlim((xmin,xmax))
-    ax2.set_ylim(yrmin,yrmax)
-    ax2.yaxis.set_tick_params(length=5, width=lw, labelsize=fs)
-    ax2.xaxis.set_tick_params(length=5, width=lw, labelsize=fs)
-    ax2.axhline(0,linestyle='-',color='r',linewidth=1.5)
-    ax2.set_ylabel(r'$O-C$ ($\times 1000$)',fontsize=fs)
-    ax2.set_xlabel('Time (BKJD)',fontsize=fs)
-    
-    plt.savefig(path+'MCMC/running/'+name+stag+'_LCfit'+tag+'.png', dpi=300)
-    plt.clf()
 
 
-######################################################################
-# RV model
-######################################################################
-    rvmodel1 = compute_eclipse(rvdata1[:,0],parm,vder=vder,fitrvs=True,vsys=vsys,ktot=ktot)
-    k2 = ktot/(1+massratio)
-    k1 = k2*massratio
-    rv1 = rvmodel1*k1 + vsys
-    tfold1 = foldtime_pos(rvdata1[:,0], period=parm[eb.PAR_P], t0=parm[eb.PAR_T0])
-    resrv1 = rvdata1[:,1] - rv1
-    
-    rvmodel2 = compute_eclipse(rvdata2[:,0],parm,vder=vder,fitrvs=True,vsys=vsys,ktot=ktot,secondary=True)
-    rv2 = -1.0*rvmodel2*k2 + vsys
-    tfold2 = foldtime_pos(rvdata2[:,0], period=parm[eb.PAR_P], t0=parm[eb.PAR_T0])
-    resrv2 = rvdata2[:,1] - rv2
-
-    rvtime = np.linspace(0,parm[eb.PAR_P],1000)+parm[eb.PAR_T0]
-    rvphase = (rvtime - parm[eb.PAR_T0])/parm[eb.PAR_P]
-    rvplt = compute_eclipse(rvtime,parm,vder=vder,fitrvs=True,vsys=vsys,ktot=ktot)
-    rvplt1 = rvplt*k1 + vsys
-    rvplt2 = -1.0*rvplt*k2 + vsys
-
-#    esq = parm[eb.PAR_ECOSW]*parm[eb.PAR_ECOSW] + parm[eb.PAR_ESINW]*parm[eb.PAR_ESINW]
-#    roe = np.sqrt(1.0-esq)
-#    sini = np.sqrt(1.0-parm[eb.PAR_COSI]*parm[eb.PAR_COSI])
-#    qpo = 1.0+parm[eb.PAR_Q]
-#    omega = 2.0*np.pi*(1.0 + vsys*1000.0/eb.LIGHT) / (parm[eb.PAR_P]*86400.0)
-#    tmp = ktot*1000.0 * roe
-#    mtot = tmp*tmp*tmp / (EB_GMSUN*omega*sini);
-#    m1 = mtot / qpo
-#    m2 = massratio * m1
-
-    fs = 18
-    lw = 1.5
-    ms = 12
-    period = parm[eb.PAR_P]
-    ymax = np.max(np.array([rvplt1,rvplt2]))
-    ymin = np.min(np.array([rvplt1,rvplt2]))
-    yrange = ymax-ymin
- 
-    fig = plt.figure(101,figsize=(11,8.5),dpi=300)
-    plt.clf()
-    gs = gridspec.GridSpec(3, 1,wspace=0)
-    ax1 = plt.subplot(gs[0:2, 0])    
-    ax1.errorbar(tfold1/period,rvdata1[:,1],yerr=rvdata1[:,2],fmt='ko',linewidth=lw,markersize=ms)
-    ax1.errorbar(tfold2/period,rvdata2[:,1],yerr=rvdata2[:,2],fmt='ro',linewidth=lw,markersize=ms)
-    ax1.axhline(vsys,linestyle='--',color='k',linewidth=lw)
-    ax1.plot(rvphase,rvplt1,'k-',lw=lw)
-    ax1.plot(rvphase,rvplt2,'r-',lw=lw)
-    ax1.set_xlim(0,period/period)
-    ax1.set_ylim(ymin-0.1*yrange,ymax+0.1*yrange)
-    ax1.set_title('RV data and model for KIC '+name,fontsize=fs)
-#    mass1 = vder[eb.PAR_M1]
-#    ax1.annotate(r'$M_1 = %.3f$ M$_\odot$' % mass1, xy=(0.95,0.9), \
-#                     ha="right",xycoords='axes fraction',fontsize=fs)
-#    mass2 = vder[eb.PAR_M2]
-#    ax1.annotate(r'$M_2 = %.3f$ M$_\odot$' % mass2, xy=(0.95,0.83), \
-#                     ha="right",xycoords='axes fraction',fontsize=fs)
-    ax1.set_ylabel('Radial Velocity (km/s)',fontsize=fs)
-    ax1.yaxis.set_tick_params(length=10, width=lw, labelsize=fs)
-    ax1.yaxis.set_tick_params(length=5, width=lw, labelsize=fs)
-    ax1.xaxis.set_tick_params(length=10, width=lw, labelsize=fs)
-    ax1.xaxis.set_tick_params(length=10, width=lw, labelsize=fs)
-    ax1.set_xticklabels(())
-
-    ax2 = plt.subplot(gs[2, 0])
-    ax2.errorbar(tfold1/period,resrv1,yerr=rvdata1[:,2],fmt='ko',linewidth=lw,markersize=ms)
-    ax2.errorbar(tfold2/period,resrv2,yerr=rvdata2[:,2],fmt='ro',linewidth=lw,markersize=ms)
-    ax2.axhline(0,linestyle='--',color='k',lw=lw)
-    ax2.set_xlim(0,period/period)
-    ax2.set_ylabel('$O-C$ (km/s)',fontsize=fs)
-    ax2.set_xlabel('Orbital Phase',fontsize=fs)
-    ax2.yaxis.set_tick_params(length=10, width=lw, labelsize=fs)
-    ax2.yaxis.set_tick_params(length=5, width=lw, labelsize=fs)
-    ax2.xaxis.set_tick_params(length=10, width=lw, labelsize=fs)
-    ax2.xaxis.set_tick_params(length=10, width=lw, labelsize=fs)
- 
-    plt.savefig(path+'MCMC/running/'+name+stag+'_RVfit'+tag+'.png',dpi=300)
-    plt.clf()
-
-    outdata = np.array([tfit,ffit,e_ffit,res])
-    np.savetxt(path+'MCMC/running/'+name+stag+'_E'+str(enum)+'_data.txt',outdata.T)
-    outmod  = np.array([tmodel,flux])
-    np.savetxt(path+'MCMC/running/'+name+stag+'_E'+str(enum)+'_model.txt',outmod.T)
-
-    return chisquare
-
-                           
 def get_limb_qs(Mstar=0.5,Rstar=0.5,Tstar=3800.0,limb='quad',network=None):
     import constants as c
 
@@ -3164,11 +2331,11 @@ def distparams(dist):
     from scipy.stats.kde import gaussian_kde
 
     vals = np.linspace(np.min(dist)*0.5,np.max(dist)*1.5,1000)
-    kde = gaussian_kde(dist)
-    pdf = kde(vals)
-    dist_c = np.cumsum(pdf)/np.nansum(pdf)
-    func = sp.interpolate.interp1d(dist_c,vals,kind='linear')
     try:
+        kde = gaussian_kde(dist)
+        pdf = kde(vals)
+        dist_c = np.cumsum(pdf)/np.nansum(pdf)
+        func = sp.interpolate.interp1d(dist_c,vals,kind='linear')
         lo = np.float(func(math.erfc(1./np.sqrt(2))))
         hi = np.float(func(math.erf(1./np.sqrt(2))))
         med = np.float(func(0.5))
@@ -3182,37 +2349,45 @@ def distparams(dist):
         print 'KDE analysis failed! Using "normal" stats.'
         interval = 2.0*np.std(dist)
         med = np.median(dist)
+        mode = med
         lo = med-interval/2.0
         hi = med+interval/2.0
     
-
-    return med,mode,interval,lo,hi
-
+    return med,mode,np.abs(interval),lo,hi
 
 
-def params_of_interest(chains=False,lp=False):
+def params_of_interest(eclipse,chains=False,lp=False):
+
+    ethin = eclipse['thin']
+    thintag = '_thin'+str(ethin) if ethin > 1 else ''
+
+    enum = eclipse['enum']
 
     print "Deriving values for parameters of interest"
-    nsamp = nw*mcs
-    tmaster = time.time()
-    if chains == False:
+
+#    tmaster = time.time()
+    if not np.shape(chains):
         print "Reading in MCMC chains"        
-        chains = np.zeros((nsamp,len(variables)))
         for i in np.arange(len(variables)):
             try:
                 print "Reading MCMC chains for "+variables[i]
-                tmp = np.loadtxt(path+'MCMC/'+name+stag+'_'+variables[i]+'chain.txt')
+                tmp = np.loadtxt(path+'MCMC/singlefits/E'+str(enum)+'/' \
+                                 +name+stag+thintag+'_'+variables[i]+'chain_E'+str(enum)+\
+                                 '.txt')
+                if i == 0:
+                    chains = np.zeros((len(tmp),len(variables)))
+
                 chains[:,i] = tmp
             except:
                 print name+stag+'_'+variables[i]+'chain.txt does not exist on disk !'
 
-            print done_in(tmaster)
+#            print done_in(tmaster)
 
 
-    if lp == False:
+    if not np.shape(lp):
         try:
             print "Reading ln(prob) chain"
-            lp = np.loadtxt(path+'MCMC/'+name+stag+'_lnprob.txt')
+            lp = np.loadtxt(path+'MCMC/singlefits/E'+str(enum)+'/'+name+stag+thintag+'_lnprob_E'+str(enum)+'.txt')
         except:
             print "lnprob chain does not exist. Exiting"
             return
@@ -3232,8 +2407,13 @@ def params_of_interest(chains=False,lp=False):
     mratdist = chains[:,ind]
     ind, = np.where(np.array(variables) == 'vsys')[0]
     vsysdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'period')[0]
-    pdist = chains[:,ind]
+
+    try:
+        ind, = np.where(np.array(variables) == 'period')[0]
+        pdist = chains[:,ind]
+    except:
+        pdist = ebpar0['Period']
+
     ind, = np.where(np.array(variables) == 'ktot')[0]
     ktotdist = chains[:,ind]
     ind, = np.where(np.array(variables) == 'J')[0]
@@ -3249,8 +2429,8 @@ def params_of_interest(chains=False,lp=False):
 
     maxlike = np.max(lp)
     imax = np.array([i for i, j in enumerate(lp) if j == maxlike])
-    if imax.size > 1:
-        imax = imax[0]
+#    if imax.size > 1:
+    imax = imax[0]
     for i in np.arange(len(variables)):
         bestvals[i] = chains[imax,i]
 
@@ -3281,27 +2461,59 @@ def params_of_interest(chains=False,lp=False):
     esinwval = esinwdist[imax]
     eval = np.sqrt(ecoswval**2 + esinwval**2)
 
+    vals = []
+    meds = []
+    modes = []
+    onesig = []
     med,mode,interval,lo,hi = distparams(m1dist)
     out = 'M1: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-    print out.format(m1val[0],med,mode,interval)
-
+    print out.format(m1val,med,mode,interval)
+    vals   = np.append(vals,m1val)
+    meds   = np.append(meds,med)
+    modes  = np.append(modes,mode)
+    onesig = np.append(onesig,interval)
+    
     med,mode,interval,lo,hi = distparams(m2dist)
     out = 'M2: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-    print out.format(m2val[0],med,mode,interval)
+    print out.format(m2val,med,mode,interval)
+    vals   = np.append(vals,m2val)
+    meds   = np.append(meds,med)
+    modes  = np.append(modes,mode)
+    onesig = np.append(onesig,interval)
 
     med,mode,interval,lo,hi = distparams(r1dist)
     out = 'R1: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-    print out.format(r1val[0],med,mode,interval)
+    print out.format(r1val,med,mode,interval)
+    vals   = np.append(vals,r1val)
+    meds   = np.append(meds,med)
+    modes  = np.append(modes,mode)
+    onesig = np.append(onesig,interval)
 
     med,mode,interval,lo,hi = distparams(r2dist)
     out = 'R2: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-    print out.format(r2val[0],med,mode,interval)
+    print out.format(r2val,med,mode,interval)
+    vals   = np.append(vals,r2val)
+    meds   = np.append(meds,med)
+    modes  = np.append(modes,mode)
+    onesig = np.append(onesig,interval)
 
     med,mode,interval,lo,hi = distparams(edist)
     out = 'eccentricity: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-    print out.format(eval[0],med,mode,interval)
+    print out.format(eval,med,mode,interval)
+    vals   = np.append(vals,eval)
+    meds   = np.append(meds,med)
+    modes  = np.append(modes,mode)
+    onesig = np.append(onesig,interval)
+
+    outstr = name+ ' %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f' % (vals[0],meds[0],modes[0],onesig[0],vals[1],meds[1],modes[1],onesig[1],vals[2],meds[2],modes[2],onesig[2],vals[3],meds[3],modes[3],onesig[3],vals[4],meds[4],modes[4],onesig[4])
+
+    f = open(path+'MCMC/singlefits/E'+str(enum)+'/'+name+stag+thintag+
+                '_bestparams_E'+str(enum)+'.txt','w')
+    f.write(outstr+'\n')
+    f.closed
 
     return 
+
 
 
 def triangle_plot(chains=False,lp=False,thin=False,frac=0.001,sigfac=1.5):
@@ -3799,6 +3011,41 @@ def limbvals(angle,ldc,limbmodel='quad'):
     return Imu
 
 
+def int_limb(ldc,limbmodel='quad'):
+
+    """
+    Integrate mu = cos(theta) from 1 to 0 for given limb model
+    """
+    
+    if limb == 'nlin':
+        c1 = ldc[0]
+        c2 = ldc[1]
+        c3 = ldc[2]
+        c4 = ldc[3]
+#        Imu = 1.0 - c1*(1.0 - mu**0.5) - c2*(1.0 - mu) - \
+#              c3*(1.0 - mu**1.5) - c4*(1.0 - mu**2.0)
+        intImu = c1/3.0 + c2/2.0 + 3*c3/5.0 + 2*c4/3.0 - 1.0
+        
+    elif limbmodel == 'quad':
+        q1in = ldc[0]
+        q2in = ldc[1]
+        c1 =  2*np.sqrt(q1in)*q2in
+        c2 =  np.sqrt(q1in)*(1-2*q2in)
+#        Imu = 1.0 - c1*(1.0 - mu) - c2*(1.0 - mu)**2.0
+        intImu = c1/2.0 + c2/3.0 - 1.0
+
+    elif limbmodel == 'sqrt':
+        q1in = ldc[0]
+        q2in = ldc[1]
+        # Check the validity of this transformation
+        c1 =  2*np.sqrt(q1in)*q2in
+        c2 =  np.sqrt(q1in)*(1-2*q2in)
+#        Imu = 1.0 - c1*(1.0 - mu) - c2*(1.0 - mu**0.5)
+        intImu = c1/2.0 + c2/3.0 - 1.0
+    else: pass
+
+    return intImu
+
 
 
 def get_limb_curve(ldc,limbmodel='quad'):
@@ -4085,242 +3332,414 @@ def done_in(tmaster):
  
 
 
+def foldtime(time,period=1.0,t0=0.0,phase=False):
 
-def get_rhostar(koi,planet,short=False,network=None,clip=False,limbmodel='quad',
-                rprior=False,lprior=False,thin=100,bins=100):
+    """ 
+    ----------------------------------------------------------------------
+    foldtime:
+    ---------
+    Basic utility to fold time based on period and ephemeris
 
-    lc,pdata,sdata = get_koi_info(koi,planet,short=short,network=network,\
-                                  clip=clip,limbmodel=limbmodel,rprior=rprior,lprior=lprior)
-    t = time.time()
+    example:
+    --------
+    In[1]: ttm = foldtime(time,period=2.35884,t0=833.5123523)
+    ----------------------------------------------------------------------
+    """
 
-    print 'Importing MCMC chains'
-    rprsdist = np.loadtxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_rchain.txt')
-    print done_in(t)
-    ddist    = np.loadtxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_dchain.txt')
-    bdist    = np.loadtxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_bchain.txt')
-    pdist    = np.loadtxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_pchain.txt')
-    q1dist   = np.loadtxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_q1chain.txt')
-    q2dist   = np.loadtxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_q2chain.txt')
-    print done_in(t)
+# Number of transits before t0 in data
+    npstart = np.round((t0 - np.min(time))/period)
 
-    if thin:
-        rprsdist = rprsdist[0::thin]
-        ddist = ddist[0::thin]
-        pdist = pdist[0::thin]
-        bdist = bdist[0::thin]
-        q1dist = q1dist[0::thin]
-        q2dist = q2dist[0::thin]
+# Time of first transit in data
+    TT0 = t0 - npstart*period
+
+# Let cycle start 1/2 period before first transit
+    tcycle0 = TT0 - period/2.0
+
+# tcycle = 0 at 1/2 period before first transit
+    tcycle = (time - tcycle0) % period
+
+# Time to mid transit is 1/2 period from this starting point
+    tfold  = (tcycle - period/2.0)
+
+    if phase:
+        tfold = tfold/period
+
+    return tfold
 
 
-#    ttotdist,tfulldist = midtotot(ddist,rprsdist,bdist)
+def foldtime_pos(time,t0=0.0,period=1.0,phase=False):
+    """
+    foldtime_pos:
+    -------------
+    Return folded time with all positive values
+    """
 
-    ttotdist = ddist
+# Number of transits before t0 in data
+    npstart = np.round((t0 - np.min(time))/period)
 
-#    t = time.time()
-#    tfulldist =[]
-#    for i in np.arange(len(rprsdist)):
-#        tmodel,smoothmodel,tcontact = compute_trans(rprsdist[i],ddist[i],bdist[i],0.0,
-#                                                 pdist[i],[q1dist[i],q2dist[i]],
-#                                                 getcontact=True)
-#        ttot=tcontact[0]
-#        tfull=tcontact[1]
-#
-#        tfulldist = np.append(tfulldist,tfull)
-#        ttotdist  = np.append(ttotdist,ttot)
-#        if (i+1) % 500 == 0:
-#            out = done_in(t)
-#            pdone = (i+1.0)/len(rprsdist) * 100.0
-#            print str(pdone)+"% "+out
+# Time of first transit in data
+    TT0 = t0 - npstart*period
 
-    aorsdist = np.sqrt( ((1+rprsdist)**2 - bdist**2)/((np.sin(np.pi*ttotdist/pdist))**2) + bdist**2)
-#    aorsdist = np.sqrt( ((1-rprsdist)**2 - bdist**2)/((np.sin(np.pi*tfulldist/pdist))**2) + bdist**2)
+# Let cycle start at first transit
+    tcycle0 = TT0
 
-#    aorsdist = 2.0 * np.sqrt(rprsdist) * pdist / (np.pi*np.sqrt(ttotdist**2 - tfulldist**2))
+# tcycle = 0 at first transit
+
+    tcycle = (time - tcycle0) % period
+
+# Time to mid transit is tcycle
+    tfold  = tcycle
+
+    if phase:
+        tfold = tfold/period
+
+    return tfold
+
+
+
+def bin_lc(x,y,nbins=100):
+
+    """
+    ----------------------------------------------------------------------    
+    bin_lc:
+    -------
+    Utility to bin data and return standard deviation in each bin
     
-    rhodist =  3.0*np.pi/( c.G * (pdist*24.*3600.)**2 ) * aorsdist**3
+    For visual aid in plots, mostly
 
-    plt.figure(999,figsize=(8.5,11))
-    plt.clf()
-    plt.subplot(2,1,1)
+    example:
+    --------
+    tbin,fbin,errbin = bin_lc(ttm,flux,nbins=200)
+
+    """
+
+    n, I = np.histogram(x, bins=nbins)
+    sy, I = np.histogram(x, bins=nbins, weights=y)
+    sy2, I = np.histogram(x, bins=nbins, weights=y*y)
+    mean = sy / n
+    std = np.sqrt(sy2/n - mean*mean)
+
+    binvals = (I[1:] + I[:-1])/2
+    yvals = mean
+    yerr = std/np.sqrt(len(std))
     
-    plt.hist(aorsdist,bins=bins)
-    nsamp = len(aorsdist)
-    frac = 0.003
-    aorsmin = np.float(np.sort(aorsdist)[np.round(frac*nsamp)])
-    aorsmax = np.float(np.sort(aorsdist)[np.round((1-frac)*nsamp)])
-    plt.xlim([aorsmin,aorsmax])
-    plt.xlim([10.8,11.1])
-#    plt.axvline(x=q1val,color='r',linestyle='--')
-#    plt.axvline(x=q1lo,color='c',linestyle='--')
-#    plt.axvline(x=q1med,color='c',linestyle='--')
-#    plt.axvline(x=q1hi,color='c',linestyle='--')
-    plt.xlabel(r'$a/R_{\star}$')
-    plt.ylabel(r'$N$')
+    return binvals,yvals,yerr
 
-    plt.subplot(2,1,2)
+
+def qtou(q1,q2,limb='quad'):
+    if limb == 'quad':
+        try:
+            u1 =  2*np.sqrt(q1)*q2
+            u2 =  np.sqrt(q1)*(1-2*q2)
+        except:
+            u1 = np.nan
+            u2 = np.nan
+    if limb == 'sqrt':
+        try:
+            u1 = np.sqrt(q1)*(1-2*q2)
+            u2 = 2*np.sqrt(q1)*u2
+        except:
+            u1 = np.nan
+            u2 = np.nan            
+    return u1, u2
+
+
+def utoq(u1,u2,limb='quad'):
     
-    plt.hist(rhodist,bins=bins)
-    nsamp = len(rhodist)
-    frac = 0.003
-    rhomin = np.float(np.sort(rhodist)[np.round(frac*nsamp)])
-    rhomax = np.float(np.sort(rhodist)[np.round((1-frac)*nsamp)])
-    plt.xlim([rhomin,rhomax])
-    plt.xlim([3.95,4.3])
-#    plt.axvline(x=q1val,color='r',linestyle='--')
-#    plt.axvline(x=q1lo,color='c',linestyle='--')
-#    plt.axvline(x=q1med,color='c',linestyle='--')
-#    plt.axvline(x=q1hi,color='c',linestyle='--')
-    plt.xlabel(r'$\rho_{\star}$')
-    plt.ylabel(r'$N$')
+    if limb == 'quad':
+        try:
+            q1 = (u1+u2)**2
+            q2 = u1/(2.0*(u1+u2))
+        except:
+            q1 = np.nan
+            q2 = np.nan
+    if limb == 'sqrt':
+        try:
+            q1 = (u1+u2)**2
+            q2 = u2/(2*(u1+u2))
+        except:
+            q1 = np.nan
+            q2 = np.nan
+
+    return q1, q2
+
+
+
+def get_limb_coeff(Tstar,loggstar,filter='Kp',plot=False,network=None,limb='quad',interp='linear'):
+    """
+    Utility to look up the limb darkening coefficients given an effective temperature and log g.
+
+    """
+    from scipy.interpolate import griddata
+    import pylab as pl
+    from mpl_toolkits.mplot3d import axes3d, Axes3D
+    from scipy.interpolate import RectBivariateSpline as bspline
+
     
-    plt.savefig(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_rhostar.png')
+    global ldc1func,ldc2func,ldc3func,ldc4func
 
-    pdb.set_trace()
-    return rhodist
+# Account for gap in look up tables between 4800 and 5000K
+#    if (Tstar > 4800 and Tstar <= 4900):
+#        Tstar = 4800
+#    if (Tstar > 4900 and Tstar < 5000):
+#        Tstar = 5000
+    
+# Choose proper file to read
+    if limb == 'nlin':
+        skiprows = 49
+        filtcol = 8
+        metcol = 9
+        mercol = 10
+        col1 = 4
+        col2 = 5
+        col3 = 6
+        col4 = 7
+    else:
+        skiprows = 58
+        filtcol = 4
+        metcol = 5
+        mercol = 6
+        col1 = 9
+        col2 = 10
+        col3 = 11
+        col4 = 12
 
 
+    file1 = 'Claret_cool.dat'
+    file2 = 'Claret_hot.dat'
 
-#----------------------------------------------------------------------
-# do_full_koi:
-#    pick a KOI and do all fits!
-#----------------------------------------------------------------------
-            
+    if network == 'gps':
+        path = '/home/jswift/Mdwarfs/'
+    if network == 'astro':
+        path = '/home/jswift/Mdwarfs/'
+    if network == None:
+        path = '/Users/jonswift/Astronomy/Exoplanets/TransitFits/'
 
-def do_full_koi(koi,nwalkers=1000,burnsteps=1000,mcmcsteps=2000,clobber=False,network=None,thin=False):
+    # Get data from both the low and high temp files and then append
+    limbdata1 = np.loadtxt(path+file1,dtype='string', delimiter='|',skiprows=skiprows)
+    limbdata2 = np.loadtxt(path+file2,dtype='string', delimiter='|',skiprows=skiprows)
+
+    logg = limbdata1[:,0].astype(np.float).flatten()
+    logg = np.append(logg,limbdata2[:,0].astype(np.float).flatten())
+    
+    Teff = limbdata1[:,1].astype(np.float).flatten()
+    Teff = np.append(Teff,limbdata2[:,1].astype(np.float).flatten())
+
+    Z = limbdata1[:,2].astype(np.float).flatten()
+    Z = np.append(Z,limbdata2[:,2].astype(np.float).flatten())
+
+    xi = limbdata1[:,3].astype(np.float).flatten()
+    xi = np.append(xi,limbdata2[:,3].astype(np.float).flatten())
+
+    filt = np.char.strip(limbdata1[:,filtcol].flatten())
+    filt = np.append(filt,np.char.strip(limbdata2[:,filtcol].flatten()))
+    
+    method = limbdata1[:,metcol].flatten()
+    method = np.append(method,limbdata2[:,metcol].flatten())
+    
+    avec = limbdata1[:,col1].astype(np.float).flatten()
+    avec = np.append(avec,limbdata2[:,col1].astype(np.float).flatten())
+
+    bvec = limbdata1[:,col2].astype(np.float).flatten()
+    bvec = np.append(bvec,limbdata2[:,col2].astype(np.float).flatten())
+
+    cvec = limbdata1[:,col3].astype(np.float).flatten()
+    cvec = np.append(cvec,limbdata2[:,col3].astype(np.float).flatten())
+
+    dvec = limbdata1[:,col4].astype(np.float).flatten()
+    dvec = np.append(dvec,limbdata2[:,col4].astype(np.float).flatten())
+
+# Select out correct filter and method.
+
+    idata, = np.where((filt == filter) & (method == 'L'))
+    
+    npts = idata.size
+
+    uTeff = np.unique(Teff[idata])
+    ulogg = np.unique(logg[idata])
+
+    locs = np.zeros(2*npts).reshape(npts,2)
+    locs[:,0] = Teff[idata].flatten()
+    locs[:,1] = logg[idata].flatten()
+    
+    vals = np.zeros(npts)
+    vals[:] = avec[idata]
+
+    agrid = np.zeros((len(uTeff),len(ulogg)))
+    for i in np.arange(len(uTeff)):
+        for ii in np.arange(len(ulogg)):
+            eval  = np.array([uTeff[i],ulogg[ii]]).reshape(1,2)
+            val = griddata(locs,vals,eval,method='nearest')
+            if len(val) > 0:
+                agrid[i,ii] = val[0]
+            else:
+                pass 
+
+    ldc1func = bspline(uTeff, ulogg, agrid, kx=1, ky=1, s=0)    
+    aval = ldc1func(Tstar,loggstar)[0][0]
+
+    if plot:      
+        plt.figure(1)
+        plt.clf()
+        plt.imshow(agrid,interpolation='nearest',
+                   extent=[np.min(ulogg),np.max(ulogg),np.min(uTeff),np.max(uTeff)],
+                   aspect=1./3000,vmin=np.nanmin(agrid),vmax=np.nanmax(agrid))
+        plt.colorbar()
+
+#------------------------------
+# Second coefficient
+#------------------------------
+    vals = np.zeros(npts)
+    vals[:] = bvec[idata]
+
+    bgrid = np.zeros((len(uTeff),len(ulogg)))
+    for i in np.arange(len(uTeff)):
+        for ii in np.arange(len(ulogg)):
+            eval  = np.array([uTeff[i],ulogg[ii]]).reshape(1,2)
+            val = griddata(locs,vals,eval,method='nearest')
+            if len(val) > 0:
+                bgrid[i,ii] = val[0]
+            else:
+                pass 
+
+    ldc2func = bspline(uTeff, ulogg, bgrid, kx=1, ky=1, s=0)
+    bval = ldc2func(Tstar,loggstar)[0][0]
+
+    if plot:      
+        plt.figure(2)
+        plt.clf()
+        plt.imshow(bgrid,interpolation='nearest',
+                   extent=[np.min(ulogg),np.max(ulogg),np.min(uTeff),np.max(uTeff)],
+                   aspect=1./3000,vmin=np.nanmin(bgrid),vmax=np.nanmax(bgrid))
+        plt.colorbar()
+
+#------------------------------
+# Third coefficient
+#------------------------------
+    vals = np.zeros(npts)
+    vals[:] = cvec[idata]
+
+    cgrid = np.zeros((len(uTeff),len(ulogg)))
+    for i in np.arange(len(uTeff)):
+        for ii in np.arange(len(ulogg)):
+            eval  = np.array([uTeff[i],ulogg[ii]]).reshape(1,2)
+            val = griddata(locs,vals,eval,method='nearest')
+            if len(val) > 0:
+                cgrid[i,ii] = val[0]
+            else:
+                pass 
+
+    ldc3func = bspline(uTeff, ulogg, cgrid, kx=1, ky=1, s=0)
+    cval = ldc3func(Tstar,loggstar)[0][0]
+
+    if plot:      
+        plt.figure(3)
+        plt.clf()
+        plt.imshow(cgrid,interpolation='nearest',
+                   extent=[np.min(ulogg),np.max(ulogg),np.min(uTeff),np.max(uTeff)],
+                   aspect=1./3000,vmin=np.nanmin(cgrid),vmax=np.nanmax(cgrid))
+        plt.colorbar()
+
+
+#------------------------------
+# Fourth coefficient
+#------------------------------
+
+    vals = np.zeros(npts)
+    vals[:] = dvec[idata]
+
+    dgrid = np.zeros((len(uTeff),len(ulogg)))
+    for i in np.arange(len(uTeff)):
+        for ii in np.arange(len(ulogg)):
+            eval  = np.array([uTeff[i],ulogg[ii]]).reshape(1,2)
+            val = griddata(locs,vals,eval,method='nearest')
+            if len(val) > 0:
+                dgrid[i,ii] = val[0]
+            else:
+                pass 
+
+    ldc4func = bspline(uTeff, ulogg, dgrid, kx=1, ky=1, s=0)
+    dval = ldc4func(Tstar,loggstar)[0][0]
+
+    if plot:      
+        plt.figure(4)
+        plt.clf()
+        plt.imshow(dgrid,interpolation='nearest',
+                   extent=[np.min(ulogg),np.max(ulogg),np.min(uTeff),np.max(uTeff)],
+                   aspect=1./3000,vmin=np.nanmin(dgrid),vmax=np.nanmax(dgrid))
+        plt.colorbar()
+
+    if limb == 'quad':
+        return aval, bval
+
+    if limb == 'sqrt':
+        return cval, dval
+
+    if limb == 'nlin':
+        return aval, bval, cval, dval
+
+
+def fit_all_singles(kic,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
+                    fit_limb=False,fit_L3=False,network=None,thin=1,clip=False,
+                    limbmodel='quad',doplots=False,short=False,rprior=False,
+                    lprior=False,getsamp=False,bindiv=10,L3=0.027,reduce=10,
+                    start=0,stop=None,claret_limb=False):
     
     import numpy as np
     import time
     import os
     import constants as c
 
-    print "starting KOI-"+str(koi)
+    print ""
+    print "----------------------------------------------------------------------"
+    print "Getting info on KIC "+str(kic)
+    print "----------------------------------------------------------------------"
+    info = get_eb_info(kic,L3=L3)
 
-    for planet in np.arange(1,9):
-        check1 = isthere(koi,planet,short=True,network=network)
-        check2 = isthere(koi,planet,network=network)
-        check3 = isthere(koi,planet,network=network)
-        if check3 and lcnb:
-            lc,pdata,sdata = get_koi_info(koi,planet,network=network)
-            chains,lp = fit_single(nwalkers=nwalkers,burnsteps=burnsteps,\
-                                    mcmcsteps=mcmcsteps,clobber=clobber)
-            fit,rpdf = bestvals(chains=chains)
-            triangle_plot(thin=thin)
-        if check2:
-            lc,pdata,sdata = get_koi_info(koi,planet,network=network)
-            chains,lp = fit_single(nwalkers=nwalkers,burnsteps=burnsteps,\
-                                    mcmcsteps=mcmcsteps,clobber=clobber)
-            fit,rpdf = bestvals(chains=chains)
-            triangle_plot(thin=thin)
-        if check1:
-            lc,pdata,sdata = get_koi_info(koi,planet,short=True,network=network)
-            chains,lp = fit_single(nwalkers=nwalkers,burnsteps=burnsteps,\
-                                    mcmcsteps=mcmcsteps,clobber=clobber)
-            fit,rpdf = bestvals(chains=chains)
-            triangle_plot(thin=thin)
-        else: pass
- 
-    return
+    print ""
+    print "----------------------------------------------------------------------"
+    print "Getting light curves..."
+    print "----------------------------------------------------------------------"
+    lcf,lcm = get_lc_data(kic,short=short)
 
-#----------------------------------------------------------------------
-# batchfit:
-#    routine allowing the batch fitting of several KOIs
-#----------------------------------------------------------------------
-# 1-8 (-1, 255)
-# 9-17 (0, done)
-# 19-   on 936
-# on 1141
-# on 1867
-# on 2329
-# on 2793
-# on 3444
+    print ""
+    print "----------------------------------------------------------------------"
+    print "Solving for all mid-eclipse times..."
+    print "----------------------------------------------------------------------"
+    tpiter = eclipse_times(lcf,info)
 
-def batchfit(start=0,stop=103,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,
-             clobber=False,thin=False,frac=0.003,doplots=False,short=False,
-             list=False,network=None,clip=False,rprior=False,notriangle=True,
-             bindiv=15,lprior=False):
+    if not stop:
+        stop = len(tpiter)
 
-    import numpy as np
-    import time
-    import os
-    import constants as c
-    
-    kois = np.sort(koilist(network=network))
-
-    nkois = len(kois)
-    
-  
-    if list:
-        for number in np.arange(nkois):
-            print number,kois[number]
-        return
+    print ""
+    print "----------------------------------------------------------------------"
+    print "Starting iteration over all eclipses"
+    print "----------------------------------------------------------------------"
+    for i in range(start,stop):
+        print ""
+        print "----------------------------------------------------------------------"
+        print "Getting eclipse #"+str(i)
+        print "----------------------------------------------------------------------"
+        eclipse_ut = select_eclipse(i,info,thin=1,durfac=2.25,fbuf=1.2,order=3,plot=False)
+        if eclipse_ut['status'] == 0:
+            print "----------------------------------------------------------------------"
+            print "Starting MCMC fitting for KIC "+str(kic)
+            print "----------------------------------------------------------------------"
+            eclipse = select_eclipse(i,info,thin=thin,durfac=2.25,fbuf=1.2,order=3,plot=True)
+            lp,chains,variables = single_fit(eclipse,info,clobber=clobber,nwalkers=nwalkers, \
+                                             burnsteps=burnsteps,mcmcsteps=mcmcsteps, \
+                                             fit_limb=fit_limb,fit_L3=fit_L3,reduce=reduce, \
+                                             claret_limb=claret_limb)
+            bestvals = best_single_vals(eclipse,info,chains=chains,lp=lp)
+            params_of_interest(eclipse,chains=chains,lp=lp)
+        else:
+            print "----------------------------------------------------------------------"
+            print "Skipping MCMC fit on account of intractable spots"
+            print "----------------------------------------------------------------------"
 
     else:
-        tstart = time.time()
-        for i in np.arange(start,stop+1):
-            koi = kois[i]
-            npl,koiname = numplanet(koi,network=network)
-            for planet in np.arange(npl)+1:
-                do_fit(koi,planet,nwalkers=nwalkers,burnsteps=burnsteps,
-                       mcmcsteps=mcmcsteps,network=network,clobber=clobber,
-                       thin=thin,frac=frac,doplots=doplots,short=short,clip=clip,
-                       rprior=rprior,notriangle=notriangle,bindiv=bindiv,lprior=lprior)
+        print "----------------------------------------------------------------------"
+        print "Skipping eclipse #"+str(i)+" due to poor extraction"
+        print "----------------------------------------------------------------------"
         
-    return
-
-
- 
-def fit_all(kic,nwalkers=500,burnsteps=1000,mcmcsteps=1000,clobber=False,fit_L3=True,
-           network=None,thin=10,clip=False,limbmodel='quad',doplots=False,
-           short=False,rprior=False,lprior=False,getsamp=False,bindiv=10,L3=0.0):
-    
-    import numpy as np
-    import time
-    import os
-    import constants as c
-
-    print ""
-    print ""    
-    print "Starting MCMC fitting for KIC "+str(kic)
-
-    check1 = isthere(kic,clip=True)
-    if check1:
-        lcf, lcm, ebpar0, rvdata1, rvdata2 = get_eb_info(kic,short=False,limbmodel='quad',
-                                                         running=False,eclipse=False,L3=L3)
-
-        
-        fit_eclipse(nwalkers=nwalkers,burnsteps=burnsteps,mcmcsteps=mcmcsteps,clobber=clobber,fit_L3=fit_L3)
-
-        bestvals(thin=thin)
-
-#        if doplots != False:
-#            fit,rpdf = bestvals(chains=chains,lp=lp,thin=thin,frac=frac,rpmax=rpmax,
-#                                durmax=durmax,bindiv=bindiv)
-#            if notriangle != True:
-#                triangle_plot(thin=thin,frac=frac)
-
-    else: pass
- 
-    return
-
-
-def fit_single(kic,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,enum=1,
-               fit_L3=True,network=None,thin=10,clip=False,limbmodel='quad',doplots=False,
-               short=False,rprior=False,lprior=False,getsamp=False,bindiv=10,L3=0.0):
-    
-    import numpy as np
-    import time
-    import os
-    import constants as c
-
-    print ""
-    print ""    
-    print "Starting MCMC fitting for KIC "+str(kic)
-
-    check1 = isthere(kic,clip=True,running=True)
-    if check1:
-        lcf,lcm,ebpar0,rvdata1,rvdata2 = get_eb_info(9821078,short=True,running=True)
-        do_single_fit(nwalkers=nwalkers,burnsteps=burnsteps,mcmcsteps=mcmcsteps,enum=enum)
-        single_bestvals(enum=enum)
-
-
     return
