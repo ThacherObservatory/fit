@@ -114,7 +114,7 @@ def fit_sequence(params,seq_num):
     triangle_plot()
     
 
-def make_model_data(m1=0.7,m2=0.35,r1=0.7,r2=0.5,M_is_R=True,ecc=0.0,omega=0.0,impact=0,
+def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
                     period=4.123456789, t0=2454833.0,int=60.0,
                     q1a=None,q2a=None,q1b=None,q2b=None,J=None,L3=0.0,vsys=10.0,
                     usegravdark=False,usereflection=False,ellipsoidal=False,
@@ -131,17 +131,19 @@ def make_model_data(m1=0.7,m2=0.35,r1=0.7,r2=0.5,M_is_R=True,ecc=0.0,omega=0.0,i
     """
 
     # Set mass to be equal to radius in solar units if flag is set
-    if M_is_R:
-        m1 = r1
-        m2 = r2
+    if not m1 and not m2:
+        m1 = r_to_m(r1)
+        m2 = r_to_m(r2)
 
     # Mass ratio is not used unless gravity darkening is considered.
     massratio = m2/m1 if usegravdark else 0.0
 
     # Surface brightness ratio
     if not J:
-        J = (m2/m1)**4
-
+        l1 = r_to_l(r1)
+        l2 = r_to_l(r2)
+        J = l2/l1
+        
     # Get limb darkening according to input stellar params
     if not q1a or not q1b or not q2a or not q2b:
         print 'get_limb_coeff here!!!'
