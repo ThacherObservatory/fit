@@ -13,7 +13,7 @@ import scipy as sp
 import robust as rb
 from scipy.io.idl import readsav
 from length import length
-from kepler_tools import *
+#from kepler_tools import *
 import pyfits as pf
 from statsmodels.nonparametric.kernel_density import KDEMultivariate as KDE
 from stellar import rt_from_m, flux2mag, mag2flux
@@ -68,6 +68,31 @@ def param_sequence():
                         index += 1
                                     
     return params,seq_num
+
+def r_to_l(r):
+    """Converts radius to luminosity (solar units)
+    Boyajian et. al 2012 equation 7"""
+    
+    if r < .1 or r > .9:
+        return "Radius outside of suitable range"
+    
+    log_l = -3.5822 + 6.8639*r - 7.185*r**2 + 4.5169*r**3
+    
+    return 10**log_l
+    
+def r_to_m(r):
+    """Converts radius to mass (solar units)
+    Inverts Boyajian et. al 2012 equation 11"""
+    
+    if r < .1 or r > .9:
+        return "Radius outside of suitable range"
+        
+    a = -0.1297
+    b = 1.0718
+    c = 0.0135-r
+    
+    return (-b + np.sqrt(b**2 - 4*a*c))/(2*a)
+    
 
 
 def fit_sequence(params,seq_num):
