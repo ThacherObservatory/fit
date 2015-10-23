@@ -1,6 +1,6 @@
 # TO DO:
 #-------
-# Incorporate get_limb_coeff into make_model_data
+# Update the RV time sampling according to algorithms in Saunders et al. (2006)
 # Run through "fit_sequence" routine and update all functions in sequence
 # 1. Reconfigure "all_fit" fitting procedure to take as input ebpar0 and data
 # Reconfigure code for parallelization.
@@ -43,13 +43,15 @@ def r_to_m(r):
     
     return (-b + np.sqrt(b**2 - 4*a*c))/(2*a)
 
+
+
 def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
                     period=4.123456789, t0=2454833.0,int=60.0,
                     q1a=None,q2a=None,q1b=None,q2b=None,J=None,L3=0.0,vsys=10.0,
-                    usegravdark=False,usereflection=False,ellipsoidal=False,
-                    roemer=True,photnoise=0.0003,RVnoise=0.1,RVsamples=100,
-                    fitlighttravel=True,durfac=1.5,ncycles=1,durpoints=None,
-                    write=False):
+                    gravdark=False,reflection=False,ellipsoidal=False,
+                    photnoise=0.0003,RVnoise=0.1,RVsamples=100,
+                    lighttravel=True,durfac=1.5,ncycles=1,durpoints=None,
+                    write=False,path='./'):
 
 
     """
@@ -65,7 +67,7 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
         m2 = r_to_m(r2)
 
     # Mass ratio is not used unless gravity darkening is considered.
-    massratio = m2/m1 if usegravdark else 0.0
+    massratio = m2/m1 if gravdark else 0.0
 
     # Surface brightness ratio
     if not J:
@@ -73,8 +75,8 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
         l2 = r_to_l(r2)
         J = l2/l1
 
-    Teff1 = (l1*c.Lsun/(4*np.pi*(r1*c.Rsun)**2*c.sb )**(0.25)
-    Teff2 = (l2*c.Lsun/(4*np.pi*(r2*c.Rsun)**2*c.sb )**(0.25)
+    Teff1 = (l1*c.Lsun/(4*np.pi*(r1*c.Rsun)**2*c.sb ))**(0.25)
+    Teff2 = (l2*c.Lsun/(4*np.pi*(r2*c.Rsun)**2*c.sb ))**(0.25)
 
     # Get limb darkening according to input stellar params
     if not q1a or not q1b or not q2a or not q2b:
@@ -171,9 +173,9 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
               'et01':0.0, 'et02':0.0, 'dt12':None, 'tdur1':None, 'tdur2':None, 
               'mag0':10.0,'vsys':vsys, 'Mstar1':m1, 'Mstar2':m2,
               'ktot':ktot, 'L3':L3,'Period':period, 'ePeriod':0.1,
-              'integration':int,'bjd':bjd,'variables':variables,
-              'fitlighttravel':fitlighttravel,'usegravdark':usegravdark,
-              'usereflection':usereflection}
+              'integration':int,'bjd':bjd,'variables':variables,'ndim':0,
+              'lighttravel':lighttravel,'gravdark':gravdark,
+              'reflection':reflection,'path':path}
               
     #              'GD1':0.32, 'Ref1':0.4, 'GD2':0.32, 'Ref2':0.4, 'Rot1':0.0,
 
@@ -199,8 +201,8 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
         tphot = np.append(np.linspace(-tdprim/2,tdprim/2,durpoints),
                           np.linspace(-tdsec/2+t0sec,tdsec/2+t0sec,durpoints*tdsec/tdprim))
     else:
-        tphot = np.append(np.arange(-tdprim/2,tdprim/2,integration/86400),
-                          np.arange(-tdsec/2+t0sec,tdsec/2+t0sec,integration/86400))
+        tphot = np.append(np.arange(-tdprim/2,tdprim/2,integration/86400.0),
+                          np.arange(-tdsec/2+t0sec,tdsec/2+t0sec,integration/86400.0))
         
     lightmodel = compute_eclipse(tphot,parm,ebpar0['integration'],modelfac=11.0,fitrvs=False,tref=0.0,
                                  period=period,ooe1fit=None,ooe2fit=None,unsmooth=False)
@@ -220,6 +222,9 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
     variables = np.array(variables)
     ebpar0['variables'] = variables
 
+    ndim = np.shape(p0_init)[1]
+    ebpar0['ndim'] = ndim
+    
     parm,vder = vec_to_params(p0_init,ebpar0)
 
     # RV sampling
@@ -281,55 +286,34 @@ def check_model(data):
     return
 
 
+def ebsim_fit(data,ebpar0,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
+              fit_period=False,fit_limb=False,claret=True,fit_rvs=True,fit_ooe1=False,fit_ooe2=False,
+              fit_L3=False,fit_sp2=False,full_spot=False,fit_ellipsoidal=False,write=True,order=3,
+              reduce=10,network=None,thin=100):
 
-
-
-def all_fit(fitdata,info,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
-            fit_period=True,fit_limb=True,fit_rvs=True,fit_sp1=False,fit_L3=False,
-            fit_sp2=False,full_spot=False,fit_ellipsoidal=False,fit_lighttravel=False,
-            use_gravdark=False,use_reflection=False,write=True,order=3,reduce=10,
-            claret_limb=False,network=None):
-
-    global ndim, variables,tfit,mfit,e_mfit
     global nw, bs, mcs
-    global fitrvs, fitlimb, fitsp1, fitsp2, claret
+    global fitrvs, fitlimb, fitsp1, fitsp2
     global fullspot, fitellipsoidal, fitlighttravel, fitL3
     global usegravdark, usereflection
     global fitdict, fitorder
 
-    fitorder = order
-
-    fitdict = fitdata
-
-    claret = claret_limb
-
-    fitperiod = fit_period
+    fitinfo = {'ooe_order':order, 'fit_period':fit_period, 'thin':thin,
+               'fit_rvs':fit_rvs, 'fit_limb':fitlimb,'claret':claret,
+               'fit_ooe1':fit_ooe1,'fit_ooe2':fit_ooe2,'fit_ellipsoidal':fit_ellipsoidal,
+               'fit_lighttravel':ebpar0['lighttravel'],'fit_L3':fit_L3,
+               'fit_gravdark':ebpar0['gravdark'],'fit_reflection':ebpar0['reflection'],
+               'nwalkers':nwalkers,'burnsteps':burnsteps,'mcmcsteps':mcmcsteps,
+               'clobber':clobber}
     
-#    thintag = '_thin'+str(fitdict['thin']) if fitdict['thin'] > 1 else ''
-    thintag = ''
-    fitrvs = fit_rvs
-    fitlimb = fit_limb
-    fitsp1 = fit_sp1
-    fitsp2 = fit_sp2
-    fullspot = full_spot
-    fitellipsoidal = fit_ellipsoidal
-    fitlighttravel = fit_lighttravel
-    fitL3 = fit_L3
-    usegravdark = use_gravdark
-    usereflection = use_reflection
 
-    nw = nwalkers
-    bs = burnsteps
-    mcs = mcmcsteps
+#    fullspot = full_spot
 
-#    enum = fitdict['enum']
-
-    directory = path+'MCMC/fullfit/'
+    directory = ebpar0['path']+'MCMC/'
     if not os.path.exists(directory):
         os.makedirs(directory)
 
     print ""
-    print "Starting MCMC fitting routine for "+name
+    print "Starting MCMC fitting routine"
 
     twomin = 2./(24.*60.)
     onesec = 1./(24.*60.*60.)
@@ -374,19 +358,18 @@ def all_fit(fitdata,info,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=Fal
 
 # L3 at 14 ... 14 and beyond + 1
 
-#    p0_init = np.array([p0_0,p0_1,p0_2,p0_3,p0_4,p0_5,p0_6,p0_7])
-#    variables =["J","Rsum","Rratio","cosi","ecosw","esinw","magoff","t0"]
-
     p0_init = np.array([p0_0,p0_1,p0_2,p0_3,p0_4,p0_5,p0_7])
     variables =["J","Rsum","Rratio","cosi","ecosw","esinw","t0"]
 
-    if fitperiod:
+    if fitinfo['fit_period']:
         p0_init = np.append(p0_init,[p0_8],axis=0)
         variables.append("period")
 
-    if fitlimb and claret:
+# Start from here 10/22/15
+
+    if fitinfo['fit_limb'] and fitinfo['claret']:
         sys.exit('Cannot fit for LD parameters and constrain them according to the other fit parameters!')
-    if fitlimb:
+    if fitinfo['fit_limb']
         limb0 = np.array([p0_9,p0_10,p0_11,p0_12])
         lvars = ["q1a", "q2a", "q1b", "q2b"]
 #        limb0 = np.array([p0_9,p0_11])
