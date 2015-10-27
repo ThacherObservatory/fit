@@ -5,7 +5,7 @@
 # 1. Reconfigure "all_fit" fitting procedure to take as input ebpar0 and data
 # Reconfigure code for parallelization.
 
-import sys,math,pdb,time,glob,re,os,eb,emcee
+import sys,math,pdb,time,glob,re,os,eb,emcee,pickle
 import numpy as np
 import matplotlib.pyplot as plt
 import constants as c
@@ -51,7 +51,7 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
                     gravdark=False,reflection=False,ellipsoidal=False,
                     photnoise=0.0003,RVnoise=0.1,RVsamples=100,
                     lighttravel=True,durfac=1.5,ncycles=1,durpoints=None,
-                    write=False,path='./'):
+                    write=False,path='./',limb='quad'):
 
 
     """
@@ -67,7 +67,7 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
         m2 = r_to_m(r2)
 
     # Mass ratio is not used unless gravity darkening is considered.
-    massratio = m2/m1 if gravdark else 0.0
+    massratio = m2/m1 #if gravdark else 0.0
 
     # Surface brightness ratio
     if not J:
@@ -80,15 +80,15 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
 
     # Get limb darkening according to input stellar params
     if not q1a or not q1b or not q2a or not q2b:
-             q1a,q2a = get_limb_qs(Mstar=m1,Rstar=r1,Tstar=Teff1,limb='quad')
-             q1b,q2b = get_limb_qs(Mstar=m2,Rstar=r2,Tstar=Teff2,limb='quad')
+             q1a,q2a = get_limb_qs(Mstar=m1,Rstar=r1,Tstar=Teff1,limb=limb)
+             q1b,q2b = get_limb_qs(Mstar=m2,Rstar=r2,Tstar=Teff2,limb=limb)
         
     # Integration time and reference time
     integration = int
     bjd = 2454833.0
 
     # For consistency with EB code
-    NewtonG = eb.GMSUN*1000/c.Msun
+    NewtonG = eb.GMSUN*1e6/c.Msun
 
     # Compute additional orbital parameters from input
     # These calculations were lifted from eb-master code (for consistency).
@@ -164,8 +164,14 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
     variables.append('L3')
 
 
-    # Create initial ebpar dictionary
+    # Create output path if not already there.
+    directory = path
+    if not os.path.exists(directory):
+        print 'Making directory '+directory
+        os.makedirs(directory)
 
+    
+    # Create initial ebpar dictionary
     ebpar0 = {'J':J, 'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
               'Mratio':massratio, 'LDlin1':q1a, 'LDnon1':q2a, 'LDlin2':q1b, 'LDnon2':q2b,
               'GD1':0.0, 'Ref1':0.0, 'GD2':0.0, 'Ref2':0.0, 'Rot1':0.0,
@@ -173,9 +179,10 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
               'et01':0.0, 'et02':0.0, 'dt12':None, 'tdur1':None, 'tdur2':None, 
               'mag0':10.0,'vsys':vsys, 'Mstar1':m1, 'Mstar2':m2,
               'ktot':ktot, 'L3':L3,'Period':period, 'ePeriod':0.1,
-              'integration':int,'bjd':bjd,'variables':variables,'ndim':0,
+              'integration':int,'bjd':bjd,'variables':variables,'ninput':0,
               'lighttravel':lighttravel,'gravdark':gravdark,
-              'reflection':reflection,'path':path}
+              'reflection':reflection,'path':path,'limb':limb,
+              'Rstar1':r1, 'Rstar2':r2}
               
     #              'GD1':0.32, 'Ref1':0.4, 'GD2':0.32, 'Ref2':0.4, 'Rot1':0.0,
 
@@ -183,6 +190,17 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
     # Make "parm" vector
     parm,vder = vec_to_params(p0_init,ebpar0)
 
+    debug = False
+    if debug:
+        print "Model parameters:"
+        for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
+            print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+
+        vder = eb.getvder(parm, vsys, ktot)
+        print "Derived parameters:"
+        for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
+            print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+            
     # Contact points of the eclipses
     (ps, pe, ss, se) = eb.phicont(parm)
 
@@ -204,13 +222,15 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
         tphot = np.append(np.arange(-tdprim/2,tdprim/2,integration/86400.0),
                           np.arange(-tdsec/2+t0sec,tdsec/2+t0sec,integration/86400.0))
         
-    lightmodel = compute_eclipse(tphot,parm,ebpar0['integration'],modelfac=11.0,fitrvs=False,tref=0.0,
+    lightmodel = compute_eclipse(tphot,parm,integration=ebpar0['integration'],modelfac=11.0,fitrvs=False,tref=0.0,
                                  period=period,ooe1fit=None,ooe2fit=None,unsmooth=False)
 
     if photnoise != None:
         n = len(lightmodel)
         lightmodel += np.random.normal(0,photnoise,n)
-        
+        lighterr = np.ones(len(lightmodel))*photnoise
+    else:
+        lighterr = np.zeros(len(lightmodel))
     
     p0_init = np.append(p0_init,[p0_13],axis=0)
     variables.append('massratio')
@@ -222,15 +242,15 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
     variables = np.array(variables)
     ebpar0['variables'] = variables
 
-    ndim = np.shape(p0_init)[1]
-    ebpar0['ndim'] = ndim
+    ninput = len(p0_init)
+    ebpar0['ninput'] = ninput
     
     parm,vder = vec_to_params(p0_init,ebpar0)
 
     # RV sampling
     tRV = np.random.uniform(0,1,RVsamples)*period
     
-    rvs = compute_eclipse(tRV,parm,ebpar0['integration'],modelfac=11.0,fitrvs=True,tref=0.0,
+    rvs = compute_eclipse(tRV,parm,modelfac=11.0,fitrvs=True,tref=0.0,
                           period=period,ooe1fit=None,ooe2fit=None,unsmooth=False)
     
     massratio = m2/m1
@@ -242,15 +262,16 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
     if RVnoise != None:
         n1 = len(rv1)
         rv1 += np.random.normal(0,RVnoise,n1)
+        rv1_err = np.ones(len(rv1))*RVnoise
         n2 = len(rv2)
         rv2 += np.random.normal(0,RVnoise,n2)
- 
+        rv2_err = np.ones(len(rv2))*RVnoise
+    
+    lout = np.array([tphot+2454833.0,lightmodel,lighterr])
+    r1out = np.array([tRV+2454833.0,rv1,rv1_err])
+    r2out = np.array([tRV+2454833.0,rv2,rv2_err])
 
-    lout = np.array([tphot+2454833.0,lightmodel])
-    r1out = np.array([tRV+2454833.0,rv1])
-    r2out = np.array([tRV+2454833.0,rv2])
-
-    data = {'light':lout, 'rv1':r1out, 'rv2':r2out}
+    data = {'light':lout,'rv1':r1out,'rv2':r2out}
 
 
     if write:
@@ -286,29 +307,25 @@ def check_model(data):
     return
 
 
-def ebsim_fit(data,ebpar0,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
-              fit_period=False,fit_limb=False,claret=True,fit_rvs=True,fit_ooe1=False,fit_ooe2=False,
+def fit_params(ebpar0,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
+              fit_period=False,fit_limb=True,claret=False,fit_rvs=True,fit_ooe1=False,fit_ooe2=False,
               fit_L3=False,fit_sp2=False,full_spot=False,fit_ellipsoidal=False,write=True,order=3,
-              reduce=10,network=None,thin=100):
-
-    global nw, bs, mcs
-    global fitrvs, fitlimb, fitsp1, fitsp2
-    global fullspot, fitellipsoidal, fitlighttravel, fitL3
-    global usegravdark, usereflection
-    global fitdict, fitorder
-
-    fitinfo = {'ooe_order':order, 'fit_period':fit_period, 'thin':thin,
-               'fit_rvs':fit_rvs, 'fit_limb':fitlimb,'claret':claret,
-               'fit_ooe1':fit_ooe1,'fit_ooe2':fit_ooe2,'fit_ellipsoidal':fit_ellipsoidal,
-               'fit_lighttravel':ebpar0['lighttravel'],'fit_L3':fit_L3,
-               'fit_gravdark':ebpar0['gravdark'],'fit_reflection':ebpar0['reflection'],
-               'nwalkers':nwalkers,'burnsteps':burnsteps,'mcmcsteps':mcmcsteps,
-               'clobber':clobber}
+              thin=1):
     
+    fitinfo = {'ooe_order':order, 'fit_period':fit_period, 'thin':thin,
+              'fit_rvs':fit_rvs, 'fit_limb':fit_limb,'claret':claret,
+              'fit_ooe1':fit_ooe1,'fit_ooe2':fit_ooe2,'fit_ellipsoidal':fit_ellipsoidal,
+              'fit_lighttravel':ebpar0['lighttravel'],'fit_L3':fit_L3,
+              'fit_gravdark':ebpar0['gravdark'],'fit_reflection':ebpar0['reflection'],
+              'nwalkers':nwalkers,'burnsteps':burnsteps,'mcmcsteps':mcmcsteps,
+               'clobber':clobber,'write':write}
 
-#    fullspot = full_spot
+    return fitinfo
 
-    directory = ebpar0['path']+'MCMC/'
+
+def ebsim_fit(data,ebpar0,fitinfo):
+
+    directory = ebpar0['path']
     if not os.path.exists(directory):
         os.makedirs(directory)
 
@@ -318,26 +335,28 @@ def ebsim_fit(data,ebpar0,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=Fa
     twomin = 2./(24.*60.)
     onesec = 1./(24.*60.*60.)
 
-#    bestvals, meds, modes, sigints, chisq = best_spotvals(fitdict,info,doprint=False,doplot=False)
+    nw = fitinfo['nwalkers']
+    bjd = ebpar0['bjd']
     
 # Initial chain values
     print ""
     print "Deriving starting values for chains"
-    p0_0  = np.random.uniform(ebpar0['J']*0.5,ebpar0['J']*2.0,nw)             # surface brightness
-    p0_1  = np.random.uniform(ebpar0['Rsum_a']*0.5,ebpar0['Rsum_a']*2, nw)    # fractional radius
-    p0_2  = np.random.uniform(ebpar0['Rratio']*0.5,ebpar0['Rratio']*2, nw)    # radius ratio
-    p0_3  = np.random.uniform(0,ebpar0['Rsum_a'], nw)                         # cos i
-    p0_4  = np.random.uniform(ebpar0['ecosw']*0.5,min(ebpar0['ecosw']*2,1), nw) # ecosw
-    p0_5  = np.random.uniform(ebpar0['esinw']*0.5,min(ebpar0['esinw']*2,1), nw) # esinw
+    p0_0  = np.random.uniform(ebpar0['J']*0.9,ebpar0['J']*1.1,nw)             # surface brightness
+    p0_1  = np.random.uniform(ebpar0['Rsum_a']*0.9,ebpar0['Rsum_a']*1.1, nw)    # fractional radius
+    p0_2  = np.random.uniform(ebpar0['Rratio']*0.9,ebpar0['Rratio']*1.1, nw)    # radius ratio
+#    p0_3  = np.random.uniform(0,ebpar0['Rsum_a'], nw)                          # cos i
+    p0_3  = np.random.uniform(0,0.01, nw)                          # cos i
+    p0_4  = np.random.uniform(ebpar0['ecosw']*0.9,min(ebpar0['ecosw']*1.1,1), nw) # ecosw
+    p0_5  = np.random.uniform(ebpar0['esinw']*0.9,min(ebpar0['esinw']*1.1,1), nw) # esinw
     p0_6  = np.random.normal(ebpar0['mag0'],0.1, nw)                          # mag zpt
-    p0_7  = np.random.normal(ebpar0['t01']-bjd,twomin,nw)                     # ephemeris
+    p0_7  = np.random.normal(ebpar0['t01']-bjd,onesec,nw)                     # ephemeris
     p0_8  = np.random.normal(ebpar0['Period'],onesec,nw    )                  # Period
     p0_9  = np.random.uniform(0,1,nw)                                         # Limb darkening
     p0_10 = np.random.uniform(0,1,nw)                                         # Limb darkening
     p0_11 = np.random.uniform(0,1,nw)                                         # Limb darkening
     p0_12 = np.random.uniform(0,1,nw)                                         # Limb darkening
-    p0_13 = np.abs(np.random.normal(ebpar0['Mratio'],0.05,nw))                # Mass ratio
-    p0_14 = np.random.uniform(0,0.5,nw)                                       # Third Light
+    p0_13 = np.abs(np.random.normal(ebpar0['Mratio'],0.001,nw))               # Mass ratio
+    p0_14 = np.random.uniform(0,0.1,nw)                                       # Third Light
     p0_15 = np.random.normal(ebpar0['Rot1'],0.001,nw)                         # Star 1 rotation
     p0_16 = np.random.uniform(0,1,nw)                                         # Fraction of spots eclipsed
     p0_17 = np.random.normal(0,0.001,nw)                                      # base spottedness
@@ -369,7 +388,7 @@ def ebsim_fit(data,ebpar0,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=Fa
 
     if fitinfo['fit_limb'] and fitinfo['claret']:
         sys.exit('Cannot fit for LD parameters and constrain them according to the other fit parameters!')
-    if fitinfo['fit_limb']
+    if fitinfo['fit_limb']:
         limb0 = np.array([p0_9,p0_10,p0_11,p0_12])
         lvars = ["q1a", "q2a", "q1b", "q2b"]
 #        limb0 = np.array([p0_9,p0_11])
@@ -378,11 +397,11 @@ def ebsim_fit(data,ebpar0,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=Fa
         for var in lvars:
             variables.append(var)
 
-    if fitL3:
+    if fitinfo['fit_L3']:
         p0_init = np.append(p0_init,[p0_14],axis=0)
         variables.append('L3')
 
-    if fitsp1:
+    if fitinfo['fit_ooe1']:
         p0_init = np.append(p0_init,[p0_16],axis=0)
         variables.append('spFrac1')
         for i in range(fitorder+1):
@@ -392,7 +411,7 @@ def ebsim_fit(data,ebpar0,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=Fa
             p0_init = np.append(p0_init,[np.random.normal(0,0.05,nw)],axis=0)
             variables.append('c'+str(i)+'_2')
 
-    if fitsp2:
+    if fitinfo['fit_ooe2']:
         sys.exit('Not ready for this yet!')
 
     
@@ -438,7 +457,7 @@ def ebsim_fit(data,ebpar0,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=Fa
 #            for var in spvars:
 #                variables.append(var)
 
-    if fitrvs:
+    if fitinfo['fit_rvs']:
         p0_init = np.append(p0_init,[p0_13],axis=0)
         variables.append('massratio')
         p0_init = np.append(p0_init,[p0_29],axis=0)
@@ -450,31 +469,26 @@ def ebsim_fit(data,ebpar0,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=Fa
 
 # Transpose array of initial guesses
     p0 = np.array(p0_init).T
-    
+
 # Number of dimensions in the fit.
     ndim = np.shape(p0)[1]
 
 # Do not redo MCMC unless clobber flag is set
-    done = os.path.exists(directory+name+stag+thintag+'_Jchain.txt')
-    if done == True and clobber == False:
+    done = os.path.exists(directory+'Jchain.txt')
+    if done == True and fitinfo['clobber'] == False:
         print "MCMC run already completed"
         return False,False,variables
-
-
-    def lnprob(x):
-#        return lnprob_single(x)
-        return lnprob_full(x)
 
 
 # Set up MCMC sampler
     print "... initializing emcee sampler"
     tstart = time.time()
-    sampler = emcee.EnsembleSampler(nw, ndim, lnprob)
+    sampler = emcee.EnsembleSampler(nw, ndim, lnprob, args=(data,ebpar0,fitinfo,variables))
 
 # Run burn-in
     print ""
-    print "Running burn-in with "+str(bs)+" steps and "+str(nw)+" walkers"
-    pos, prob, state = sampler.run_mcmc(p0, bs)
+    print "Running burn-in with "+str(fitinfo['burnsteps'])+" steps and "+str(fitinfo['nwalkers'])+" walkers"
+    pos, prob, state = sampler.run_mcmc(p0, fitinfo['burnsteps'])
     print done_in(tstart)
 
 # Calculate G-R scale factor for each variable
@@ -491,19 +505,19 @@ def ebsim_fit(data,ebpar0,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=Fa
 # Save burn in stats
     burn = np.append(Rs,sampler.acor)
     burn = np.append(burn,sampler.acceptance_fraction)
-    np.savetxt(directory+name+stag+thintag+'_burnstats.txt',burn)
+    np.savetxt(directory+'burnstats.txt',burn)
 
-# Reset sampler and run MCMC for reals
+    # Reset sampler and run MCMC for reals
     print "getting pdfs for LD coefficients"
-    print "... resetting sampler and running MCMC with "+str(mcs)+" steps"
+    print "... resetting sampler and running MCMC with "+str(fitinfo['mcmcsteps'])+" steps"
     sampler.reset()
-    posf, probf, statef = sampler.run_mcmc(pos, mcs)
+    posf, probf, statef = sampler.run_mcmc(pos, fitinfo['mcmcsteps'])
     print done_in(tstart)
 
- # Calculate G-R scale factor for each variable
+    # Calculate G-R scale factor for each variable
     Rs = GR_test(sampler.chain,variables=variables)
 
-# Autocorrelation times
+    # Autocorrelation times
     for var in np.arange(ndim):
         acout = "Autocorrelation time for "+variables[var]+" = {0:0.3f}"
         print acout.format(sampler.acor[var])
@@ -513,54 +527,25 @@ def ebsim_fit(data,ebpar0,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=Fa
 
     stats = np.append(Rs,sampler.acor)
     stats = np.append(stats,sampler.acceptance_fraction)
-    np.savetxt(directory+name+stag+thintag+'_finalstats.txt',stats)
+    np.savetxt(directory+'finalstats.txt',stats)
 
-# Write out chains to disk
-    if write:
+    # Dump the initial parameter dictionary into a file for comparison with best fits
+    pickle.dump(ebpar0,open(directory+"initial_params.p", "wb" ))
+
+
+    # Write out chains to disk
+    if fitinfo['write']:
+        thin = fitinfo['thin']
+        thinst = '_thin_'+str(thin) if thin > 1 else ''
         print "Writing MCMC chains to disk"
         lp = sampler.lnprobability.flatten()
-        np.savetxt(directory+name+stag+thintag+'_lnprob.txt',lp[0::reduce])
+        np.savetxt(directory+'lnprob'+thinst+'.txt',lp[0::thin])
         for i in np.arange(len(variables)):
-            np.savetxt(directory+name+stag+thintag+'_'+variables[i]+'chain.txt',sampler.flatchain[0::reduce,i])
-
+            np.savetxt(directory+variables[i]+'chain'+thinst+'.txt',sampler.flatchain[0::thin,i])
 
     return sampler.lnprobability.flatten(),sampler.flatchain,variables
 
 
-#----------------------------------------------------------------------
-# EBLIST
-#----------------------------------------------------------------------
-def eblist(network=None):
-
-    """ 
-    ----------------------------------------------------------------------
-    eblist:
-    --------
-    Check the list of EBs with preliminary data.
-
-    inputs:
-    -------
-    "network": choose correct path (see get_path routine)
-    
-    example:
-    --------
-    In[1]: ebs = eblist(network=None)
-    ----------------------------------------------------------------------
-    """
-
-    # Directories correspond to KIC numbers
-    files = glob.glob(get_path(network=network)+'[1-9]*')
-
-    # Extract KIC numbers from string
-    eblist = np.zeros(len(files))
-    for i in xrange(0,len(files)):
-        ind = files[i].find('outdata/')+8
-        eblist[i] = files[i][ind:]
-
-    # Format output
-    eblist = np.array(eblist).astype(int)
-
-    return eblist
 
 
 #----------------------------------------------------------------------
@@ -979,7 +964,7 @@ def vec_to_params(x,ebpar0):
         parm[eb.PAR_L3] = ebpar0["L3"]
     
     # Light travel time coefficient.
-    if ebpar0['fitlighttravel']:        
+    if ebpar0['lighttravel']:        
         try:
             cltt = ktot / eb.LIGHT
             parm[eb.PAR_CLTT]   =  cltt      # ktot / c
@@ -990,11 +975,11 @@ def vec_to_params(x,ebpar0):
 #        ktot = 0.0
 
 
-    if ebpar0['usegravdark']:
+    if ebpar0['gravdark']:
         parm[eb.PAR_GD1]    = ebpar0['GD1']   # gravity darkening, std. value
         parm[eb.PAR_GD2]    = ebpar0['GD2']   # gravity darkening, std. value
 
-    if ebpar0['usereflection']:
+    if ebpar0['reflection']:
         parm[eb.PAR_REFL1]  = ebpar0['Ref1']  # albedo, std. value
         parm[eb.PAR_REFL2]  = ebpar0['Ref2']  # albedo, std. value
 
@@ -1068,7 +1053,7 @@ def vec_to_params(x,ebpar0):
 
 
 
-def compute_eclipse(t,parm,integration,modelfac=11.0,fitrvs=False,tref=None,
+def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None,
                     period=None,ooe1fit=None,ooe2fit=None,unsmooth=False):
 
     """
@@ -1092,7 +1077,9 @@ def compute_eclipse(t,parm,integration,modelfac=11.0,fitrvs=False,tref=None,
         return rv
 
     else:
-
+        if not integration:
+            print 'You need to supply an integration time for light curve data!'
+            sys.exit()
         if tref == None or period == None:
             print "Must supply a reference time AND period for "\
                 +"calculation of a light curve"
@@ -1193,8 +1180,7 @@ def get_teffs_loggs(parm,vsys,ktot):
     return T1,logg1,T2,logg2
 
 
-
-def lnprob_single(x):
+def lnprob(x,data,ebpar0,fitinfo,variables):
 
     """
     ----------------------------------------------------------------------
@@ -1207,12 +1193,12 @@ def lnprob_single(x):
 
     """
 
-    parm,vder = vec_to_params(x)
+    parm,vder = vec_to_params(x,ebpar0)
     
     vsys = x[-1]
     ktot = x[-2]
 
-    if claret:
+    if fitinfo['claret']:
         T1,logg1,T2,logg2 = get_teffs_loggs(parm,vsys,ktot)
 
         u1a = ldc1func(T1,logg1)[0][0]
@@ -1229,246 +1215,18 @@ def lnprob_single(x):
         parm[eb.PAR_LDLIN2] = u1b  # u1 star 2
         parm[eb.PAR_LDNON2] = u2b  # u2 star 2
 
-    elif fitlimb:
+    elif fitinfo['fit_limb']:
         q1a = x[variables == 'q1a'][0]  
         q2a = x[variables == 'q2a'][0]  
         q1b = x[variables == 'q1b'][0]  
         q2b = x[variables == 'q2b'][0]  
-        u1a = parm[eb.PAR_LDLIN1]
-        u2a = parm[eb.PAR_LDNON1]
-        u1b = parm[eb.PAR_LDLIN2]
-        u2b = parm[eb.PAR_LDNON2]
-    else:
-        q1a = 0.5 ; q2a = 0.5 ; q1b = 0.5 ; q2b = 0.5
-        u1a = 0 ; u2a = 0 ; u1b = 0 ; u2b = 0
-        
-    # Exclude conditions that give unphysical limb darkening parameters
-    if q1b > 1 or q1b < 0 or q2b > 1 or q2b < 0 or np.isnan(q1b) or np.isnan(q2b):
-        return -np.inf        
-    if q1a > 1 or q1a < 0 or q2a > 1 or q2a < 0 or np.isnan(q1a) or np.isnan(q2a):
-        return -np.inf        
-    
-    # Sometimes the gridding function fails
-    if np.isnan(u1a) or np.isnan(u2a) or np.isnan(u1b) or np.isnan(u2b):
-        return -np.inf
-
-    # Priors
-    if fitL3:
-        if parm[eb.PAR_L3] > 1 or parm[eb.PAR_L3] < 0:
-            return -np.inf
-
-    # Need to understand exactly what this parameter is!!
-    if fitsp1:
-        if parm[eb.PAR_FSPOT1] < 0 or parm[eb.PAR_FSPOT1] > 1:
-            return -np.inf
-        coeff1 = []
-        for i in range(fitorder+1):
-            coeff1 = np.append(coeff1,x[variables == 'c'+str(i)+'_1'])
-        
-### Compute eclipse model for given input parameters ###
-
-    massratio = parm[eb.PAR_Q]
-    if not ellipsoidal:
-        parm[eb.PAR_Q] = 0.0
-
-    # Primary eclipse
-    t0 = parm[eb.PAR_T0]
-    period = parm[eb.PAR_P]
-    tprim = fitdict['tprim']
-    norm = fitdict['norm']
-    xprim = fitdict['xprim']/norm
-    eprim = fitdict['eprim']/norm
-
-    sm1  = compute_eclipse(tprim,parm,fitrvs=False,tref=t0,period=period,ooe1fit=coeff1)
-
-    # Log Likelihood Vector
-    lfi1 = -1.0*(sm1 - xprim)**2/(2.0*eprim**2)
-
-    # Log likelihood
-    lf1 = np.sum(lfi1)
-
-    # Secondary eclipse
-    tsec = fitdict['tsec']
-    xsec = fitdict['xsec']/norm
-    esec = fitdict['esec']/norm
-
-    if fitsp1:
-        coeff2 = []
-        for i in range(fitorder+1):
-            coeff2 = np.append(coeff2,x[variables == 'c'+str(i)+'_2'])
-
-    sm2  = compute_eclipse(tsec,parm,fitrvs=False,tref=t0,period=period,ooe1fit=coeff2)
-    
-    # Log Likelihood Vector
-    lfi2 = -1.0*(sm2 - xsec)**2/(2.0*esec**2)
-    
-    # Log likelihood
-    lf2 = np.sum(lfi2)
-
-    lf = lf1+lf2
-
-    
-    # need this for the RVs!
-    parm[eb.PAR_Q] = massratio
-
-    if fitrvs:
-        if (vsys > max(np.max(rvdata1[:,1]),np.max(rvdata2[:,1]))) or \
-           (vsys < min(np.min(rvdata1[:,1]),np.min(rvdata2[:,1]))): 
-            return -np.inf
-        rvmodel1 = compute_eclipse(rvdata1[:,0],parm,fitrvs=True)
-        k2 = ktot/(1+massratio)
-        k1 = k2*massratio
-        rv1 = rvmodel1*k1 + vsys
-        rvmodel2 = compute_eclipse(rvdata2[:,0],parm,fitrvs=True)
-        rv2 = -1.0*rvmodel2*k2 + vsys
-        lfrv1 = -np.sum((rv1 - rvdata1[:,1])**2/(2.0*rvdata1[:,2]))
-        lfrv2 = -np.sum((rv2 - rvdata2[:,1])**2/(2.0*rvdata2[:,2]))
-        lfrv = lfrv1 + lfrv2
-        lf  += lfrv
-
-    debug = False
-    if debug:
-        print "Model parameters:"
-        for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
-            print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
-
-        vder = eb.getvder(parm, vsys, ktot)
-        print "Derived parameters:"
-        for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
-            print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
-
-        plt.ion()
-        plt.figure(91)
-        plt.clf()
-        plt.subplot(2, 2, 1)
-        plt.plot(tprim,xprim,'ko')
-        plt.plot(tprim,sm1,'ro')
-        tcomp = np.linspace(np.min(tprim),np.max(tprim),10000)
-        compmodel = compute_eclipse(tcomp,parm,fitrvs=False,tref=t0,period=period,ooe1fit=coeff1)
-        plt.plot(tcomp,compmodel,'r-')
-        plt.ylim(0.5,1.1)
-        chi1 = -1*lf1
-        plt.annotate(r'$\chi^2$ = %.0f' % chi1, [0.1,0.1],horizontalalignment='left',
-                     xycoords='axes fraction',fontsize='large')
-
-        plt.subplot(2, 2, 2)
-        plt.plot(tsec,xsec,'ko')
-        plt.plot(tsec,sm2,'ro')
-        tcomp = np.linspace(np.min(tsec),np.max(tsec),10000)
-        compmodel = compute_eclipse(tcomp,parm,fitrvs=False,tref=t0,period=period,ooe1fit=coeff2)
-        plt.plot(tcomp,compmodel,'r-')
-        plt.ylim(0.7,1.1)
-        chi2 = -1*lf2
-        plt.annotate(r'$\chi^2$ = %.0f' % chi2, [0.1,0.1],horizontalalignment='left',
-                     xycoords='axes fraction',fontsize='large')
-        
-        plt.subplot(2, 1, 2)
-        phi1 = foldtime(rvdata1[:,0],t0=t0,period=period)/period
-        plt.plot(phi1,rvdata1[:,1],'ko')
-        plt.plot(phi1,rv1,'kx')
-        tcomp = np.linspace(-0.5,0.5,10000)*period+t0
-        rvmodel1 = compute_eclipse(tcomp,parm,fitrvs=True)
-        k2 = ktot/(1+massratio)
-        k1 = k2*massratio
-        rvcomp1 = rvmodel1*k1 + vsys
-        plt.plot(np.linspace(-0.5,0.5,10000),rvcomp1,'k--')
-        plt.annotate(r'$\chi^2$ = %.0f' % -lfrv, [0.05,0.85],horizontalalignment='left',
-                     xycoords='axes fraction',fontsize='large')
-  
-        phi2 = foldtime(rvdata2[:,0],t0=t0,period=period)/period
-        plt.plot(phi2,rvdata2[:,1],'ro')
-        plt.plot(phi2,rv2,'rx')
-        tcomp = np.linspace(-0.5,0.5,10000)*period+t0
-        rvmodel2 = compute_eclipse(tcomp,parm,fitrvs=True)
-        rvcomp2 = -1.0*rvmodel2*k2 + vsys
-        plt.plot(np.linspace(-0.5,0.5,10000),rvcomp2,'r--')
-        plt.xlim(-0.5,0.5)
-        plt.suptitle('Eclipse Fit')
-
-        gamma = np.linspace(0,np.pi/2.0,1000,endpoint=True)
-        theta = gamma*180.0/np.pi
-        mu = np.cos(gamma)
-        Imu1 = 1.0 - u1a*(1.0 - mu) - u2a*(1.0 - mu)**2.0
-        Imu2 = 1.0 - u1b*(1.0 - mu) - u2b*(1.0 - mu)**2.0
-
-
-        plt.figure(92)
-        plt.clf()
-        label1 = '%.2f, ' % u1a + '%.2f' % u2a +' (Primary)'
-        label2 = '%.2f, ' % u1b + '%.2f' % u2b +' (Secondary)'
-        plt.plot(theta,Imu1,label=label1)
-        plt.plot(theta,Imu2,label=label2)
-        plt.ylim([0,1.0])
-        plt.xlabel(r"$\theta$ (degrees)",fontsize=18)
-        plt.ylabel(r"$I(\theta)/I(0)$",fontsize=18)
-        plt.annotate(r'$T_{\rm eff,1}$ = %.0f K' % T1, [0.16,0.6],horizontalalignment='left',
-                     xycoords='figure fraction',fontsize='large')
-        plt.annotate(r'$M_1$ = %.2f M$_\odot$' % m1, [0.16,0.55],horizontalalignment='left',
-                     xycoords='figure fraction',fontsize='large')
-        plt.annotate(r'$R_1$ = %.2f R$_\odot$' % r1, [0.16,0.5],horizontalalignment='left',
-                     xycoords='figure fraction',fontsize='large')
-        plt.annotate(r'$\log(g)_1$ = %.2f' % logg1, [0.16,0.45],horizontalalignment='left',
-                     xycoords='figure fraction',fontsize='large')
-
-        plt.annotate(r'$T_{\rm eff,2}$ = %.0f K' % T2, [0.16,0.35],horizontalalignment='left',
-                     xycoords='figure fraction',fontsize='large')
-        plt.annotate(r'$M_2$ = %.2f M$_\odot$' % m2, [0.16,0.3],horizontalalignment='left',
-                     xycoords='figure fraction',fontsize='large')
-        plt.annotate(r'$R_2$ = %.2f R$_\odot$' % r2, [0.16,0.25],horizontalalignment='left',
-                     xycoords='figure fraction',fontsize='large')
-        plt.annotate(r'$\log(g)_2$ = %.2f' % logg2, [0.16,0.2],horizontalalignment='left',
-                     xycoords='figure fraction',fontsize='large')
-        plt.title('Limb Darkening')
-        
-        plt.legend()
-
-        print q1a,q2a,q1b,q2b
-
-        pdb.set_trace()
-        
-    return lf
-
-
-def lnprob_full(x):
-
-    """
-    ----------------------------------------------------------------------
-    lnprob:
-    -------
-    Function to compute logarithmic probability of data given model. This
-    function sets prior constaints explicitly and calls compute_trans to
-    compare the data with the model. Only data within the smoothed transit
-    curve is compared to model. 
-
-    """
-
-    parm,vder = vec_to_params(x)
-    
-    vsys = x[-1]
-    ktot = x[-2]
-
-    if claret:
-        T1,logg1,T2,logg2 = get_teffs_loggs(parm,vsys,ktot)
-
-        u1a = ldc1func(T1,logg1)[0][0]
-        u2a = ldc2func(T1,logg1)[0][0]
-        
-        u1b = ldc1func(T2,logg2)[0][0]
-        u2b = ldc2func(T2,logg2)[0][0]
-        
-        q1a,q2a = utoq(u1a,u2a,limb=limb)        
-        q1b,q2b = utoq(u1b,u2b,limb=limb)
-        
+        u1a,u2a = qtou(q1a,q2a,limb=ebpar0['limb'])        
+        u1b,u2b = qtou(q1b,q2b,limb=ebpar0['limb'])
         parm[eb.PAR_LDLIN1] = u1a  # u1 star 1
         parm[eb.PAR_LDNON1] = u2a  # u2 star 1
         parm[eb.PAR_LDLIN2] = u1b  # u1 star 2
         parm[eb.PAR_LDNON2] = u2b  # u2 star 2
-
-    elif fitlimb:
-        q1a = x[variables == 'q1a'][0]  
-        q2a = x[variables == 'q2a'][0]  
-        q1b = x[variables == 'q1b'][0]  
-        q2b = x[variables == 'q2b'][0]  
+      
 #        u1a = x[variables == 'u1a']
 #        u2a = 0
 #        u1b = x[variables == 'u1b']
@@ -1486,12 +1244,12 @@ def lnprob_full(x):
 #        return -np.inf        
     
     # Priors
-    if fitL3:
+    if fitinfo['fit_L3']:
         if parm[eb.PAR_L3] > 1 or parm[eb.PAR_L3] < 0:
             return -np.inf
 
     # Need to understand exactly what this parameter is!!
-    if fitsp1:
+    if fitinfo['fit_ooe1']:
         if parm[eb.PAR_FSPOT1] < 0 or parm[eb.PAR_FSPOT1] > 1:
             return -np.inf
         coeff1 = []
@@ -1500,17 +1258,17 @@ def lnprob_full(x):
         
 ### Compute eclipse model for given input parameters ###
     massratio = parm[eb.PAR_Q]
-    if not ellipsoidal:
+    if not fitinfo['fit_ellipsoidal']:
         parm[eb.PAR_Q] = 0.0
 
     # Primary eclipse
     t0 = parm[eb.PAR_T0]
     period = parm[eb.PAR_P]
-    time   = fitdict['time']
-    flux   = fitdict['flux']
-    eflux  = fitdict['eflux']
+    time   = data['light'][0,:]-ebpar0['bjd']
+    flux   = data['light'][1,:]
+    eflux  = data['light'][2,:]
 
-    sm  = compute_eclipse(time,parm,fitrvs=False,tref=t0,period=period)
+    sm  = compute_eclipse(time,parm,integration=ebpar0['integration'],fitrvs=False,tref=t0,period=period)
 
     # Log Likelihood Vector
     lfi = -1.0*(sm - flux)**2/(2.0*eflux**2)
@@ -1541,18 +1299,21 @@ def lnprob_full(x):
     # need this for the RVs!
     parm[eb.PAR_Q] = massratio
 
-    if fitrvs:
-        if (vsys > max(np.max(rvdata1[:,1]),np.max(rvdata2[:,1]))) or \
-           (vsys < min(np.min(rvdata1[:,1]),np.min(rvdata2[:,1]))): 
+    rvdata1 = data['rv1']
+    rvdata2 = data['rv2']
+
+    if fitinfo['fit_rvs']:
+        if (vsys > max(np.max(rvdata1[1,:]),np.max(rvdata2[1,:]))) or \
+           (vsys < min(np.min(rvdata1[1,:]),np.min(rvdata2[1,:]))): 
             return -np.inf
-        rvmodel1 = compute_eclipse(rvdata1[:,0],parm,fitrvs=True)
+        rvmodel1 = compute_eclipse(rvdata1[0,:]-ebpar0['bjd'],parm,fitrvs=True)
         k2 = ktot/(1+massratio)
         k1 = k2*massratio
         rv1 = rvmodel1*k1 + vsys
-        rvmodel2 = compute_eclipse(rvdata2[:,0],parm,fitrvs=True)
+        rvmodel2 = compute_eclipse(rvdata2[0,:]-ebpar0['bjd'],parm,fitrvs=True)
         rv2 = -1.0*rvmodel2*k2 + vsys
-        lfrv1 = -np.sum((rv1 - rvdata1[:,1])**2/(2.0*rvdata1[:,2]))
-        lfrv2 = -np.sum((rv2 - rvdata2[:,1])**2/(2.0*rvdata2[:,2]))
+        lfrv1 = -np.sum((rv1 - rvdata1[1,:])**2/(2.0*rvdata1[2,:]))
+        lfrv2 = -np.sum((rv2 - rvdata2[1,:])**2/(2.0*rvdata2[2,:]))
         lfrv = lfrv1 + lfrv2
         lf  += lfrv
 
@@ -1580,7 +1341,8 @@ def lnprob_full(x):
         plt.plot(tprim,xprim,'ko')
         plt.plot(tprim,mprim,'r-')
         chi1 = -1*lf1
-        plt.annotate(r'$\chi^2$ = %.0f' % chi1, [0.05,0.87],horizontalalignment='left',xycoords='axes fraction',fontsize='large')
+        plt.annotate(r'$\chi^2$ = %.0f' % chi1, [0.05,0.87],
+                     horizontalalignment='left',xycoords='axes fraction',fontsize='large')
 
 
         tfold_pos = foldtime_pos(time,t0=t0,period=period)
@@ -1599,8 +1361,8 @@ def lnprob_full(x):
 
 
         plt.subplot(2, 1, 2)
-        phi1 = foldtime(rvdata1[:,0],t0=t0,period=period)/period
-        plt.plot(phi1,rvdata1[:,1],'ko')
+        phi1 = foldtime(rvdata1[0,:]-ebpar0['bjd'],t0=t0,period=period)/period
+        plt.plot(phi1,rvdata1[1,:],'ko')
         plt.plot(phi1,rv1,'kx')
         tcomp = np.linspace(-0.5,0.5,10000)*period+t0
         rvmodel1 = compute_eclipse(tcomp,parm,fitrvs=True)
@@ -1611,8 +1373,8 @@ def lnprob_full(x):
         plt.annotate(r'$\chi^2$ = %.0f' % -lfrv, [0.05,0.85],horizontalalignment='left',
                      xycoords='axes fraction',fontsize='large')
   
-        phi2 = foldtime(rvdata2[:,0],t0=t0,period=period)/period
-        plt.plot(phi2,rvdata2[:,1],'ro')
+        phi2 = foldtime(rvdata2[0,:]-ebpar0['bjd'],t0=t0,period=period)/period
+        plt.plot(phi2,rvdata2[1,:],'ro')
         plt.plot(phi2,rv2,'rx')
         tcomp = np.linspace(-0.5,0.5,10000)*period+t0
         rvmodel2 = compute_eclipse(tcomp,parm,fitrvs=True)
@@ -1724,7 +1486,7 @@ def best_vals(eclipse,info,chains=False,lp=False,network=None,bindiv=20.0,
 
     varnames = varnameconv(variables)
 
-# Primary Variables
+# Primary Var0iables
     priminds, = np.where((np.array(variables) == 'J') ^ (np.array(variables) =='Rsum') ^ 
                          (np.array(variables) == 'Rratio') ^ (np.array(variables) == 'ecosw') ^ 
                          (np.array(variables) == 'esinw') ^ (np.array(variables) == 'cosi'))
