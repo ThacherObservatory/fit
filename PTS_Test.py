@@ -7,6 +7,7 @@ Created on Wed Oct 14 14:03:49 2015
 
 import numpy as np
 from emcee import PTSampler
+import corner
 
 # mu1 = [1, 1], mu2 = [-1, -1]
 mu1 = np.ones(2)
@@ -43,6 +44,7 @@ for p, lnprob, lnlike in sampler.sample(p, lnprob0=lnprob,
 
 assert sampler.chain.shape == (ntemps, nwalkers, 100, ndim)
 
+
 # Chain has shape (ntemps, nwalkers, nsteps, ndim)
 # Zero temperature mean:
 mu0 = np.mean(np.mean(sampler.chain[0,...], axis=0), axis=0)
@@ -51,3 +53,6 @@ mu0 = np.mean(np.mean(sampler.chain[0,...], axis=0), axis=0)
 max_acl = np.max(sampler.acor)
 
 # etc
+
+samples = sampler.chain[:, 50:, :].reshape((-1, ndim))
+corner.corner(samples)

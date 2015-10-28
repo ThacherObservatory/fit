@@ -18,7 +18,7 @@ f_true = 0.534
 #############################################################
 # Generate some synthetic data from the model.
 #############################################################
-N = 200
+N = 50
 x = np.sort(10*np.random.rand(N))
 yerr = 0.1+0.5*np.random.rand(N)
 y = m_true*x+b_true
@@ -56,27 +56,86 @@ def lnprob(theta, x, y, yerr):
         return -np.inf
     return lp + lnlike(theta, x, y, yerr)
 
-ntemps,ndim, nwalkers = 5, 2, 100
-pos = [result["x"] + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
-pos = np.reshape(np.tile(pos,ntemps),(ntemps,nwalkers,ndim))
+def run_mcmc(ntemps=3,nwalkers=100,nsteps=100, graph=False):
+    ndim = 2
+    pos = [result["x"] + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+    pos = np.reshape(np.tile(pos,ntemps),(ntemps,nwalkers,ndim))
 
-#sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(x, y, yerr),threads=7)
-nthreads = 2
-sampler = emcee.PTSampler(ntemps, nwalkers, ndim, lnlike, lnprior,loglargs=[x,y,yerr])
+    sampler = emcee.PTSampler(ntemps, nwalkers, ndim, lnlike, lnprior,loglargs=[x,y,yerr])
+    sampler.run_mcmc(pos,nsteps)
+    sampler.reset()
+    sampler.run_mcmc(pos, nsteps)
 
-sampler.run_mcmc(pos, 100)
+    chains = sampler.flatchain
+    samples = sampler.chain.reshape(ntemps*10000,2)
+    
+    
+    mmed = np.median(chains[:,:,0])
+    mstd = np.std(chains[:,:,0])
+    bmed = np.median(chains[:,:,1])
+    bstd = np.std(chains[:,:,1])
+    
+    if graph:
+        xmc = np.linspace(0,10,1000)
+        ymc = mmed*xmc + bmed
+        
+        plt.plot(xmc,ymc)
+        
+        corner.corner(samples, labels=["$m$", "$b$"],
+                              truths=[m_true, b_true])
+    
+    return mstd, bstd, mmed, bmed
 
-samples = sampler.chain[:, 50:, :].reshape((-1, ndim))
-chains = sampler.flatchain
+def test_temps():
+    temps = range(1,10)
+    mstds = []
+    mmeds = []
+    bstds = []
+    bmeds = []
+    for n in temps:
+        ms,bs,mm,bm = run_mcmc(ntemps=n)
+        mstds.append(ms)
+        bstds.append(bs)
+        mmeds.append(mm)
+        bmeds.append(bm)
+    plt.plot(temps,mstds)
+    plt.plot(temps,bstds)
+    plt.figure()
+    plt.plot(temps,mmeds)
+    plt.plot(temps,bmeds)
+    
+def test_walkers():
+    walkers = range(4,1000,10)
+    mstds = []
+    mmeds = []
+    bstds = []
+    bmeds = []
+    for n in walkers:
+        ms,bs,mm,bm = run_mcmc(nwalkers=n)
+        mstds.append(ms)
+        bstds.append(bs)
+        mmeds.append(mm)
+        bmeds.append(bm)
+    plt.plot(walkers,mstds)
+    plt.plot(walkers,bstds)
+    plt.figure()
+    plt.plot(walkers,mmeds)
+    plt.plot(walkers,bmeds)
 
-
-mmed = np.median(chains[:,:,0])
-bmed = np.median(chains[:,:,1])
-
-xmc = np.linspace(0,10,1000)
-ymc = mmed*xmc + bmed
-
-plt.plot(xmc,ymc)
-
-fig = corner.corner(samples, labels=["$m$", "$b$"],
-                      truths=[m_true, b_true])
+def test_steps():
+    steps = range(1,1000,100)
+    mstds = []
+    mmeds = []
+    bstds = []
+    bmeds = []
+    for n in steps:
+        ms,bs,mm,bm = run_mcmc(nsteps=n)
+        mstds.append(ms)
+        bstds.append(bs)
+        mmeds.append(mm)
+        bmeds.append(bm)
+    plt.plot(steps,mstds)
+    plt.plot(steps,bstds)
+    plt.figure()
+    plt.plot(steps,mmeds)
+    plt.plot(steps,bmeds)
