@@ -18,6 +18,15 @@ import pyfits as pf
 from statsmodels.nonparametric.kernel_density import KDEMultivariate as KDE
 from stellar import rt_from_m, flux2mag, mag2flux
 
+def RV_sampling(N,T):
+    """Creates a group of RV samples according to Sanuders et al. (2006)"""
+    #calculate optimal geometric base
+    #function from graph interpretation needed here: given N, find x
+    
+    x = 1.02
+    
+    k = np.arange(N)
+    return (x**k - 1)/(x**(N-1) - 1) * T
 
 def r_to_l(r):
     """Converts radius to luminosity (solar units)
