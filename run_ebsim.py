@@ -4,15 +4,24 @@ from ebsim import *
 
 def ebsim_core(core,ncores=16,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
                path='/Users/jonswift/Astronomy/EBs/Simulations/'):
+
+    # get array of input values and unique sequence number
     params,seq = param_sequence()
+
+    # Total number of fits to be done
     nproc = len(seq)
+
+    # Number of tasks per core
     ntask = nproc/ncores
+
+    # Assign each core "ntask" tasks
     coretask = np.ones(ncores,dtype='int')*ntask
+
+    # Distribute the remained amongst the cores
     rem = np.remainder(nproc,ncores)
     for i in range(rem):
         coretask[i] += 1
 
-    
     coreseq = range(coretask[core-1])+np.sum(coretask[0:core-1])
 
     print 'Sequence for core number '+str(core)+':'
@@ -100,6 +109,7 @@ def fit_sequence(params,seq_num,path='/Users/jonswift/Astronomy/EBs/Simulations/
 
     """
 
+    
     # params = [photnoise,int,RVsamples,Rratio,impact]
     
     ebpar0,data = make_model_data(photnoise=params[0],int=params[1],RVsamples=params[2],
@@ -147,13 +157,54 @@ def get_path(network=None):
 
     # Set correct paths here
     if network == None:
-        path = '/Users/jonswift/Astronomy/EBs/outdata/'
+        path = '/Users/jonswift/Astronomy/EBs/Simulations/'
 
     if network == 'pegasus':
         path = '/'
 
     return path
+
+
+
+
+def thin_chains(koi,planet,thin=10,short=False,network=None,clip=False,limbmodel='quad',rprior=False):
     
+    lc,pdata,sdata = get_koi_info(koi,planet,short=short,network=network,\
+                                      clip=clip,limbmodel=limbmodel,rprior=rprior)
+    t = time.time()
+    print 'Importing MCMC chains'
+    rprsdist = np.loadtxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_rchain.txt')
+    ddist    = np.loadtxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_dchain.txt')*24.
+    bdist    = np.loadtxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_bchain.txt')
+    tdist    = (np.loadtxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_t0chain.txt')) * 24.0 * 3600.0 + pdata[0,3]
+    pdist    = (np.loadtxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_pchain.txt')-pdata[0,4])*24.*3600.
+    q1dist   = np.loadtxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_q1chain.txt')
+    q2dist   = np.loadtxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_q2chain.txt')
+    print done_in(t)
+
+    rprsdist = rprsdist[0::thin]
+    ddist    = ddist[0::thin]
+    tdist    = tdist[0::thin]
+    bdist    = bdist[0::thin]
+    pdist    = pdist[0::thin]
+    q1dist   = q1dist[0::thin]
+    q2dist   = q2dist[0::thin]
+
+    t = time.time()
+    print 'Exporting thinned chains'
+    np.savetxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_thin_rchain.txt',rdist)
+    np.savetxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_thin_dchain.txt',ddist)
+    np.savetxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_thin_bchain.txt',bdist)
+    np.savetxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_thin_t0chain.txt',tdist)
+    np.savetxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_thin_pchain.txt',pdist)
+    np.savetxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_thin_q1chain.txt',q1dist)
+    np.savetxt(path+'MCMC/'+name+stag+ctag+rtag+lptag+ltag+'fit_thin_q2chain.txt',q2dist)
+    print done_in(t)
+    
+    return
+
+
+
 #----------------------------------------------------------------------
 # EBLIST
 #----------------------------------------------------------------------
