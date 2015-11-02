@@ -990,11 +990,17 @@ def lnprob(x,data,ebpar,fitinfo):
         
 ### Compute eclipse model for given input parameters ###
     massratio = parm[eb.PAR_Q]
+    if massratio < 0 or massratio > 1:
+        return -np.inf
+
     if not fitinfo['fit_ellipsoidal']:
         parm[eb.PAR_Q] = 0.0
 
     # Primary eclipse
     t0 = parm[eb.PAR_T0]
+    if np.abs(t0) > 1800:
+        return -np.inf
+    
     period = parm[eb.PAR_P]
     time   = data['light'][0,:]-ebpar['bjd']
     flux   = data['light'][1,:]

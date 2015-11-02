@@ -13,6 +13,7 @@ from scipy.stats.kde import gaussian_kde
 from plot_params import plot_params, plot_defaults
 import run_ebsim as reb
 import ebsim as ebs
+from done_in import done_in
 
 def analyze_run(run,network=None,thin=10):
 
