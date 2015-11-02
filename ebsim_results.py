@@ -11,6 +11,7 @@ from stellar import rt_from_m, flux2mag, mag2flux
 import matplotlib as mpl
 from scipy.stats.kde import gaussian_kde
 from plot_params import plot_params, plot_defaults
+from ebsim import vec_to_params
 
 def analyze_run(run):
     pass
