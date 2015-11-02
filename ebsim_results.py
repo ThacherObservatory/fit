@@ -750,28 +750,6 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=1.5
     path = ebpar['path']
     variables = fitinfo['variables']
     
-    tmaster = time.time()
-    if chains == False:
-        print "Reading in MCMC chains"        
-        chains = np.zeros((nsamp,len(variables)))
-        for i in np.arange(len(variables)):
-            try:
-                print "Reading MCMC chains for "+variables[i]
-                tmp = np.loadtxt(path+variables[i]+'chain.txt')
-                chains[:,i] = tmp
-            except:
-                print name+stag+'_'+variables[i]+'chain.txt does not exist on disk !'
-
-            print done_in(tmaster)
-
-
-    if lp == False:
-        try:
-            print "Reading ln(prob) chain"
-            lp = np.loadtxt(path+'lnprob.txt')
-        except:
-            print "lnprob chain does not exist. Exiting"
-            return
 
     print "Converting posteriors into physical quantities"
     ind, = np.where(np.array(variables) == 'Rsum')[0]
