@@ -3,11 +3,12 @@ from ebsim import *
 
 
 def ebsim_core(core,ncores=16,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
-               path='/Users/jonswift/Astronomy/EBs/Simulations/'):
+               network=None):
+    #TODO: set network to pegasus default
+    path = get_path(network)
 
     # get array of input values and unique sequence number
     params,seq = param_sequence()
-
     # Total number of fits to be done
     nproc = len(seq)
 
@@ -43,7 +44,7 @@ def ebsim_core(core,ncores=16,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobbe
         print 'RV Samples        = %.0f' % param[2]
         print 'Radius Ratio      = %.2f' % param[3]
         print 'Impact Parameter  = %.2f' % param[4]
-        fit_sequence(param,n,nwalkers=nwalkers,
+        fit_sequence(param,n,path,nwalkers=nwalkers,
                      burnsteps=burnsteps,mcmcsteps=mcmcsteps,
                      clobber=False)
         
@@ -77,7 +78,6 @@ def param_sequence():
     
     # Array of parameters for each iteration
     params = np.zeros((niter,5))
-
 
     # Create array of parameters
     seq_num = []
