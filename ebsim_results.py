@@ -11,13 +11,56 @@ from stellar import rt_from_m, flux2mag, mag2flux
 import matplotlib as mpl
 from scipy.stats.kde import gaussian_kde
 from plot_params import plot_params, plot_defaults
+import run_ebsim as reb
+import ebsim as ebs
 
-def analyze_run(run):
-    pass
 
-def best_vals(data,fitinfo,chains=False,lp=False,network=None,bindiv=20.0,
-                thin=False,frac=0.001,nbins=100,rpmax=1,
-                durmax=10,sigrange=5.0):
+def analyze_run(run,network=None,thin=10):
+
+    chains,lp = get_chains(run,network=network)
+    
+    best_vals(run,chains=chains,lp=lp,network=network,thin=thin)
+
+    params_of_interest(run,chains=chains,lp=lp,network=network)
+
+    triangle_plot(run,chains=chains,lp=lp,network=network,thin=thin)
+    
+    return
+
+
+def get_chains(seq_num,network=None):
+    path = reb.get_path(network=network)+str(seq_num)+'/'
+    ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
+    data    = pickle.load( open( path+'data.p', 'rb' ) )
+    fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
+    
+    nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
+
+    variables = fitinfo['variables']
+    for i in np.arange(len(variables)):
+        try:
+            print "Reading MCMC chains for "+variables[i]
+            tmp = np.loadtxt(path+variables[i]+'chain.txt')
+            if i == 0:
+                chains = np.zeros((len(tmp),len(variables)))
+                
+            chains[:,i] = tmp
+        except:
+            print variables[i]+'chain.txt does not exist on disk !'
+
+    try:
+        print "Reading ln(prob) chain"
+        lp = np.loadtxt(path+'lnprob.txt')
+    except:
+        print 'lnprob.txt does not exist. Exiting'
+        return
+
+    return chains, lp
+
+
+
+def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
+                thin=False,frac=0.001,nbins=100,rpmax=1,durmax=10,sigrange=5.0):
 
     # "eclipse" taken out of args and "data" put in
     # need to propagate that change
@@ -31,38 +74,37 @@ def best_vals(data,fitinfo,chains=False,lp=False,network=None,bindiv=20.0,
     ----------------------------------------------------------------------
     """
 
-    
-    from plot_params import plot_params, plot_defaults
-    
     plot_params(linewidth=1.5,fontsize=12)
 
+    path = reb.get_path(network=network)+str(seq_num)+'/'
+    
+    ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
+    data    = pickle.load( open( path+'data.p', 'rb' ) )
+    fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
+    
     nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
 
-    ethin = 0
-    thintag = '_thin'+str(ethin) if ethin > 1 else ''
-
-#    enum = eclipse['enum']
+    variables = fitinfo['variables']
     
     # Use supplied chains or read from disk
     if not np.shape(chains):
         for i in np.arange(len(variables)):
             try:
                 print "Reading MCMC chains for "+variables[i]
-                tmp = np.loadtxt(path+'MCMC/fullfit/' \
-                                 +name+stag+thintag+'_'+variables[i]+'chain.txt')
+                tmp = np.loadtxt(path+variables[i]+'chain.txt')
                 if i == 0:
                     chains = np.zeros((len(tmp),len(variables)))
 
                 chains[:,i] = tmp
             except:
-                print name+stag+thintag+'_'+variables[i]+'chain.txt does not exist on disk !'
+                print variables[i]+'chain.txt does not exist on disk !'
 
     if not np.shape(lp):
         try:
             print "Reading ln(prob) chain"
-            lp = np.loadtxt(path+'MCMC/fullfit/'+name+stag+thintag+'_lnprob.txt')
+            lp = np.loadtxt(path+'lnprob.txt')
         except:
-            print name+stag+thintag+'_lnprob.txt does not exist. Exiting'
+            print 'lnprob.txt does not exist. Exiting'
             return
 
 #  Get maximum likelihood values
@@ -87,9 +129,10 @@ def best_vals(data,fitinfo,chains=False,lp=False,network=None,bindiv=20.0,
         lp = lp[0::thin]
         chains = thinchains 
 
-    varnames = varnameconv(variables)
+    varnames = ebs.varnameconv(variables)
 
-# Primary Var0iables
+
+    # Primary Variables
     priminds, = np.where((np.array(variables) == 'J') ^ (np.array(variables) =='Rsum') ^ 
                          (np.array(variables) == 'Rratio') ^ (np.array(variables) == 'ecosw') ^ 
                          (np.array(variables) == 'esinw') ^ (np.array(variables) == 'cosi'))
@@ -127,24 +170,17 @@ def best_vals(data,fitinfo,chains=False,lp=False,network=None,bindiv=20.0,
         plt.xlabel(varnames[i])
         plt.ylabel(r'$dP$')
         if plotnum == 1:
-            plt.title('Parameter Distributions for KIC '+name)
+            plt.title('Parameter Distributions for Run '+str(seq_num))
 
     plt.subplots_adjust(hspace=0.55)
-    plt.savefig(path+'MCMC/fullfit/'+name+stag+thintag+
-                '_params1.png', dpi=300)
+    plt.savefig(path+'params1.png', dpi=300)
     plt.clf()
 
 
 
 
 # Second set of parameters
-#    secinds, = np.where((np.array(variables) == 't0') ^ (np.array(variables) =='q1a') ^ 
-#                        (np.array(variables) == 'q2a') ^ (np.array(variables) == 'q1b') ^ 
-#                        (np.array(variables) == 'q2b') ^ (np.array(variables) == 'massratio') ^ 
-#                        (np.array(variables) == 'ktot') ^ (np.array(variables) == 'vsys'))
-
-    secinds, = np.where((np.array(variables) == 'period') ^ (np.array(variables) == 't0') ^
-                        (np.array(variables) == 'massratio') ^ 
+    secinds, = np.where((np.array(variables) == 't0') ^ (np.array(variables) == 'massratio') ^ 
                         (np.array(variables) == 'ktot') ^ (np.array(variables) == 'vsys'))
 
     plt.figure(5,figsize=(8.5,11),dpi=300)    
@@ -153,13 +189,13 @@ def best_vals(data,fitinfo,chains=False,lp=False,network=None,bindiv=20.0,
     for i in secinds:
         print ''
         if variables[i] == 't0':
-            dist   = (chains[:,i] - (ebpar0["t01"] - bjd))*24.*3600.0
+            dist   = (chains[:,i] - (ebpar["t01"] - ebpar['bjd']))*24.*3600.0
             t0val = bestvals[i]
-            bestvals[i] = (t0val -(ebpar0["t01"] - bjd))*24.*3600.0
+            bestvals[i] = (t0val -(ebpar["t01"] - ebpar['bjd']))*24.*3600.0
         elif variables[i] == 'period':
-            dist   = (chains[:,i] - ebpar0["Period"])*24.*3600.0
+            dist   = (chains[:,i] - ebpar["Period"])*24.*3600.0
             pval  =  bestvals[i]
-            bestvals[i] = (pval - ebpar0["Period"])*24.*3600.0
+            bestvals[i] = (pval - ebpar["Period"])*24.*3600.0
         else:
             dist = chains[:,i]
 
@@ -189,18 +225,18 @@ def best_vals(data,fitinfo,chains=False,lp=False,network=None,bindiv=20.0,
         plt.xlabel(varnames[i])
         plt.ylabel(r'$dP$')
         if plotnum == 1:
-            plt.title('Parameter Distributions for KIC '+name)
+            plt.title('Parameter Distributions for Run '+str(seq_num))
         if variables[i] == 't0':
-            plt.annotate(r'$t_0$ = %.6f BJD' % ebpar0["t01"], xy=(0.96,0.8),
+            plt.annotate(r'$t_0$ = %.6f BJD' % ebpar["t01"], xy=(0.96,0.8),
                          ha="right",xycoords='axes fraction',fontsize='large')
             bestvals[i] = t0val
         if variables[i] == 'period':
-            plt.annotate(r'$P$ = %.6f d' % ebpar0["Period"], xy=(0.96,0.8),
+            plt.annotate(r'$P$ = %.6f d' % ebpar["Period"], xy=(0.96,0.8),
                          ha="right",xycoords='axes fraction',fontsize='large')
             bestvals[i] = pval
 
     plt.subplots_adjust(hspace=0.55)
-    plt.savefig(path+'MCMC/fullfit/'+name+stag+thintag+'_params2.png', dpi=300)
+    plt.savefig(path+'params2.png', dpi=300)
     plt.clf()
 
 
@@ -259,11 +295,11 @@ def best_vals(data,fitinfo,chains=False,lp=False,network=None,bindiv=20.0,
             plt.xlabel(varnames[i])
             plt.ylabel(r'$dP$')
             if plotnum == 1:
-                plt.title('Parameter Distributions for KIC '+name)
+                plt.title('Parameter Distributions for Run '+str(seq_num))
             plotnum += 1
             
         plt.subplots_adjust(hspace=0.55)
-        plt.savefig(path+'MCMC/fullfit/'+name+stag+thintag+'_params3.png', dpi=300)
+        plt.savefig(path+'params3.png', dpi=300)
         plt.clf()
  
    # calculate limb darkening parameters
@@ -283,9 +319,9 @@ def best_vals(data,fitinfo,chains=False,lp=False,network=None,bindiv=20.0,
 #
 #    vals = [[bestvals],[meds],[modes],[onesigs]]
 
-    plot_model(bestvals,eclipse,tag='_MCMC')
+    plot_model(bestvals,data,ebpar,fitinfo,data,tag='_fit')
 
-    f = open(path+'MCMC/fullfit/'+name+stag+thintag+'_fitparams.txt','w')
+    f = open(path+'fitparams.txt','w')
     for i in np.arange(len(variables)):
         outstr = []
         fmt = []
@@ -304,7 +340,8 @@ def best_vals(data,fitinfo,chains=False,lp=False,network=None,bindiv=20.0,
 
 
 
-def plot_model(vals,eclipse,markersize=5,smallmark=2,nbins=100,errorbars=False,durfac=5,enum=1,tag=''):
+def plot_model(vals,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
+               errorbars=False,durfac=5,enum=1,tag=''):
 
     """
     ----------------------------------------------------------------------
@@ -315,28 +352,19 @@ def plot_model(vals,eclipse,markersize=5,smallmark=2,nbins=100,errorbars=False,d
     ----------------------------------------------------------------------
     """
     plot_params(fontsize=10,linewidth=1.2)
-    
+
     # Check for output directory   
-    directory = path+'MCMC/singlefits/'
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+    directory = ebpar['path']
+    variables = fitinfo['variables']
 
-    parm,vder = vec_to_params(vals)
-    
-    
-    ethin = 1
-    thintag = '_thin'+str(ethin) if ethin > 1 else ''
-
-#    enum = eclipse['enum']
-    
-    tag = ''
+    parm,vder = ebs.vec_to_params(vals,ebpar)
     
     vsys = vals[variables == 'vsys'][0]
     ktot = vals[variables == 'ktot'][0]
 
     massratio = parm[eb.PAR_Q]
 
-    if claret:
+    if fitinfo['claret']:
         T1,logg1,T2,logg2 = get_teffs_loggs(parm,vsys,ktot)
         
         u1a = ldc1func(T1,logg1)[0][0]
@@ -353,7 +381,7 @@ def plot_model(vals,eclipse,markersize=5,smallmark=2,nbins=100,errorbars=False,d
         parm[eb.PAR_LDLIN2] = u1b  # u1 star 2
         parm[eb.PAR_LDNON2] = u2b  # u2 star 2
 
-    elif fitlimb:
+    elif fitinfo['fit_limb']:
         q1a = vals[variables == 'q1a'][0]  
         q2a = vals[variables == 'q2a'][0]  
         q1b = vals[variables == 'q1b'][0]  
@@ -376,10 +404,10 @@ def plot_model(vals,eclipse,markersize=5,smallmark=2,nbins=100,errorbars=False,d
 # Light curve model
 ######################################################################
 
-    time = eclipse["time"]
-    flux = eclipse["flux"]
+    time = data["light"][0,:]
+    flux = data["light"][1,:]
     
-    if not fitellipsoidal:
+    if not fitinfo['fit_ellipsoidal']:
         parm[eb.PAR_Q] = 0.0        
 
     # Phases of contact points
@@ -389,28 +417,31 @@ def plot_model(vals,eclipse,markersize=5,smallmark=2,nbins=100,errorbars=False,d
     t0 = parm[eb.PAR_T0]
     period = parm[eb.PAR_P]
 
-    tfold = foldtime(time,t0=t0,period=period)
+    # This could be done better
+    tfold = ebs.foldtime(time-ebpar['bjd'],t0=t0,period=period)
     keep, = np.where((tfold >= -0.2) & (tfold <=0.2))
     inds = np.argsort(tfold[keep])
     tprim = tfold[keep][inds]
     phiprim = tprim/period
     xprim = flux[keep][inds]
 
-    if fitsp1:
+    if fitinfo['fit_ooe1']:
         coeff1 = []
         for i in range(fitorder+1):
             coeff1 = np.append(coeff1,vals[variables == 'c'+str(i)+'_1'])
 
-    model1  = compute_eclipse(tprim+t0,parm,fitrvs=False,tref=t0,period=period)
+    model1  = ebs.compute_eclipse(tprim+t0,parm,integration=ebpar['integration'],
+                                  fitrvs=False,tref=t0,period=period)
 
     tcomp1 = np.linspace(np.min(tprim),np.max(tprim),10000)
-    compmodel1  = compute_eclipse(tcomp1+t0,parm,fitrvs=False,tref=t0,period=period)
+    compmodel1  = ebs.compute_eclipse(tcomp1+t0,parm,integration=ebpar['integration'],
+                                  fitrvs=False,tref=t0,period=period)
 
     phicomp1 = tcomp1/period
 
 
     # Secondary eclipse
-    tfold_pos = foldtime_pos(time,t0=t0,period=period)
+    tfold_pos = ebs.foldtime_pos(time-ebpar['bjd'],t0=t0,period=period)
     ph_pos = tfold_pos/period
     keep, = np.where((ph_pos >= 0.3) & (ph_pos <=0.7))
     inds = np.argsort(tfold_pos[keep])
@@ -418,26 +449,30 @@ def plot_model(vals,eclipse,markersize=5,smallmark=2,nbins=100,errorbars=False,d
     phisec = tsec/period
     xsec = flux[keep][inds]
 
-    if fitsp1:
+    if fitinfo['fit_ooe1']:
         coeff2 = []
         for i in range(fitorder+1):
             coeff2 = np.append(coeff2,vals[variables == 'c'+str(i)+'_2'])
 
-    model2  = compute_eclipse(tsec+t0,parm,fitrvs=False,tref=t0,period=period)
+    model2  = ebs.compute_eclipse(tsec+t0,parm,integration=ebpar['integration'],
+                              fitrvs=False,tref=t0,period=period)
 
     tcomp2 = np.linspace(np.min(tsec),np.max(tsec),10000)
-    compmodel2 = compute_eclipse(tcomp2+t0,parm,fitrvs=False,tref=t0,period=period)
+    compmodel2 = ebs.compute_eclipse(tcomp2+t0,parm,integration=ebpar['integration'],
+                                 fitrvs=False,tref=t0,period=period)
         
     phicomp2 = tcomp2/period
     
     parm[eb.PAR_Q] = massratio
 
-    if fitrvs:
-        rvmodel1 = compute_eclipse(rvdata1[:,0],parm,fitrvs=True)
+    if fitinfo['fit_rvs']:
+        rvdata1 = data['rv1']
+        rvdata2 = data['rv2']
+        rvmodel1 = ebs.compute_eclipse(rvdata1[0,:],parm,fitrvs=True)
         k2 = ktot/(1+massratio)
         k1 = k2*massratio
         rv1 = rvmodel1*k1 + vsys
-        rvmodel2 = compute_eclipse(rvdata2[:,0],parm,fitrvs=True)
+        rvmodel2 = ebs.compute_eclipse(rvdata2[0,:],parm,fitrvs=True)
 
 # Does dof need another - 1 ???
 #    dof = np.float(len(tfit)) - np.float(len(variables))
@@ -481,30 +516,30 @@ def plot_model(vals,eclipse,markersize=5,smallmark=2,nbins=100,errorbars=False,d
 
     
     plt.subplot(2, 1, 2)
-    phi1 = foldtime(rvdata1[:,0],t0=t0,period=period)/period
-    plt.plot(phi1,rvdata1[:,1],'ko',markersize=3)
+    phi1 = ebs.foldtime_pos(rvdata1[0,:]-ebpar['bjd'],t0=t0,period=period)/period
+    plt.plot(phi1,rvdata1[1,:],'ko',markersize=3)
 #    plt.plot(phi1,rv1,'kx')
-    tcomp = np.linspace(-0.5,0.5,10000)*period+t0
-    rvmodel1 = compute_eclipse(tcomp,parm,fitrvs=True)
+    tcomp = np.linspace(0,1,10000)*period+t0
+    rvmodel1 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
     k2 = ktot/(1+massratio)
     k1 = k2*massratio
     rvcomp1 = rvmodel1*k1 + vsys
-    plt.plot(np.linspace(-0.5,0.5,10000),rvcomp1,'g--')
+    plt.plot(np.linspace(0,1,10000),rvcomp1,'g--')
     
-    phi2 = foldtime(rvdata2[:,0],t0=t0,period=period)/period
-    plt.plot(phi2,rvdata2[:,1],'ro',markersize=3)
+    phi2 = ebs.foldtime_pos(rvdata2[0,:]-ebpar['bjd'],t0=t0,period=period)/period
+    plt.plot(phi2,rvdata2[1,:],'ro',markersize=3)
 #    plt.plot(phi2,rv2,'rx')
-    tcomp = np.linspace(-0.5,0.5,10000)*period+t0
-    rvmodel2 = compute_eclipse(tcomp,parm,fitrvs=True)
+    tcomp = np.linspace(0,1,10000)*period+t0
+    rvmodel2 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
     rvcomp2 = -1.0*rvmodel2*k2 + vsys
-    plt.plot(np.linspace(-0.5,0.5,10000),rvcomp2,'b--')
-    plt.xlim(-0.5,0.5)
+    plt.plot(np.linspace(0,1,10000),rvcomp2,'b--')
+    plt.xlim(0,1)
     plt.ylabel('Radial Velocity (km/s)')
     plt.xlabel('Phase')
 
     plt.suptitle('Fitting Results',fontsize=14)
     
-    plt.savefig(path+'MCMC/fullfit/'+name+stag+thintag+'_MCMCfit.png')
+    plt.savefig(directory+'MCMCfit.png')
 
     plot_defaults()
 
@@ -512,40 +547,44 @@ def plot_model(vals,eclipse,markersize=5,smallmark=2,nbins=100,errorbars=False,d
 
 
 
-def params_of_interest(eclipse,chains=False,lp=False):
+def params_of_interest(seq_num,chains=False,lp=False,network=None):
 
-    ethin = 1
-    thintag = '_thin'+str(ethin) if ethin > 1 else ''
+    path = reb.get_path(network=network)+str(seq_num)+'/'
+    
+    ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
+    data    = pickle.load( open( path+'data.p', 'rb' ) )
+    fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
+    
+    nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
 
-#    enum = eclipse['enum']
-
-    print "Deriving values for parameters of interest"
-
-#    tmaster = time.time()
+    variables = fitinfo['variables']
+    
+    # Use supplied chains or read from disk
     if not np.shape(chains):
-        print "Reading in MCMC chains"        
         for i in np.arange(len(variables)):
             try:
                 print "Reading MCMC chains for "+variables[i]
-                tmp = np.loadtxt(path+'MCMC/fullfit/'+name+stag+thintag+'_'+variables[i]+\
-                                 'chain.txt')
+                tmp = np.loadtxt(path+variables[i]+'chain.txt')
                 if i == 0:
                     chains = np.zeros((len(tmp),len(variables)))
 
                 chains[:,i] = tmp
             except:
-                print name+stag+'_'+variables[i]+'chain.txt does not exist on disk !'
-
-#            print done_in(tmaster)
-
+                print variables[i]+'chain.txt does not exist on disk !'
 
     if not np.shape(lp):
         try:
             print "Reading ln(prob) chain"
-            lp = np.loadtxt(path+'MCMC/fullfit/'+name+stag+thintag+'_lnprob.txt')
+            lp = np.loadtxt(path+'lnprob.txt')
         except:
-            print "lnprob chain does not exist. Exiting"
+            print 'lnprob.txt does not exist. Exiting'
             return
+
+    path = ebpar['path']
+    variables = fitinfo['variables']
+    
+    print "Deriving values for parameters of interest"
+
 
     print "Converting posteriors into physical quantities"
     ind, = np.where(np.array(variables) == 'Rsum')[0]
@@ -567,7 +606,7 @@ def params_of_interest(eclipse,chains=False,lp=False):
         ind, = np.where(np.array(variables) == 'period')[0]
         pdist = chains[:,ind]
     except:
-        pdist = ebpar0['Period']
+        pdist = ebpar['Period']
 
     ind, = np.where(np.array(variables) == 'ktot')[0]
     ktotdist = chains[:,ind]
@@ -660,24 +699,56 @@ def params_of_interest(eclipse,chains=False,lp=False):
     modes  = np.append(modes,mode)
     onesig = np.append(onesig,interval)
 
-    outstr = name+ ' %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f' % (vals[0],meds[0],modes[0],onesig[0],vals[1],meds[1],modes[1],onesig[1],vals[2],meds[2],modes[2],onesig[2],vals[3],meds[3],modes[3],onesig[3],vals[4],meds[4],modes[4],onesig[4])
+    outstr = 'Run'+str(seq_num)+ ' %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f' % (vals[0],meds[0],modes[0],onesig[0],vals[1],meds[1],modes[1],onesig[1],vals[2],meds[2],modes[2],onesig[2],vals[3],meds[3],modes[3],onesig[3],vals[4],meds[4],modes[4],onesig[4])
 
-    f = open(path+'MCMC/fullfit/'+name+stag+thintag+
-                '_bestparams.txt','w')
+    f = open(path+'bestparams.txt','w')
     f.write(outstr+'\n')
     f.closed
 
     return 
 
 
-def triangle_plot(chains=False,lp=False,thin=False,frac=0.001,sigfac=1.5):
+
+def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=1.5,network=None):
     import matplotlib.gridspec as gridspec
 
     mpl.rc('axes', linewidth=1)
   
     bindiv = 10
     
-    nsamp = nw*mcs
+    path = reb.get_path(network=network)+str(seq_num)+'/'
+    
+    ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
+    data    = pickle.load( open( path+'data.p', 'rb' ) )
+    fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
+    
+    nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
+
+    variables = fitinfo['variables']
+    
+    # Use supplied chains or read from disk
+    if not np.shape(chains):
+        for i in np.arange(len(variables)):
+            try:
+                print "Reading MCMC chains for "+variables[i]
+                tmp = np.loadtxt(path+variables[i]+'chain.txt')
+                if i == 0:
+                    chains = np.zeros((len(tmp),len(variables)))
+
+                chains[:,i] = tmp
+            except:
+                print variables[i]+'chain.txt does not exist on disk !'
+
+    if not np.shape(lp):
+        try:
+            print "Reading ln(prob) chain"
+            lp = np.loadtxt(path+'lnprob.txt')
+        except:
+            print 'lnprob.txt does not exist. Exiting'
+            return
+
+    path = ebpar['path']
+    variables = fitinfo['variables']
     
     tmaster = time.time()
     if chains == False:
@@ -686,7 +757,7 @@ def triangle_plot(chains=False,lp=False,thin=False,frac=0.001,sigfac=1.5):
         for i in np.arange(len(variables)):
             try:
                 print "Reading MCMC chains for "+variables[i]
-                tmp = np.loadtxt(path+'MCMC/fullfit/'+name+stag+'_'+variables[i]+'chain.txt')
+                tmp = np.loadtxt(path+variables[i]+'chain.txt')
                 chains[:,i] = tmp
             except:
                 print name+stag+'_'+variables[i]+'chain.txt does not exist on disk !'
@@ -697,7 +768,7 @@ def triangle_plot(chains=False,lp=False,thin=False,frac=0.001,sigfac=1.5):
     if lp == False:
         try:
             print "Reading ln(prob) chain"
-            lp = np.loadtxt(path+'MCMC/fullfit/'+name+stag+'_lnprob.txt')
+            lp = np.loadtxt(path+'lnprob.txt')
         except:
             print "lnprob chain does not exist. Exiting"
             return
@@ -717,12 +788,16 @@ def triangle_plot(chains=False,lp=False,thin=False,frac=0.001,sigfac=1.5):
     mratdist = chains[:,ind]
     ind, = np.where(np.array(variables) == 'vsys')[0]
     vsysdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'period')[0]
-    pdist = chains[:,ind]
     ind, = np.where(np.array(variables) == 'ktot')[0]
     ktotdist = chains[:,ind]
     ind, = np.where(np.array(variables) == 'J')[0]
     jdist = chains[:,ind]
+
+    try:
+        ind, = np.where(np.array(variables) == 'period')[0]
+        pdist = chains[:,ind]
+    except:
+        pdist = ebpar['Period']
 
     esq = ecoswdist * ecoswdist + esinwdist * esinwdist
     roe = np.sqrt(1.0 - esq)
@@ -864,8 +939,8 @@ def triangle_plot(chains=False,lp=False,thin=False,frac=0.001,sigfac=1.5):
     print done_in(t8)
 
     print "Saving output figures"
-    plt.savefig(path+'MCMC/'+name+stag+'_triangle1.png', dpi=300)
-    plt.savefig(path+'MCMC/'+name+stag+'_triangle1.eps', dpi=300)
+    plt.savefig(path+'triangle1.png', dpi=300)
+    plt.savefig(path+'triangle1.eps', dpi=300)
 
     print "Procedure finished!"
     print done_in(tmaster)
