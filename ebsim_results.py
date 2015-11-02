@@ -14,7 +14,6 @@ from plot_params import plot_params, plot_defaults
 import run_ebsim as reb
 import ebsim as ebs
 
-
 def analyze_run(run,network=None,thin=10):
 
     chains,lp = get_chains(run,network=network)

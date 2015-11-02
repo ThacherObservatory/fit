@@ -4,13 +4,11 @@ from ebsim import *
 
 def ebsim_core(core,ncores=16,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
                network=None):
-
     # get path appropriate for network
     path = get_path(network=network)
 
     # get array of input values and unique sequence number
     params,seq = param_sequence()
-
     # Total number of fits to be done
     nproc = len(seq)
 
@@ -46,6 +44,9 @@ def ebsim_core(core,ncores=16,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobbe
         print 'RV Samples        = %.0f' % param[2]
         print 'Radius Ratio      = %.2f' % param[3]
         print 'Impact Parameter  = %.2f' % param[4]
+
+#        fit_sequence(param,n,path,nwalkers=nwalkers,
+
         fit_sequence(param,n,nwalkers=nwalkers,path=path,
                      burnsteps=burnsteps,mcmcsteps=mcmcsteps,
                      clobber=False)
@@ -80,7 +81,6 @@ def param_sequence():
     
     # Array of parameters for each iteration
     params = np.zeros((niter,5))
-
 
     # Create array of parameters
     seq_num = []
