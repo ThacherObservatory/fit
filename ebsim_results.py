@@ -712,6 +712,8 @@ def params_of_interest(seq_num,chains=False,lp=False,network=None):
 def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=1.5,network=None):
     import matplotlib.gridspec as gridspec
 
+    tmaster = time.time()
+    
     mpl.rc('axes', linewidth=1)
   
     bindiv = 10
