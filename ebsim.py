@@ -1503,11 +1503,13 @@ def get_limb_coeff(Tstar,loggstar,filter='Kp',plot=False,network=None,limb='quad
     file1 = 'Claret_cool.dat'
     file2 = 'Claret_hot.dat'
 
-    if network == 'doug':
+    if network == None or network == 'bellerophon':
+	path = '/home/administrator/python/fit/'
+    elif network == 'doug':
         path = '/home/douglas/Astronomy/Resources/'
-    if network == 'astro':
+    elif network == 'astro':
         path = '/home/jswift/Mdwarfs/'
-    if network == None:
+    elif network == 'swift':
         path = '/Users/jonswift/Astronomy/Exoplanets/TransitFits/'
 
     # Get data from both the low and high temp files and then append
