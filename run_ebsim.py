@@ -117,7 +117,7 @@ def check(seq_num,path='/Users/jonswift/Astronomy/EBs/Simulations/'):
     return
 
 
-def fit_sequence(seq_num,path='/Users/jonswift/Astronomy/EBs/Simulations/',
+def fit_sequence(seq_num,path='/home/administrator/Simulations/',
                  nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
                  fit_period=False,fit_limb=True,claret=False,fit_rvs=True,
                  fit_ooe1=False,fit_ooe2=False,fit_L3=False,fit_sp2=False,
@@ -170,11 +170,10 @@ def get_path(network=None):
     """
 
     # Set correct paths here
-    if network == None:
+    if network == None or network=='bellerophon':
+        path = '/home/administrator/Simulations/'
+    elif network=='swift':
         path = '/Users/jonswift/Astronomy/EBs/Simulations/'
-
-    if network == 'bellerophon':
-        path = '/'
 
     return path
 
