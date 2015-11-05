@@ -26,6 +26,26 @@ def analyze_run(run,network=None,thin=10):
     triangle_plot(run,chains=chains,lp=lp,network=network,thin=thin)
     
     return
+    
+def plot_chains(seq_num,network=None):
+    chains,lp = get_chains(seq_num, network=network)
+    path = reb.get_path(network=network)+str(seq_num)+'/'
+    fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
+    nwalkers = fitinfo['nwalkers']
+    nsteps = fitinfo['mcmcsteps']
+    variables = fitinfo['variables'] 
+
+    for i in range(len(variables)):
+        var = variables[i]
+        print 'plotting ' + var
+        var_chains = np.reshape(chains[:,i],[nwalkers,nsteps])
+        plt.ioff()
+        plt.figure()
+        plt.clf()
+        for chain in var_chains:
+            plt.plot(chain)
+        plt.savefig(path+var+'Chains.png')
+    
 
 
 def get_chains(seq_num,network=None):
