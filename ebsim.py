@@ -1,14 +1,6 @@
 # TO DO:
 #-------
-
-# High priority
-#--------------
-# Update bestvals, plot_model, and triangle to be compatible with
-# output of simulation fits
-#
-# Low priority:
-#--------------
-# Reconfigure code for parallelization.
+# Parallelize code and test on bellerophon
 
 
 import sys,math,pdb,time,glob,re,os,eb,emcee,pickle
@@ -19,7 +11,6 @@ import scipy as sp
 import robust as rb
 from scipy.io.idl import readsav
 from length import length
-#from kepler_tools import *
 import pyfits as pf
 from statsmodels.nonparametric.kernel_density import KDEMultivariate as KDE
 from stellar import rt_from_m, flux2mag, mag2flux
@@ -92,7 +83,7 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
                     gravdark=False,reflection=False,ellipsoidal=False,
                     photnoise=0.0003,RVnoise=0.1,RVsamples=100,
                     lighttravel=True,durfac=1.5,ncycles=1,durpoints=None,
-                    write=False,path='./',limb='quad'):
+                    write=False,network=None,limb='quad',path='./'):
 
 
     """
@@ -121,8 +112,8 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
 
     # Get limb darkening according to input stellar params
     if not q1a or not q1b or not q2a or not q2b:
-             q1a,q2a = get_limb_qs(Mstar=m1,Rstar=r1,Tstar=Teff1,limb=limb)
-             q1b,q2b = get_limb_qs(Mstar=m2,Rstar=r2,Tstar=Teff2,limb=limb)
+             q1a,q2a = get_limb_qs(Mstar=m1,Rstar=r1,Tstar=Teff1,limb=limb,network=network)
+             q1b,q2b = get_limb_qs(Mstar=m2,Rstar=r2,Tstar=Teff2,limb=limb,network=network)
         
     # Integration time and reference time
     integration = int
@@ -211,10 +202,13 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
         print 'Making directory '+directory
         os.makedirs(directory)
 
-    
+    # Convert q's to u's
+    u1a,u2a = qtou(q1a,q2a)
+    u1b,u2b = qtou(q1b,q2b)
+
     # Create initial ebpar dictionary
     ebpar = {'J':J, 'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
-              'Mratio':massratio, 'LDlin1':q1a, 'LDnon1':q2a, 'LDlin2':q1b, 'LDnon2':q2b,
+              'Mratio':massratio, 'LDlin1':u1a, 'LDnon1':u2a, 'LDlin2':u1b, 'LDnon2':u2b,
               'GD1':0.0, 'Ref1':0.0, 'GD2':0.0, 'Ref2':0.0, 'Rot1':0.0,
               'ecosw':ecosw0, 'esinw':esinw0, 'Period':period, 't01':bjd, 't02':None, 
               'et01':0.0, 'et02':0.0, 'dt12':None, 'tdur1':None, 'tdur2':None, 
@@ -449,11 +443,10 @@ def ebsim_fit(data,ebpar,fitinfo):
 
     if fitinfo['fit_limb'] and fitinfo['claret']:
         sys.exit('Cannot fit for LD parameters and constrain them according to the other fit parameters!')
+
     if fitinfo['fit_limb']:
         limb0 = np.array([p0_9,p0_10,p0_11,p0_12])
         lvars = ["q1a", "q2a", "q1b", "q2b"]
-#        limb0 = np.array([p0_9,p0_11])
-#        lvars = ["u1a", "u1b"]
         p0_init = np.append(p0_init,limb0,axis=0)
         for var in lvars:
             variables.append(var)
@@ -655,10 +648,6 @@ def vec_to_params(x,ebpar,fitinfo=None):
     x[29] = total radial velocity amplitude
     x[30] = system velocity
 
-    To do:
-    ------
-    Check if this is indeed correct!!!!
-
     """
     
     if fitinfo != None:
@@ -696,14 +685,14 @@ def vec_to_params(x,ebpar,fitinfo=None):
     except:
         parm[eb.PAR_M0] = ebpar['mag0']
 
-        
+
     # Limb darkening paramters for star 1
     try:
-#        q1a = x[variables == 'q1a'][0]  
-#        q2a = x[variables == 'q2a'][0]  
-#        a1, b1 = qtou(q1a,q2a,limb=limb)
-        parm[eb.PAR_LDLIN1] = x[variables == 'u1a']  # u1 star 1
-        parm[eb.PAR_LDNON1] = 0  # u2 star 1
+        q1a = x[variables == 'q1a'][0]  
+        q2a = x[variables == 'q2a'][0]  
+        a1, b1 = qtou(q1a,q2a,limb=limb)
+        parm[eb.PAR_LDLIN1] = a1
+        parm[eb.PAR_LDNON1] = b1
     except:
         parm[eb.PAR_LDLIN1] = ebpar["LDlin1"]   # u1 star 1
         parm[eb.PAR_LDNON1] = ebpar["LDnon1"]   # u2 star 1
@@ -711,11 +700,11 @@ def vec_to_params(x,ebpar,fitinfo=None):
 
     # Limb darkening paramters for star 2
     try:
-#        q1b = x[variables == 'q1b'][0]  
-#        q2b = x[variables == 'q2b'][0]  
-#        a2, b2 = qtou(q1b,q2b)
-        parm[eb.PAR_LDLIN2] = x[variables == 'u1b']  # u1 star 2
-        parm[eb.PAR_LDNON2] = 0  # u2 star 2
+        q1b = x[variables == 'q1b'][0]  
+        q2b = x[variables == 'q2b'][0] 
+        a2, b2 = qtou(q1b,q2b)
+        parm[eb.PAR_LDLIN2] = a2
+        parm[eb.PAR_LDNON2] = b2
     except:
         parm[eb.PAR_LDLIN2] = ebpar["LDlin2"]   # u1 star 2
         parm[eb.PAR_LDNON2] = ebpar["LDnon2"]   # u2 star 2
@@ -746,8 +735,6 @@ def vec_to_params(x,ebpar,fitinfo=None):
         except:
             print "Cannot perform light travel time correction (no masses)"
             ktot = 0.0
-#    else:
-#        ktot = 0.0
 
 
     if ebpar['gravdark']:
@@ -759,7 +746,7 @@ def vec_to_params(x,ebpar,fitinfo=None):
         parm[eb.PAR_REFL2]  = ebpar['Ref2']  # albedo, std. value
 
 
-    # Spot model
+    # Spot modelling
     try: 
         parm[eb.PAR_ROT1]   = x[variables == 'Rot1'][0] # rotation parameter (1 = sync.)
         parm[eb.PAR_OOE1O]  = x[variables == 'spBase1'][0]  # base spottedness out of eclipse
@@ -824,6 +811,8 @@ def vec_to_params(x,ebpar,fitinfo=None):
 #    print "Derived parameters:"
 #    for name, value, unit in zip(eb.dernames, vder, eb.derunits):
 #        print "{0:<10} {1:14.6f} {2}".format(name, value, unit)
+
+
     return parm, vder
 
 
