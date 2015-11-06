@@ -82,7 +82,7 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
                     q1a=None,q2a=None,q1b=None,q2b=None,J=None,L3=0.0,vsys=10.0,
                     gravdark=False,reflection=False,ellipsoidal=False,
                     photnoise=0.0003,RVnoise=0.1,RVsamples=100,
-                    lighttravel=True,durfac=1.5,ncycles=1,durpoints=None,
+                    lighttravel=True,durfac=1.5,ncycles=1,tsamp=60,
                     write=False,network=None,limb='quad',path='./'):
 
 
@@ -249,10 +249,10 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
     tdsec  = (se - ss)*period * durfac
     t0sec = (se+ss)/2*period 
 
-    # Sample primary eclipse with the specified number of points, else use integration time as cadence
-    if durpoints:
-        tphot = np.append(np.linspace(-tdprim/2,tdprim/2,durpoints),
-                          np.linspace(-tdsec/2+t0sec,tdsec/2+t0sec,durpoints*tdsec/tdprim))
+    # Sample primary eclipse with the specified sampling, else use integration time as cadence
+    if tsamp:
+        tphot = np.append(np.arange(-tdprim/2,tdprim/2,tsamp/86400.0),
+                          np.arange(-tdsec/2+t0sec,tdsec/2+t0sec,tsamp/86400.0))
     else:
         tphot = np.append(np.arange(-tdprim/2,tdprim/2,integration/86400.0),
                           np.arange(-tdsec/2+t0sec,tdsec/2+t0sec,integration/86400.0))
@@ -984,7 +984,7 @@ def lnprob(x,data,ebpar,fitinfo):
         
 ### Compute eclipse model for given input parameters ###
     massratio = parm[eb.PAR_Q]
-    if massratio < 0 or massratio > 1:
+    if massratio < 0 or massratio > 10:
         return -np.inf
 
     if not fitinfo['fit_ellipsoidal']:
