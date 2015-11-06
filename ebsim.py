@@ -223,7 +223,7 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
               'integration':int,'bjd':bjd,'variables':variables,'ninput':0,
               'lighttravel':lighttravel,'gravdark':gravdark,
               'reflection':reflection,'path':path,'limb':limb,
-              'Rstar1':r1, 'Rstar2':r2}
+              'Rstar1':r1, 'Rstar2':r2,'cosi':np.cos(inc)}
               
     #              'GD1':0.32, 'Ref1':0.4, 'GD2':0.32, 'Ref2':0.4, 'Rot1':0.0,
 
@@ -416,7 +416,7 @@ def ebsim_fit(data,ebpar,fitinfo):
     p0_10 = np.random.uniform(0,1,nw)                                         # Limb darkening
     p0_11 = np.random.uniform(0,1,nw)                                         # Limb darkening
     p0_12 = np.random.uniform(0,1,nw)                                         # Limb darkening
-    p0_13 = np.abs(np.random.normal(ebpar['Mratio'],0.001,nw))               # Mass ratio
+    p0_13 = np.abs(np.random.normal(ebpar['Mratio'],0.01,nw))                 # Mass ratio
     p0_14 = np.random.uniform(0,0.1,nw)                                       # Third Light
     p0_15 = np.random.normal(ebpar['Rot1'],0.001,nw)                         # Star 1 rotation
     p0_16 = np.random.uniform(0,1,nw)                                         # Fraction of spots eclipsed
@@ -611,8 +611,7 @@ def ebsim_fit(data,ebpar,fitinfo):
     return sampler.lnprobability.flatten(),sampler.flatchain
 
 
-
-def vec_to_params(x,ebpar):
+def vec_to_params(x,ebpar,fitinfo=None):
     """
     ----------------------------------------------------------------------
     vec_to_params:
@@ -662,6 +661,12 @@ def vec_to_params(x,ebpar):
 
     """
     
+    if fitinfo != None:
+        variables = fitinfo['variables']
+    else:
+        print 'vec_to_params: Using default values from ebpar'
+        variables = None
+
     parm = np.zeros(eb.NPAR, dtype=np.double)
     # These are the basic parameters of the model.
     parm[eb.PAR_J]      =  x[0]  # J surface brightness ratio
@@ -718,6 +723,7 @@ def vec_to_params(x,ebpar):
 
     # Mass ratio is used only for computing ellipsoidal variation and
     # light travel time.  Set to zero to disable ellipsoidal.
+
     try:
         parm[eb.PAR_Q]  = x[variables == 'massratio'][0]
         ktot  = x[variables == 'ktot'][0]
@@ -922,9 +928,8 @@ def lnprob(x,data,ebpar,fitinfo):
     curve is compared to model. 
 
     """
+    parm,vder = vec_to_params(x,ebpar,fitinfo=fitinfo)
 
-    parm,vder = vec_to_params(x,ebpar)
-    
     vsys = x[-1]
     ktot = x[-2]
 

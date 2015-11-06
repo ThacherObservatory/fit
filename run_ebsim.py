@@ -102,6 +102,10 @@ def param_sequence():
 
 
 def params_from_seq(seq):
+    """
+    Return set of simulation parameters for a given sequence number.
+    """
+    
     par,s = param_sequence()
     return par[seq,:]
 
