@@ -560,7 +560,7 @@ def ebsim_fit(data,ebpar,fitinfo):
 
 # Save burn in stats
     burn = np.append(Rs,sampler.acor)
-    burn = np.append(burn,sampler.acceptance_fraction)
+    burn = np.append(burn,np.mean(sampler.acceptance_fraction))
     np.savetxt(directory+'burnstats.txt',burn)
 
     # Reset sampler and run MCMC for reals
@@ -582,7 +582,7 @@ def ebsim_fit(data,ebpar,fitinfo):
     print afout.format(np.mean(sampler.acceptance_fraction))
 
     stats = np.append(Rs,sampler.acor)
-    stats = np.append(stats,sampler.acceptance_fraction)
+    stats = np.append(stats,np.mean(sampler.acceptance_fraction))
     np.savetxt(directory+'finalstats.txt',stats)
 
     # Dump the initial parameter dictionary, fit information dictionary, and the
