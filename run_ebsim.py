@@ -4,7 +4,7 @@ from ebsim_results import *
 
 
 def ebsim_core(core,ncores=16,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
-               network=None,thin=10):
+               network=None,thin=10,fullanalysis=False):
 
     # get array of input values and unique sequence number
     params,seq = param_sequence()
@@ -48,7 +48,7 @@ def ebsim_core(core,ncores=16,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobbe
                      burnsteps=burnsteps,mcmcsteps=mcmcsteps,
                      clobber=False,network=network)
 
-        analyze_run(n,network=network,thin=thin)
+        analyze_run(n,network=network,thin=thin,full=fullanalysis)
         
 
 def param_sequence():

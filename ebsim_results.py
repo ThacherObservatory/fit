@@ -15,15 +15,15 @@ import run_ebsim as reb
 import ebsim as ebs
 from done_in import done_in
 
-def analyze_run(run,network=None,thin=10):
+def analyze_run(run,network=None,thin=10,full=False):
 
     chains,lp = get_chains(run,network=network)
     
     best_vals(run,chains=chains,lp=lp,network=network,thin=thin)
 
-    params_of_interest(run,chains=chains,lp=lp,network=network)
-
-    triangle_plot(run,chains=chains,lp=lp,network=network,thin=thin)
+    if full:
+        params_of_interest(run,chains=chains,lp=lp,network=network)
+        triangle_plot(run,chains=chains,lp=lp,network=network,thin=thin)
     
     return
     
@@ -82,8 +82,6 @@ def get_chains(seq_num,network=None):
 def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
                 thin=False,frac=0.001,nbins=100,rpmax=1,durmax=10,sigrange=5.0):
 
-    # "eclipse" taken out of args and "data" put in
-    # need to propagate that change
 
     """
     ----------------------------------------------------------------------
@@ -729,7 +727,7 @@ def params_of_interest(seq_num,chains=False,lp=False,network=None):
 
 
 
-def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=1.5,network=None):
+def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=3.0,network=None):
     import matplotlib.gridspec as gridspec
 
     tmaster = time.time()

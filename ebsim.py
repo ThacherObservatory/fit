@@ -81,7 +81,7 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
                     period=4.123456789, t0=2454833.0,int=60.0,
                     q1a=None,q2a=None,q1b=None,q2b=None,J=None,L3=0.0,vsys=10.0,
                     gravdark=False,reflection=False,ellipsoidal=False,
-                    photnoise=0.0003,RVnoise=0.1,RVsamples=100,
+                    photnoise=0.0003,RVnoise=1.0,RVsamples=100,
                     lighttravel=True,durfac=1.5,ncycles=1,tsamp=60,
                     write=False,network=None,limb='quad',path='./'):
 
