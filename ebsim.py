@@ -396,11 +396,11 @@ def ebsim_fit(data,ebpar,fitinfo):
 # Initial chain values
     print ""
     print "Deriving starting values for chains"
-    p0_0  = np.random.uniform(ebpar['J']*0.9,ebpar['J']*1.1,nw)             # surface brightness
-    p0_1  = np.random.uniform(ebpar['Rsum_a']*0.9,ebpar['Rsum_a']*1.1, nw)    # fractional radius
-    p0_2  = np.random.uniform(ebpar['Rratio']*0.9,ebpar['Rratio']*1.1, nw)    # radius ratio
-    p0_3  = np.random.uniform(0,ebpar['Rsum_a'], nw)                          # cos i
-#    p0_3  = np.random.uniform(0,0.01, nw)                                    # cos i
+    p0_0  = np.random.uniform(ebpar['J']*0.999,ebpar['J']*1.001,nw)             # surface brightness
+    p0_1  = np.random.uniform(ebpar['Rsum_a']*0.999,ebpar['Rsum_a']*1.001, nw)    # fractional radius
+    p0_2  = np.random.uniform(ebpar['Rratio']*0.999,ebpar['Rratio']*1.001, nw)    # radius ratio
+#    p0_3  = np.random.uniform(0,ebpar['Rsum_a'], nw)                          # cos i
+    p0_3  = np.random.uniform(ebpar['cosi']*0.999,ebpar['cosi']*1.001, nw)     # cos i
     p0_4  = np.random.uniform(0,0.01, nw)                                      # ecosw
     p0_5  = np.random.uniform(0,0.01, nw)                                      # esinw
     p0_6  = np.random.normal(ebpar['mag0'],0.1, nw)                          # mag zpt
@@ -1049,7 +1049,7 @@ def lnprob(x,data,ebpar,fitinfo):
         lfrv = lfrv1 + lfrv2
         lf  += lfrv
 
-    debug = False
+    debug = True
     if debug:
         print "Model parameters:"
         for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
