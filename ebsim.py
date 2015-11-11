@@ -401,18 +401,28 @@ def ebsim_fit(data,ebpar,fitinfo):
     p0_2  = np.random.uniform(ebpar['Rratio']*0.999,ebpar['Rratio']*1.001, nw)    # radius ratio
 #    p0_3  = np.random.uniform(0,ebpar['Rsum_a'], nw)                          # cos i
     p0_3  = np.random.uniform(ebpar['cosi']*0.999,ebpar['cosi']*1.001, nw)     # cos i
-    p0_4  = np.random.uniform(0,0.01, nw)                                      # ecosw
-    p0_5  = np.random.uniform(0,0.01, nw)                                      # esinw
+    #p0_4  = np.random.uniform(0,0.01, nw)                                      # ecosw
+    p0_4  = np.random.uniform(ebpar['ecosw']*0.999,ebpar['ecosw']*1.001, nw)
+    #p0_5  = np.random.uniform(0,0.01, nw)                                      # esinw
+    p0_5  = np.random.uniform(ebpar['esinw']*0.999,ebpar['esinw']*1.001, nw)
     p0_6  = np.random.normal(ebpar['mag0'],0.1, nw)                          # mag zpt
     p0_7  = np.random.normal(ebpar['t01']-bjd,onesec,nw)                     # ephemeris
-    p0_8  = np.random.normal(ebpar['Period'],onesec,nw    )                  # Period
-    p0_9  = np.random.uniform(0,1,nw)                                         # Limb darkening
-    p0_10 = np.random.uniform(0,1,nw)                                         # Limb darkening
-    p0_11 = np.random.uniform(0,1,nw)                                         # Limb darkening
-    p0_12 = np.random.uniform(0,1,nw)                                         # Limb darkening
-    p0_13 = np.abs(np.random.normal(ebpar['Mratio'],0.01,nw))                 # Mass ratio
+    #p0_7  = np.random.normal((ebpar['t01']-bjd)*0.999,(ebpar['t01']-bjd)*1.001,nw)      
+    #p0_8  = np.random.normal(ebpar['Period'],onesec,nw)                       # Period
+    p0_8  = np.random.normal(ebpar['Period']*0.999,ebpar['Period']*1.001,nw)
+    #TODO:limb darkening
+    p0_9  = np.random.uniform(0,1,nw)                                         # Limb darkening q1a
+    p0_10 = np.random.uniform(0,1,nw)                                         # Limb darkening q2a
+    p0_11 = np.random.uniform(0,1,nw)                                         # Limb darkening q1b
+    p0_12 = np.random.uniform(0,1,nw)                                         # Limb darkening q2b
+    #p0_13 = np.abs(np.random.normal(ebpar['Mratio']*0.999,0.01,nw))                 # Mass ratio
+    p0_13 = np.abs(np.random.normal(ebpar['Mratio']*0.999,ebpar['Mratio']*1.001,nw))
+    #TODO: third light
     p0_14 = np.random.uniform(0,0.1,nw)                                       # Third Light
+    
     p0_15 = np.random.normal(ebpar['Rot1'],0.001,nw)                         # Star 1 rotation
+    #p0_15 = np.random.normal(ebpar['Rot1']*0.999,ebpar['Rot1']*1.001,nw)
+    #TODO: p0_16
     p0_16 = np.random.uniform(0,1,nw)                                         # Fraction of spots eclipsed
     p0_17 = np.random.normal(0,0.001,nw)                                      # base spottedness
     p0_18 = np.random.normal(0,0.0001,nw)                                     # Sin amplitude
@@ -426,8 +436,11 @@ def ebsim_fit(data,ebpar,fitinfo):
     p0_26 = np.random.normal(0,0.001,nw)                                      # Cos amplitude
     p0_27 = np.random.normal(0,0.001,nw)                                      # SinCos amplitude
     p0_28 = np.random.normal(0,0.001,nw)                                      # Cos^2-Sin^2 amplitude
-    p0_29 = np.abs(np.random.normal(ebpar['ktot'],ebpar['ktot']*0.2,nw))    # Total radial velocity amp
-    p0_30 = np.random.normal(ebpar['vsys'],5.0,nw)                           # System velocity
+    
+    #p0_29 = np.abs(np.random.normal(ebpar['ktot'],ebpar['ktot']*0.2,nw))    # Total radial velocity amp
+    p0_29 = np.abs(np.random.normal(ebpar['ktot']*0.999,ebpar['ktot']*1.001,nw))
+    #p0_30 = np.random.normal(ebpar['vsys'],5.0,nw)                           # System velocity
+    p0_30 = np.random.normal(ebpar['vsys']*.999,ebpar['vsys']*1.001,nw)   
 
 
 # L3 at 14 ... 14 and beyond + 1
