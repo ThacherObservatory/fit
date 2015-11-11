@@ -181,6 +181,8 @@ def get_path(network=None):
         path = '/home/administrator/Simulations/'
     elif network=='swift':
         path = '/Users/jonswift/Astronomy/EBs/Simulations/'
+    elif network=='doug':
+        path = '/home/douglas/Simulations/'
 
     return path
 

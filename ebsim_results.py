@@ -41,7 +41,7 @@ def plot_chains(seq_num,network=None):
         var_chains = np.reshape(chains[:,i],[nwalkers,nsteps])
         plt.ioff()
         plt.figure()
-        plt.clf()
+        plt.title(var + ' chains, run ' + str(seq_num))
         for chain in var_chains:
             plt.plot(chain)
         plt.savefig(path+var+'Chains.png')
@@ -374,6 +374,7 @@ def plot_model(vals,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     # Check for output directory   
     directory = ebpar['path']
     variables = fitinfo['variables']
+    run_number = int(directory.split('/')[-2])
 
     parm,vder = ebs.vec_to_params(vals,ebpar)
     
@@ -555,7 +556,7 @@ def plot_model(vals,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     plt.ylabel('Radial Velocity (km/s)')
     plt.xlabel('Phase')
 
-    plt.suptitle('Fitting Results',fontsize=14)
+    plt.suptitle('Fitting Results for Run ' + str(run_number))
     
     plt.savefig(directory+'MCMCfit.png')
 

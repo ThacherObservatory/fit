@@ -1062,7 +1062,7 @@ def lnprob(x,data,ebpar,fitinfo):
         lfrv = lfrv1 + lfrv2
         lf  += lfrv
 
-    debug = True
+    debug = False
     if debug:
         print "Model parameters:"
         for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
