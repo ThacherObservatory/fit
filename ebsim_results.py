@@ -171,7 +171,7 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
         sigval = rb.std(dist)
         maxval = med + sigrange*np.abs(hi-med)
         minval = med - sigrange*np.abs(med-lo)
-        nb = np.ceil((maxval-minval) / (interval/bindiv))
+        nb = min(np.ceil((maxval-minval) / (interval/bindiv)),500)
         print 'Best fit parameters for '+variables[i]        
         out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
         print out.format(bestvals[i], med, mode, interval)
@@ -226,7 +226,7 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
         sigval = rb.std(dist)
         maxval = med + sigrange*np.abs(hi-med)
         minval = med - sigrange*np.abs(med-lo)
-        nb = np.ceil((maxval-minval) / (interval/bindiv))
+        nb = min(np.ceil((maxval-minval) / (interval/bindiv)),500)
         print 'Best fit parameters for '+variables[i]        
         out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
         print out.format(bestvals[i], med, mode, interval)
@@ -297,7 +297,7 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
                 sigval = rb.std(dist)
                 minval = np.min(dist) - sigval
                 maxval = np.max(dist) + sigval
-            nb = np.ceil((maxval-minval) / (interval/bindiv))
+            nb = min(np.ceil((maxval-minval) / (interval/bindiv)),500)
             print 'Best fit parameters for '+variables[i]        
             out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
             print out.format(bestvals[i], med, mode, interval)

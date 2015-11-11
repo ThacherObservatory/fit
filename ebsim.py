@@ -400,29 +400,41 @@ def ebsim_fit(data,ebpar,fitinfo):
     p0_1  = np.random.uniform(ebpar['Rsum_a']*0.999,ebpar['Rsum_a']*1.001, nw)    # fractional radius
     p0_2  = np.random.uniform(ebpar['Rratio']*0.999,ebpar['Rratio']*1.001, nw)    # radius ratio
 #    p0_3  = np.random.uniform(0,ebpar['Rsum_a'], nw)                          # cos i
-    p0_3  = np.random.uniform(ebpar['cosi']*0.999,ebpar['cosi']*1.001, nw)     # cos i
+    if ebpar['cosi'] == 0:
+        p0_3 = np.random.uniform(-.0001,.0001)
+    else:
+        p0_3  = np.random.uniform(ebpar['cosi']*0.999,ebpar['cosi']*1.001, nw)     # cos i
     #p0_4  = np.random.uniform(0,0.01, nw)                                      # ecosw
-    p0_4  = np.random.uniform(ebpar['ecosw']*0.999,ebpar['ecosw']*1.001, nw)
+    p0_4  = np.random.uniform(-.001,.001, nw)
     #p0_5  = np.random.uniform(0,0.01, nw)                                      # esinw
-    p0_5  = np.random.uniform(ebpar['esinw']*0.999,ebpar['esinw']*1.001, nw)
+    p0_5  = np.random.uniform(-.001,.001, nw)
     p0_6  = np.random.normal(ebpar['mag0'],0.1, nw)                          # mag zpt
-    p0_7  = np.random.normal(ebpar['t01']-bjd,onesec,nw)                     # ephemeris
-    #p0_7  = np.random.normal((ebpar['t01']-bjd)*0.999,(ebpar['t01']-bjd)*1.001,nw)      
+    #p0_7  = np.random.normal(ebpar['t01']-bjd,onesec,nw)                     # ephemeris
+    if ebpar['t01']-bjd == 0:
+        p0_7 = np.random.normal(0,onesec,nw)
+    else:
+        p0_7  = np.random.uniform((ebpar['t01']-bjd)*0.999,(ebpar['t01']-bjd)*1.001,nw)      
     #p0_8  = np.random.normal(ebpar['Period'],onesec,nw)                       # Period
-    p0_8  = np.random.normal(ebpar['Period']*0.999,ebpar['Period']*1.001,nw)
-    #TODO:limb darkening
+    p0_8  = np.random.uniform(ebpar['Period']*0.999,ebpar['Period']*1.001,nw)
+    """
     p0_9  = np.random.uniform(0,1,nw)                                         # Limb darkening q1a
     p0_10 = np.random.uniform(0,1,nw)                                         # Limb darkening q2a
     p0_11 = np.random.uniform(0,1,nw)                                         # Limb darkening q1b
     p0_12 = np.random.uniform(0,1,nw)                                         # Limb darkening q2b
+    """
+    q1a,q2a = utoq(ebpar['LDlin1'],ebpar['LDnon1'])
+    q1b,q2b = utoq(ebpar['LDlin2'],ebpar['LDnon2'])
+    p0_9 = np.random.uniform(q1a*.999,q1a*1.001,nw)
+    p0_10 = np.random.uniform(q2a*.999,q2a*1.001,nw)
+    p0_11 = np.random.uniform(q1b*.999,q1b*1.001,nw)
+    p0_12 = np.random.uniform(q2b*.999,q2b*1.001,nw)
+
     #p0_13 = np.abs(np.random.normal(ebpar['Mratio']*0.999,0.01,nw))                 # Mass ratio
-    p0_13 = np.abs(np.random.normal(ebpar['Mratio']*0.999,ebpar['Mratio']*1.001,nw))
-    #TODO: third light
+    p0_13 = np.abs(np.random.uniform(ebpar['Mratio']*0.999,ebpar['Mratio']*1.001,nw))
     p0_14 = np.random.uniform(0,0.1,nw)                                       # Third Light
     
     p0_15 = np.random.normal(ebpar['Rot1'],0.001,nw)                         # Star 1 rotation
     #p0_15 = np.random.normal(ebpar['Rot1']*0.999,ebpar['Rot1']*1.001,nw)
-    #TODO: p0_16
     p0_16 = np.random.uniform(0,1,nw)                                         # Fraction of spots eclipsed
     p0_17 = np.random.normal(0,0.001,nw)                                      # base spottedness
     p0_18 = np.random.normal(0,0.0001,nw)                                     # Sin amplitude
@@ -438,9 +450,9 @@ def ebsim_fit(data,ebpar,fitinfo):
     p0_28 = np.random.normal(0,0.001,nw)                                      # Cos^2-Sin^2 amplitude
     
     #p0_29 = np.abs(np.random.normal(ebpar['ktot'],ebpar['ktot']*0.2,nw))    # Total radial velocity amp
-    p0_29 = np.abs(np.random.normal(ebpar['ktot']*0.999,ebpar['ktot']*1.001,nw))
+    p0_29 = np.abs(np.random.uniform(ebpar['ktot']*0.999,ebpar['ktot']*1.001,nw))
     #p0_30 = np.random.normal(ebpar['vsys'],5.0,nw)                           # System velocity
-    p0_30 = np.random.normal(ebpar['vsys']*.999,ebpar['vsys']*1.001,nw)   
+    p0_30 = np.random.uniform(ebpar['vsys']*.999,ebpar['vsys']*1.001,nw)   
 
 
 # L3 at 14 ... 14 and beyond + 1
@@ -1147,9 +1159,8 @@ def lnprob(x,data,ebpar,fitinfo):
         plt.title('Limb Darkening')
         
         plt.legend()
-
         pdb.set_trace()
-
+        
     if np.isnan(lf):
         print 'ln(prob) is not a number!!!'
         lf = -np.inf
