@@ -103,6 +103,9 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
     nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
 
     variables = fitinfo['variables']
+
+    var_init = ebpar['variables']
+    p_init = ebpar['p_init']
     
     # Use supplied chains or read from disk
     if not np.shape(chains):
@@ -134,9 +137,12 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
     maxlike = np.max(lp)
     imax = np.array([i for i, j in enumerate(lp) if j == maxlike])
     if imax.size > 1:
+        print 'Multiple maximum likelihood values!'
         imax = imax[0]
     for i in np.arange(len(variables)):
         bestvals[i] = chains[imax,i]
+
+    print 'Maximum likelihood = '+str(maxlike)
         
     if thin:
         print "Thinning chains by a factor of "+str(thin)
@@ -176,6 +182,10 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
         out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
         print out.format(bestvals[i], med, mode, interval)
         
+        # actual value
+        ind, = np.where(np.array(var_init) == np.array(variables)[i])
+        val = p_init[ind]
+        
         # do plot
         plotnum += 1
         plt.subplot(len(priminds),1,plotnum)
@@ -183,8 +193,9 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
         pinds, = np.where((dist >= minval) & (dist <= maxval))
         plt.hist(dist[pinds],bins=nb,normed=True)
         #    plt.xlim([minval,maxval])
-#        plt.axvline(x=bestvals[i],color='r',linestyle='--')
-#        plt.axvline(x=medval,color='c',linestyle='--')
+        plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
+        plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
         plt.xlabel(varnames[i])
         plt.ylabel(r'$dP$')
         if plotnum == 1:
@@ -231,6 +242,11 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
         out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
         print out.format(bestvals[i], med, mode, interval)
         
+        # actual value
+        ind, = np.where(np.array(var_init) == np.array(variables)[i])
+        
+        val = p_init[ind]
+        
         # do plot
         plotnum += 1
         plt.subplot(len(secinds),1,plotnum)
@@ -238,8 +254,9 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
         pinds, = np.where((dist >= minval) & (dist <= maxval))
         plt.hist(dist[pinds],bins=nb,normed=True)
         plt.xlim([minval,maxval])
-#        plt.axvline(x=bestvals[i],color='r',linestyle='--')
-#        plt.axvline(x=medval,color='c',linestyle='--')
+        plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
+        plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
         plt.xlabel(varnames[i])
         plt.ylabel(r'$dP$')
         if plotnum == 1:
@@ -302,14 +319,19 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
             out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
             print out.format(bestvals[i], med, mode, interval)
             
-            # do plot
+            # actual value
+            ind, = np.where(np.array(var_init) == np.array(variables)[i])
+            val = p_init[ind]
+        
+             # do plot
             plt.subplot(len(missedi),1,plotnum)
             print "Computing histogram of data"
             pinds, = np.where((dist >= minval) & (dist <= maxval))
             plt.hist(dist[pinds],bins=nb,normed=True)
             plt.xlim([minval,maxval])
-#            plt.axvline(x=bestvals[i],color='r',linestyle='--')
-#            plt.axvline(x=medval,color='c',linestyle='--')
+            plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
+            plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+            plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
             plt.xlabel(varnames[i])
             plt.ylabel(r'$dP$')
             if plotnum == 1:
@@ -336,6 +358,8 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
 #
 #
 #    vals = [[bestvals],[meds],[modes],[onesigs]]
+
+#    ebs.lnprob(bestvals,data,ebpar,fitinfo)
 
     plot_model(bestvals,data,ebpar,fitinfo,data,tag='_fit')
 
@@ -376,7 +400,7 @@ def plot_model(vals,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     variables = fitinfo['variables']
     run_number = int(directory.split('/')[-2])
 
-    parm,vder = ebs.vec_to_params(vals,ebpar)
+    parm,vder = ebs.vec_to_params(vals,ebpar,fitinfo=fitinfo)
     
     vsys = vals[variables == 'vsys'][0]
     ktot = vals[variables == 'ktot'][0]
@@ -449,11 +473,12 @@ def plot_model(vals,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
         for i in range(fitorder+1):
             coeff1 = np.append(coeff1,vals[variables == 'c'+str(i)+'_1'])
 
-    model1  = ebs.compute_eclipse(tprim+t0,parm,integration=ebpar['integration'],
+    # erased tprim+t0
+    model1  = ebs.compute_eclipse(tprim,parm,integration=ebpar['integration'],
                                   fitrvs=False,tref=t0,period=period)
 
-    tcomp1 = np.linspace(np.min(tprim),np.max(tprim),10000)
-    compmodel1  = ebs.compute_eclipse(tcomp1+t0,parm,integration=ebpar['integration'],
+    tcomp1 = np.linspace(np.min(tprim),np.max(tprim),10000) #+t0
+    compmodel1  = ebs.compute_eclipse(tcomp1,parm,integration=ebpar['integration'],
                                   fitrvs=False,tref=t0,period=period)
 
     phicomp1 = tcomp1/period
@@ -473,11 +498,12 @@ def plot_model(vals,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
         for i in range(fitorder+1):
             coeff2 = np.append(coeff2,vals[variables == 'c'+str(i)+'_2'])
 
-    model2  = ebs.compute_eclipse(tsec+t0,parm,integration=ebpar['integration'],
+    # erased tsec+t0
+    model2  = ebs.compute_eclipse(tsec,parm,integration=ebpar['integration'],
                               fitrvs=False,tref=t0,period=period)
-
-    tcomp2 = np.linspace(np.min(tsec),np.max(tsec),10000)
-    compmodel2 = ebs.compute_eclipse(tcomp2+t0,parm,integration=ebpar['integration'],
+    
+    tcomp2 = np.linspace(np.min(tsec),np.max(tsec),10000) # +t0
+    compmodel2 = ebs.compute_eclipse(tcomp2,parm,integration=ebpar['integration'],
                                  fitrvs=False,tref=t0,period=period)
         
     phicomp2 = tcomp2/period
@@ -1191,28 +1217,28 @@ def corner_plot(dist1,dist2,position,val1=False,val2=False,\
 
 def distparams(dist):
 
-    vals = np.linspace(np.min(dist)*0.5,np.max(dist)*1.5,1000)
-    try:
-        kde = gaussian_kde(dist)
-        pdf = kde(vals)
-        dist_c = np.cumsum(pdf)/np.nansum(pdf)
-        func = sp.interpolate.interp1d(dist_c,vals,kind='linear')
-        lo = np.float(func(math.erfc(1./np.sqrt(2))))
-        hi = np.float(func(math.erf(1./np.sqrt(2))))
-        med = np.float(func(0.5))
-        mode = vals[np.argmax(pdf)]
-        disthi = np.linspace(.684,.999,100)
-        distlo = disthi-0.6827
-        disthis = func(disthi)
-        distlos = func(distlo)
-        interval = np.min(disthis-distlos)
-    except:
-        print 'KDE analysis failed! Using "normal" stats.'
-        interval = 2.0*np.std(dist)
-        med = np.median(dist)
-        mode = med
-        lo = med-interval/2.0
-        hi = med+interval/2.0
+#    vals = np.linspace(np.min(dist)*0.5,np.max(dist)*1.5,1000)
+#    try:
+#        kde = gaussian_kde(dist)
+#        pdf = kde(vals)
+#        dist_c = np.cumsum(pdf)/np.nansum(pdf)
+#        func = sp.interpolate.interp1d(dist_c,vals,kind='linear')
+#        lo = np.float(func(math.erfc(1./np.sqrt(2))))
+#        hi = np.float(func(math.erf(1./np.sqrt(2))))
+#        med = np.float(func(0.5))
+#        mode = vals[np.argmax(pdf)]
+#        disthi = np.linspace(.684,.999,100)
+#        distlo = disthi-0.6827
+#        disthis = func(disthi)
+#        distlos = func(distlo)
+#        interval = np.min(disthis-distlos)
+#    except:
+    print 'Using "normal" stats.'
+    interval = 2.0*np.std(dist)
+    med = np.median(dist)
+    mode = med
+    lo = med-interval/2.0
+    hi = med+interval/2.0
     
     return med,mode,np.abs(interval),lo,hi
 

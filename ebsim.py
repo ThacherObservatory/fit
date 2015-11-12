@@ -1,5 +1,6 @@
 # TO DO:
 #-------
+# Debug lnprob
 # Parallelize code and test on bellerophon
 
 
@@ -208,16 +209,16 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
 
     # Create initial ebpar dictionary
     ebpar = {'J':J, 'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
-              'Mratio':massratio, 'LDlin1':u1a, 'LDnon1':u2a, 'LDlin2':u1b, 'LDnon2':u2b,
-              'GD1':0.0, 'Ref1':0.0, 'GD2':0.0, 'Ref2':0.0, 'Rot1':0.0,
-              'ecosw':ecosw0, 'esinw':esinw0, 'Period':period, 't01':bjd, 't02':None, 
-              'et01':0.0, 'et02':0.0, 'dt12':None, 'tdur1':None, 'tdur2':None, 
-              'mag0':10.0,'vsys':vsys, 'Mstar1':m1, 'Mstar2':m2,
-              'ktot':ktot, 'L3':L3,'Period':period, 'ePeriod':0.1,
-              'integration':int,'bjd':bjd,'variables':variables,'ninput':0,
-              'lighttravel':lighttravel,'gravdark':gravdark,
-              'reflection':reflection,'path':path,'limb':limb,
-              'Rstar1':r1, 'Rstar2':r2,'cosi':np.cos(inc)}
+             'Mratio':massratio, 'LDlin1':u1a, 'LDnon1':u2a, 'LDlin2':u1b, 'LDnon2':u2b,
+             'GD1':0.0, 'Ref1':0.0, 'GD2':0.0, 'Ref2':0.0, 'Rot1':0.0,
+             'ecosw':ecosw0, 'esinw':esinw0, 'Period':period, 't01':bjd, 't02':None, 
+             'et01':0.0, 'et02':0.0, 'dt12':None, 'tdur1':None, 'tdur2':None, 
+             'mag0':10.0,'vsys':vsys, 'Mstar1':m1, 'Mstar2':m2,
+             'ktot':ktot, 'L3':L3,'Period':period, 'ePeriod':0.1,
+             'integration':int,'bjd':bjd,'variables':variables,'ninput':0,'p_init':[],
+             'lighttravel':lighttravel,'gravdark':gravdark,
+             'reflection':reflection,'path':path,'limb':limb,
+             'Rstar1':r1, 'Rstar2':r2,'cosi':np.cos(inc)}
               
     #              'GD1':0.32, 'Ref1':0.4, 'GD2':0.32, 'Ref2':0.4, 'Rot1':0.0,
 
@@ -284,7 +285,9 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
 
     ninput = len(p0_init)
     ebpar['ninput'] = ninput
-    
+
+    ebpar['p_init'] = p0_init
+
     parm,vder = vec_to_params(p0_init,ebpar)
 
     # RV sampling
@@ -396,26 +399,26 @@ def ebsim_fit(data,ebpar,fitinfo):
 # Initial chain values
     print ""
     print "Deriving starting values for chains"
-    p0_0  = np.random.uniform(ebpar['J']*0.999,ebpar['J']*1.001,nw)             # surface brightness
-    p0_1  = np.random.uniform(ebpar['Rsum_a']*0.999,ebpar['Rsum_a']*1.001, nw)    # fractional radius
-    p0_2  = np.random.uniform(ebpar['Rratio']*0.999,ebpar['Rratio']*1.001, nw)    # radius ratio
+    p0_0  = np.random.uniform(ebpar['J']*0.9999,ebpar['J']*1.0001,nw)             # surface brightness
+    p0_1  = np.random.uniform(ebpar['Rsum_a']*0.9999,ebpar['Rsum_a']*1.0001, nw)    # fractional radius
+    p0_2  = np.random.uniform(ebpar['Rratio']*0.9999,ebpar['Rratio']*1.0001, nw)    # radius ratio
 #    p0_3  = np.random.uniform(0,ebpar['Rsum_a'], nw)                          # cos i
     if ebpar['cosi'] == 0:
-        p0_3 = np.random.uniform(-.0001,.0001)
+        p0_3 = np.random.uniform(-.00001,.00001)
     else:
-        p0_3  = np.random.uniform(ebpar['cosi']*0.999,ebpar['cosi']*1.001, nw)     # cos i
+        p0_3  = np.random.uniform(ebpar['cosi']*0.9999,ebpar['cosi']*1.0001, nw)     # cos i
     #p0_4  = np.random.uniform(0,0.01, nw)                                      # ecosw
-    p0_4  = np.random.uniform(-.001,.001, nw)
+    p0_4  = np.random.uniform(-.00001,.00001, nw)
     #p0_5  = np.random.uniform(0,0.01, nw)                                      # esinw
-    p0_5  = np.random.uniform(-.001,.001, nw)
+    p0_5  = np.random.uniform(-.00001,.00001, nw)
     p0_6  = np.random.normal(ebpar['mag0'],0.1, nw)                          # mag zpt
     #p0_7  = np.random.normal(ebpar['t01']-bjd,onesec,nw)                     # ephemeris
     if ebpar['t01']-bjd == 0:
         p0_7 = np.random.normal(0,onesec,nw)
     else:
-        p0_7  = np.random.uniform((ebpar['t01']-bjd)*0.999,(ebpar['t01']-bjd)*1.001,nw)      
+        p0_7  = np.random.uniform((ebpar['t01']-bjd)*0.9999,(ebpar['t01']-bjd)*1.0001,nw)      
     #p0_8  = np.random.normal(ebpar['Period'],onesec,nw)                       # Period
-    p0_8  = np.random.uniform(ebpar['Period']*0.999,ebpar['Period']*1.001,nw)
+    p0_8  = np.random.uniform(ebpar['Period']*0.9999,ebpar['Period']*1.0001,nw)
     """
     p0_9  = np.random.uniform(0,1,nw)                                         # Limb darkening q1a
     p0_10 = np.random.uniform(0,1,nw)                                         # Limb darkening q2a
@@ -430,7 +433,7 @@ def ebsim_fit(data,ebpar,fitinfo):
     p0_12 = np.random.uniform(q2b*.999,q2b*1.001,nw)
 
     #p0_13 = np.abs(np.random.normal(ebpar['Mratio']*0.999,0.01,nw))                 # Mass ratio
-    p0_13 = np.abs(np.random.uniform(ebpar['Mratio']*0.999,ebpar['Mratio']*1.001,nw))
+    p0_13 = np.abs(np.random.uniform(ebpar['Mratio']*0.9999,ebpar['Mratio']*1.0001,nw))
     p0_14 = np.random.uniform(0,0.1,nw)                                       # Third Light
     
     p0_15 = np.random.normal(ebpar['Rot1'],0.001,nw)                         # Star 1 rotation
@@ -589,7 +592,6 @@ def ebsim_fit(data,ebpar,fitinfo):
     np.savetxt(directory+'burnstats.txt',burn)
 
     # Reset sampler and run MCMC for reals
-    print "getting pdfs for LD coefficients"
     print "... resetting sampler and running MCMC with "+str(fitinfo['mcmcsteps'])+" steps"
     sampler.reset()
     posf, probf, statef = sampler.run_mcmc(pos, fitinfo['mcmcsteps'])
@@ -677,21 +679,42 @@ def vec_to_params(x,ebpar,fitinfo=None):
     
     if fitinfo != None:
         variables = fitinfo['variables']
+        if len(variables) != len(x):
+            print 'Length of variables not equal to length of input vector'
     else:
         print 'vec_to_params: Using default values from ebpar'
         variables = None
 
     parm = np.zeros(eb.NPAR, dtype=np.double)
     # These are the basic parameters of the model.
-    parm[eb.PAR_J]      =  x[0]  # J surface brightness ratio
-    parm[eb.PAR_RASUM]  =  x[1]  # (R_1+R_2)/a
-    parm[eb.PAR_RR]     =  x[2]  # R_2/R_1
-    parm[eb.PAR_COSI]   =  x[3]  # cos i
-
+    try:
+        parm[eb.PAR_J]      =  x[variables == 'J'][0]  # J surface brightness ratio
+    except:
+        parm[eb.PAR_J]      =  ebpar['J']
+    try:
+        parm[eb.PAR_RASUM]  =  x[variables == 'Rsum'][0] # (R_1+R_2)/a
+    except:
+        parm[eb.PAR_RASUM]  = ebpar['Rsum']
+        
+    try:
+        parm[eb.PAR_RR]     = x[variables == 'Rratio'][0]   # R_2/R_1
+    except:
+        parm[eb.PAR_RR]     = ebpar['Rratio']
+    try:
+        parm[eb.PAR_COSI]   =  x[variables == 'cosi'][0]  # cos i
+    except:
+        parm[eb.PAR_COSI]   = ebpar['cosi']
+        
     # Orbital parameters.
-    parm[eb.PAR_ECOSW]  =  x[4]   # ecosw
-    parm[eb.PAR_ESINW]  =  x[5]   # esinw
-
+    try:
+        parm[eb.PAR_ECOSW]  = x[variables == 'ecosw'][0]    # ecosw
+    except:
+        parm[eb.PAR_ECOSW]  = ebpar['ecosw']
+    try:
+        parm[eb.PAR_ESINW]  = x[variables == 'esinw'][0]    # esinw
+    except:
+        parm[eb.PAR_ESINW]  = ebpar['esinw']
+        
     # Period
     try:
         parm[eb.PAR_P] = x[variables == 'period'][0]
@@ -837,7 +860,6 @@ def vec_to_params(x,ebpar,fitinfo=None):
 #    for name, value, unit in zip(eb.dernames, vder, eb.derunits):
 #        print "{0:<10} {1:14.6f} {2}".format(name, value, unit)
 
-
     return parm, vder
 
 
@@ -929,7 +951,6 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
 
 
 
-
 def lnprob(x,data,ebpar,fitinfo):
 
     """
@@ -942,6 +963,7 @@ def lnprob(x,data,ebpar,fitinfo):
     curve is compared to model. 
 
     """
+
     parm,vder = vec_to_params(x,ebpar,fitinfo=fitinfo)
 
     vsys = x[-1]
@@ -1112,10 +1134,6 @@ def lnprob(x,data,ebpar,fitinfo):
         plt.subplot(2, 2, 2)
         plt.plot(tsec,xsec,'ko')
         plt.plot(tsec,msec,'r-')
-#        chi2 = -1*lf2
-#        plt.annotate(r'$\chi^2$ = %.0f' % chi2, [0.1,0.1],horizontalalignment='left',
-#                     xycoords='axes fraction',fontsize='large')
-
 
         plt.subplot(2, 1, 2)
         phi1 = foldtime(rvdata1[0,:]-ebpar['bjd'],t0=t0,period=period)/period
@@ -1127,7 +1145,7 @@ def lnprob(x,data,ebpar,fitinfo):
         k1 = k2*massratio
         rvcomp1 = rvmodel1*k1 + vsys
         plt.plot(np.linspace(-0.5,0.5,10000),rvcomp1,'k--')
-        plt.annotate(r'$\chi^2$ = %.0f' % -lfrv, [0.05,0.85],horizontalalignment='left',
+        plt.annotate(r'$\chi^2$ = %.2f' % -lfrv, [0.05,0.85],horizontalalignment='left',
                      xycoords='axes fraction',fontsize='large')
   
         phi2 = foldtime(rvdata2[0,:]-ebpar['bjd'],t0=t0,period=period)/period
