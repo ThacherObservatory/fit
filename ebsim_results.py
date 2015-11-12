@@ -652,7 +652,7 @@ def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     plt.clf()
     plt.subplot(2, 2, 1)
     plt.plot(phiprim,(xprim-mprim)*100,'ko')
-    plt.axhline(y=0,linestyle='r-')
+    plt.axhline(y=0,color='r',linestyle='-')
     plt.axvline(x=ps-1.0,color='b',linestyle='--')
     plt.axvline(x=pe,color='b',linestyle='--')
     plt.ylabel('Residual Flux (percent)')
@@ -667,7 +667,7 @@ def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     # Secondary eclipse
     plt.subplot(2, 2, 2)
     plt.plot(phisec,(xsec-msec)*100,'ko')
-    plt.axhline(y=0,linestyle='r-')
+    plt.axhline(y=0,color='r',linestyle='-')
     plt.axvline(x=ss,color='b',linestyle='--')
     plt.axvline(x=se,color='b',linestyle='--')
     plt.xlabel('Phase')
@@ -680,6 +680,7 @@ def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
                  xycoords='axes fraction',fontsize='large')
   
     plt.plot(phi2,rvdata2[1,:]-rv2,'ro')
+    plt.axhline(y=0,color='k',linestyle='--')
     plt.xlim(-0.5,0.5)
     plt.ylabel('RV Residuals (km/s)')
     plt.xlabel('Phase')
