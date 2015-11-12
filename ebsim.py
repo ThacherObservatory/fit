@@ -694,7 +694,7 @@ def vec_to_params(x,ebpar,fitinfo=None):
     try:
         parm[eb.PAR_RASUM]  =  x[variables == 'Rsum'][0] # (R_1+R_2)/a
     except:
-        parm[eb.PAR_RASUM]  = ebpar['Rsum']
+        parm[eb.PAR_RASUM]  = ebpar['Rsum_a']
         
     try:
         parm[eb.PAR_RR]     = x[variables == 'Rratio'][0]   # R_2/R_1
