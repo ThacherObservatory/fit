@@ -191,7 +191,11 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
         plt.subplot(len(priminds),1,plotnum)
         print "Computing histogram of data"
         pinds, = np.where((dist >= minval) & (dist <= maxval))
-        plt.hist(dist[pinds],bins=nb,normed=True)
+        try:
+            plt.hist(dist[pinds],bins=nb,normed=True)
+        except:
+            plt.hist(dist,bins=nb,normed=True)
+            
         #    plt.xlim([minval,maxval])
         plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
         plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
@@ -252,7 +256,10 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
         plt.subplot(len(secinds),1,plotnum)
         print "Computing histogram of data"
         pinds, = np.where((dist >= minval) & (dist <= maxval))
-        plt.hist(dist[pinds],bins=nb,normed=True)
+        try:
+            plt.hist(dist[pinds],bins=nb,normed=True)
+        except:
+            plt.hist(dist,bins=nb,normed=True)
         plt.xlim([minval,maxval])
         plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
         plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
@@ -327,7 +334,10 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
             plt.subplot(len(missedi),1,plotnum)
             print "Computing histogram of data"
             pinds, = np.where((dist >= minval) & (dist <= maxval))
-            plt.hist(dist[pinds],bins=nb,normed=True)
+            try:
+                plt.hist(dist[pinds],bins=nb,normed=True)
+            except:
+                plt.hist(dist,bins=nb,normed=True)
             plt.xlim([minval,maxval])
             plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
             plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
