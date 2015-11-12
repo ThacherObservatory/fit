@@ -1045,7 +1045,7 @@ def params_of_interest(seq_num,chains=False,lp=False,network=None):
 
 
 
-def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=5.0,network=None):
+def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0,network=None):
     import matplotlib.gridspec as gridspec
 
     tmaster = time.time()
