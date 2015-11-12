@@ -16,9 +16,6 @@ import ebsim as ebs
 from done_in import done_in
 
 
-def analyze_all(network=None,thin=10,full=False):
-    pass
-
 def analyze_run(run,network=None,thin=10,full=False):
 
     chains,lp = get_chains(run,network=network)
