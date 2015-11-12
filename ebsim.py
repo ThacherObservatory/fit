@@ -951,7 +951,7 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
 
 
 
-def lnprob(x,data,ebpar,fitinfo):
+def lnprob(x,data,ebpar,fitinfo,debug=False):
 
     """
     ----------------------------------------------------------------------
@@ -966,11 +966,16 @@ def lnprob(x,data,ebpar,fitinfo):
 
     parm,vder = vec_to_params(x,ebpar,fitinfo=fitinfo)
 
-    vsys = x[-1]
-    ktot = x[-2]
-
     variables = fitinfo['variables']
-    
+
+    try:
+        vsys = x[variables == 'vsys'][0]
+        ktot = x[variables == 'ktot'][0]
+    except:
+        vsys = x[-1]
+        ktot = x[-2]
+
+        
     if fitinfo['claret']:
         T1,logg1,T2,logg2 = get_teffs_loggs(parm,vsys,ktot)
 
@@ -999,14 +1004,9 @@ def lnprob(x,data,ebpar,fitinfo):
         parm[eb.PAR_LDNON1] = u2a  # u2 star 1
         parm[eb.PAR_LDLIN2] = u1b  # u1 star 2
         parm[eb.PAR_LDNON2] = u2b  # u2 star 2
-      
-#        u1a = x[variables == 'u1a']
-#        u2a = 0
-#        u1b = x[variables == 'u1b']
-#        u2b = 0
     else:
-        q1a = 0.5 ; q2a = 0.5 ; q1b = 0.5 ; q2b = 0.5
-#        u1a = 0 ; u2a = 0 ; u1b = 0 ; u2b = 0
+        q1a,q2a = utoq(ebpar['LDlin1'],epbar['LDnon1'],limb=ebpar['limb'])
+        q1b,q2b = utoq(ebpar['LDlin2'],epbar['LDnon2'],limb=ebpar['limb'])
         
     # Exclude conditions that give unphysical limb darkening parameters
     if q1b > 1 or q1b < 0 or q2b > 1 or q2b < 0 or np.isnan(q1b) or np.isnan(q2b):
@@ -1021,6 +1021,10 @@ def lnprob(x,data,ebpar,fitinfo):
         if parm[eb.PAR_L3] > 1 or parm[eb.PAR_L3] < 0:
             return -np.inf
 
+    # No gravitational lensing or other exotic effects allowed.
+    if parm[eb.PAR_J] < 0:
+        return -np.inf
+    
     # Need to understand exactly what this parameter is!!
     if fitinfo['fit_ooe1']:
         if parm[eb.PAR_FSPOT1] < 0 or parm[eb.PAR_FSPOT1] > 1:
@@ -1096,7 +1100,6 @@ def lnprob(x,data,ebpar,fitinfo):
         lfrv = lfrv1 + lfrv2
         lf  += lfrv
 
-    debug = False
     if debug:
         print "Model parameters:"
         for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
