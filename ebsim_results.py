@@ -15,6 +15,7 @@ import run_ebsim as reb
 import ebsim as ebs
 from done_in import done_in
 
+
 def analyze_run(run,network=None,thin=10,full=False):
 
     chains,lp = get_chains(run,network=network)
@@ -103,6 +104,9 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
     nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
 
     variables = fitinfo['variables']
+
+    var_init = ebpar['variables']
+    p_init = ebpar['p_init']
     
     # Use supplied chains or read from disk
     if not np.shape(chains):
@@ -134,9 +138,12 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
     maxlike = np.max(lp)
     imax = np.array([i for i, j in enumerate(lp) if j == maxlike])
     if imax.size > 1:
+        print 'Multiple maximum likelihood values!'
         imax = imax[0]
     for i in np.arange(len(variables)):
         bestvals[i] = chains[imax,i]
+
+    print 'Maximum likelihood = '+str(maxlike)
         
     if thin:
         print "Thinning chains by a factor of "+str(thin)
@@ -176,15 +183,24 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
         out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
         print out.format(bestvals[i], med, mode, interval)
         
+        # actual value
+        ind, = np.where(np.array(var_init) == np.array(variables)[i])
+        val = p_init[ind]
+        
         # do plot
         plotnum += 1
         plt.subplot(len(priminds),1,plotnum)
         print "Computing histogram of data"
         pinds, = np.where((dist >= minval) & (dist <= maxval))
-        plt.hist(dist[pinds],bins=nb,normed=True)
+        try:
+            plt.hist(dist[pinds],bins=nb,normed=True)
+        except:
+            plt.hist(dist,bins=nb,normed=True)
+            
         #    plt.xlim([minval,maxval])
-#        plt.axvline(x=bestvals[i],color='r',linestyle='--')
-#        plt.axvline(x=medval,color='c',linestyle='--')
+        plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
+        plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
         plt.xlabel(varnames[i])
         plt.ylabel(r'$dP$')
         if plotnum == 1:
@@ -231,15 +247,24 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
         out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
         print out.format(bestvals[i], med, mode, interval)
         
+        # actual value
+        ind, = np.where(np.array(var_init) == np.array(variables)[i])
+        
+        val = p_init[ind]
+        
         # do plot
         plotnum += 1
         plt.subplot(len(secinds),1,plotnum)
         print "Computing histogram of data"
         pinds, = np.where((dist >= minval) & (dist <= maxval))
-        plt.hist(dist[pinds],bins=nb,normed=True)
+        try:
+            plt.hist(dist[pinds],bins=nb,normed=True)
+        except:
+            plt.hist(dist,bins=nb,normed=True)
         plt.xlim([minval,maxval])
-#        plt.axvline(x=bestvals[i],color='r',linestyle='--')
-#        plt.axvline(x=medval,color='c',linestyle='--')
+        plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
+        plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
         plt.xlabel(varnames[i])
         plt.ylabel(r'$dP$')
         if plotnum == 1:
@@ -302,14 +327,22 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
             out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
             print out.format(bestvals[i], med, mode, interval)
             
-            # do plot
+            # actual value
+            ind, = np.where(np.array(var_init) == np.array(variables)[i])
+            val = p_init[ind]
+        
+             # do plot
             plt.subplot(len(missedi),1,plotnum)
             print "Computing histogram of data"
             pinds, = np.where((dist >= minval) & (dist <= maxval))
-            plt.hist(dist[pinds],bins=nb,normed=True)
+            try:
+                plt.hist(dist[pinds],bins=nb,normed=True)
+            except:
+                plt.hist(dist,bins=nb,normed=True)
             plt.xlim([minval,maxval])
-#            plt.axvline(x=bestvals[i],color='r',linestyle='--')
-#            plt.axvline(x=medval,color='c',linestyle='--')
+            plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
+            plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+            plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
             plt.xlabel(varnames[i])
             plt.ylabel(r'$dP$')
             if plotnum == 1:
@@ -337,7 +370,9 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
 #
 #    vals = [[bestvals],[meds],[modes],[onesigs]]
 
-    plot_model(bestvals,data,ebpar,fitinfo,data,tag='_fit')
+#    ebs.lnprob(bestvals,data,ebpar,fitinfo,debug=True)
+    
+    plot_model(bestvals,data,ebpar,fitinfo,data,tag='_fit',network=network)
 
     f = open(path+'fitparams.txt','w')
     for i in np.arange(len(variables)):
@@ -357,8 +392,8 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
 
 
 
-def plot_model(vals,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
-               errorbars=False,durfac=5,enum=1,tag=''):
+def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
+               errorbars=False,durfac=5,enum=1,tag='',network=None):
 
     """
     ----------------------------------------------------------------------
@@ -371,16 +406,296 @@ def plot_model(vals,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     plot_params(fontsize=10,linewidth=1.2)
 
     # Check for output directory   
-    directory = ebpar['path']
-    variables = fitinfo['variables']
-    run_number = int(directory.split('/')[-2])
-
-    parm,vder = ebs.vec_to_params(vals,ebpar)
+    path = ebpar['path']
+    run_num = int(path.split('/')[-2])
+    directory = reb.get_path(network=network)+str(run_num)+'/'
     
-    vsys = vals[variables == 'vsys'][0]
-    ktot = vals[variables == 'ktot'][0]
+    variables = fitinfo['variables']
+
+    parm,vder = ebs.vec_to_params(x,ebpar,fitinfo=fitinfo)
+
+    # Phases of contact points
+    (ps, pe, ss, se) = eb.phicont(parm)
+
+    vsys = x[variables == 'vsys'][0]
+    ktot = x[variables == 'ktot'][0]
 
     massratio = parm[eb.PAR_Q]
+
+
+    if fitinfo['claret']:
+        T1,logg1,T2,logg2 = get_teffs_loggs(parm,vsys,ktot)
+
+        u1a = ldc1func(T1,logg1)[0][0]
+        u2a = ldc2func(T1,logg1)[0][0]
+        
+        u1b = ldc1func(T2,logg2)[0][0]
+        u2b = ldc2func(T2,logg2)[0][0]
+        
+        q1a,q2a = ebs.utoq(u1a,u2a,limb=limb)        
+        q1b,q2b = ebs.utoq(u1b,u2b,limb=limb)
+        
+        parm[eb.PAR_LDLIN1] = u1a  # u1 star 1
+        parm[eb.PAR_LDNON1] = u2a  # u2 star 1
+        parm[eb.PAR_LDLIN2] = u1b  # u1 star 2
+        parm[eb.PAR_LDNON2] = u2b  # u2 star 2
+
+    elif fitinfo['fit_limb']:
+        q1a = x[variables == 'q1a'][0]  
+        q2a = x[variables == 'q2a'][0]  
+        q1b = x[variables == 'q1b'][0]  
+        q2b = x[variables == 'q2b'][0]  
+        u1a,u2a = ebs.qtou(q1a,q2a,limb=ebpar['limb'])        
+        u1b,u2b = ebs.qtou(q1b,q2b,limb=ebpar['limb'])
+        parm[eb.PAR_LDLIN1] = u1a  # u1 star 1
+        parm[eb.PAR_LDNON1] = u2a  # u2 star 1
+        parm[eb.PAR_LDLIN2] = u1b  # u1 star 2
+        parm[eb.PAR_LDNON2] = u2b  # u2 star 2
+    else:
+        q1a,q2a = ebs.utoq(ebpar['LDlin1'],epbar['LDnon1'],limb=ebpar['limb'])
+        q1b,q2b = ebs.utoq(ebpar['LDlin2'],epbar['LDnon2'],limb=ebpar['limb'])
+
+
+    # Need to understand exactly what this parameter is!!
+    if fitinfo['fit_ooe1']:
+        if parm[eb.PAR_FSPOT1] < 0 or parm[eb.PAR_FSPOT1] > 1:
+            return -np.inf
+        coeff1 = []
+        for i in range(fitorder+1):
+            coeff1 = np.append(coeff1,x[variables == 'c'+str(i)+'_1'])
+        
+### Compute eclipse model for given input parameters ###
+    massratio = parm[eb.PAR_Q]
+    if massratio < 0 or massratio > 10:
+        return -np.inf
+
+    if not fitinfo['fit_ellipsoidal']:
+        parm[eb.PAR_Q] = 0.0
+
+    # Primary eclipse
+    t0 = parm[eb.PAR_T0]
+    
+    period = parm[eb.PAR_P]
+    time   = data['light'][0,:]-ebpar['bjd']
+    flux   = data['light'][1,:]
+    eflux  = data['light'][2,:]
+
+    sm  = ebs.compute_eclipse(time,parm,integration=ebpar['integration'],fitrvs=False,tref=t0,period=period)
+
+    tfold = ebs.foldtime(time,t0=t0,period=period)
+    keep, = np.where((tfold >= -0.2) & (tfold <=0.2))
+    inds = np.argsort(tfold[keep])
+    tprim = tfold[keep][inds]
+    xprim = flux[keep][inds]
+    mprim = sm[keep][inds]
+
+    tcomp1 = np.linspace(np.min(tprim),np.max(tprim),10000)
+    lcomp1  = ebs.compute_eclipse(tcomp1,parm,integration=ebpar['integration'],fitrvs=False,
+                              tref=t0,period=period)
+    
+    tfold_pos = ebs.foldtime_pos(time,t0=t0,period=period)
+    ph_pos = tfold_pos/period
+    keep, = np.where((ph_pos >= 0.3) & (ph_pos <=0.7))
+    inds = np.argsort(tfold_pos[keep])
+    tsec = tfold_pos[keep][inds]
+    xsec = flux[keep][inds]
+    msec = sm[keep][inds]
+
+    tcomp2 = np.linspace(np.min(tsec),np.max(tsec),10000)
+    lcomp2  = ebs.compute_eclipse(tcomp2,parm,integration=ebpar['integration'],fitrvs=False,
+                              tref=t0,period=period)
+
+
+    # Log Likelihood Vector
+    lfi = -1.0*(sm - flux)**2/(2.0*eflux**2)
+
+    # Log likelihood
+    lf1 = np.sum(lfi)
+
+    lf = lf1
+
+    # need this for the RVs!
+    parm[eb.PAR_Q] = massratio
+
+    rvdata1 = data['rv1']
+    rvdata2 = data['rv2']
+
+    if fitinfo['fit_rvs']:
+        if (vsys > max(np.max(rvdata1[1,:]),np.max(rvdata2[1,:]))) or \
+           (vsys < min(np.min(rvdata1[1,:]),np.min(rvdata2[1,:]))): 
+            return -np.inf
+        rvmodel1 = ebs.compute_eclipse(rvdata1[0,:]-ebpar['bjd'],parm,fitrvs=True)
+        k2 = ktot/(1+massratio)
+        k1 = k2*massratio
+        rv1 = rvmodel1*k1 + vsys
+        rvmodel2 = ebs.compute_eclipse(rvdata2[0,:]-ebpar['bjd'],parm,fitrvs=True)
+        rv2 = -1.0*rvmodel2*k2 + vsys
+        lfrv1 = -np.sum((rv1 - rvdata1[1,:])**2/(2.0*rvdata1[2,:]))
+        lfrv2 = -np.sum((rv2 - rvdata2[1,:])**2/(2.0*rvdata2[2,:]))
+        lfrv = lfrv1 + lfrv2
+        lf  += lfrv
+
+    print "Model parameters:"
+    for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
+        print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+
+    vder = eb.getvder(parm, vsys, ktot)
+    print "Derived parameters:"
+    for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
+        print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+
+
+    ################################################
+    # Plotting
+
+    # Primary eclipse
+    fig = plt.figure(109,dpi=300)
+    plt.clf()
+    plt.subplot(2, 2, 1)
+    phiprim = tprim/period
+    phicomp1 = tcomp1/period
+    plt.plot(phiprim,xprim,'ko')
+#    plt.plot(phiprim,mprim,'gx')
+    plt.plot(phicomp1,lcomp1,'r-')
+
+    plt.axvline(x=ps-1.0,color='b',linestyle='--')
+    plt.axvline(x=pe,color='b',linestyle='--')
+    ymax = np.max(np.array(list(xprim)+list(mprim)))
+    ymin = np.min(np.array(list(xprim)+list(mprim)))
+    ytop = ymax + (ymax-ymin)*0.1
+    ybot = ymin - (ymax-ymin)*0.1
+    plt.ylim(ybot,ytop)
+    plt.ylabel('Flux (normalized)')
+    plt.xlabel('Phase')
+    plt.title('Primary Eclipse',fontsize=12)
+
+#    chi1 = -1*lf1
+#    plt.annotate(r'$\chi^2$ = %.0f' % chi1, [0.05,0.87],
+#                 horizontalalignment='left',xycoords='axes fraction',fontsize='large')
+
+
+    # Secondary eclipse
+    phisec = tsec/period
+    phicomp2 = tcomp2/period
+    plt.subplot(2, 2, 2)
+    plt.plot(phisec,xsec,'ko')
+#    plt.plot(phisec,msec,'gx')
+    plt.plot(phicomp2,lcomp2,'r-')
+    plt.axvline(x=ss,color='b',linestyle='--')
+    plt.axvline(x=se,color='b',linestyle='--')
+    ymax = np.max(np.array(list(xsec)+list(msec)))
+    ymin = np.min(np.array(list(xsec)+list(msec)))
+    ytop = ymax + (ymax-ymin)*0.1
+    ybot = ymin - (ymax-ymin)*0.1
+    plt.ylim(ybot,ytop)
+    plt.xlabel('Phase')
+    plt.title('Secondary Eclipse',fontsize=12)
+
+    plt.subplot(2, 1, 2)
+    phi1 = ebs.foldtime(rvdata1[0,:]-ebpar['bjd'],t0=t0,period=period)/period
+    plt.plot(phi1,rvdata1[1,:],'ko')
+#    plt.plot(phi1,rv1,'gx')
+    tcomp = np.linspace(-0.5,0.5,10000)*period+t0
+    rvmodel1 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
+    k2 = ktot/(1+massratio)
+    k1 = k2*massratio
+    rvcomp1 = rvmodel1*k1 + vsys
+    plt.plot(np.linspace(-0.5,0.5,10000),rvcomp1,'b-')
+
+    #plt.annotate(r'$\chi^2$ = %.2f' % -lfrv, [0.05,0.85],horizontalalignment='left',
+    #             xycoords='axes fraction',fontsize='large')
+  
+    phi2 = ebs.foldtime(rvdata2[0,:]-ebpar['bjd'],t0=t0,period=period)/period
+    plt.plot(phi2,rvdata2[1,:],'ro')
+#    plt.plot(phi2,rv2,'gx')
+    tcomp = np.linspace(-0.5,0.5,10000)*period+t0
+    rvmodel2 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
+    rvcomp2 = -1.0*rvmodel2*k2 + vsys
+    plt.plot(np.linspace(-0.5,0.5,10000),rvcomp2,'c-')
+    plt.xlim(-0.5,0.5)
+    plt.ylabel('Radial Velocity (km/s)')
+    plt.xlabel('Phase')
+
+    plt.suptitle('Fitting Results for Run ' + str(run_num))
+
+    plt.savefig(directory+'MCMCfit.png',dpi=300)
+
+    # Limb Darkening
+    gamma = np.linspace(0,np.pi/2.0,1000,endpoint=True)
+    theta = gamma*180.0/np.pi
+    mu = np.cos(gamma)
+    Imu1 = 1.0 - u1a*(1.0 - mu) - u2a*(1.0 - mu)**2.0
+    Imu2 = 1.0 - u1b*(1.0 - mu) - u2b*(1.0 - mu)**2.0
+
+    
+    fig = plt.figure(110,dpi=300)
+    plt.clf()
+    label1 = '%.2f, ' % u1a + '%.2f' % u2a +' (Primary)'
+    label2 = '%.2f, ' % u1b + '%.2f' % u2b +' (Secondary)'
+    plt.plot(theta,Imu1,label=label1)
+    plt.plot(theta,Imu2,label=label2)
+    plt.ylim([0,1.0])
+    plt.xlabel(r"$\theta$ (degrees)",fontsize=18)
+    plt.ylabel(r"$I(\theta)/I(0)$",fontsize=18)
+    plt.title('Limb Darkening')
+    
+    plt.legend()
+    plt.savefig(directory+'Limbfit.png',dpi=300)
+
+
+    ################################################
+    # Residuals
+
+    # Primary eclipse
+    fig = plt.figure(111,dpi=300)
+    plt.clf()
+    plt.subplot(2, 2, 1)
+    plt.plot(phiprim,(xprim-mprim)*100,'ko')
+    plt.axhline(y=0,color='r',linestyle='-')
+    plt.axvline(x=ps-1.0,color='b',linestyle='--')
+    plt.axvline(x=pe,color='b',linestyle='--')
+    plt.ylabel('Residual Flux (percent)')
+    plt.xlabel('Phase')
+    plt.title('Primary Eclipse',fontsize=12)
+
+    chi1 = -1*lf1
+    plt.annotate(r'$\chi^2$ = %.0f' % chi1, [0.05,0.87],
+                 horizontalalignment='left',xycoords='axes fraction',fontsize='large')
+
+
+    # Secondary eclipse
+    plt.subplot(2, 2, 2)
+    plt.plot(phisec,(xsec-msec)*100,'ko')
+    plt.axhline(y=0,color='r',linestyle='-')
+    plt.axvline(x=ss,color='b',linestyle='--')
+    plt.axvline(x=se,color='b',linestyle='--')
+    plt.xlabel('Phase')
+    plt.title('Secondary Eclipse',fontsize=12)
+
+    plt.subplot(2, 1, 2)
+    plt.plot(phi1,rvdata1[1,:]-rv1,'ko')
+
+    plt.annotate(r'$\chi^2$ = %.2f' % -lfrv, [0.05,0.85],horizontalalignment='left',
+                 xycoords='axes fraction',fontsize='large')
+  
+    plt.plot(phi2,rvdata2[1,:]-rv2,'ro')
+    plt.axhline(y=0,color='k',linestyle='--')
+    plt.xlim(-0.5,0.5)
+    plt.ylabel('RV Residuals (km/s)')
+    plt.xlabel('Phase')
+
+    plt.suptitle('Fitting Residuals for Run ' + str(run_num))
+
+    plt.savefig(directory+'MCMCres.png',dpi=300)
+
+    return
+
+
+
+
+
+
+def old_crap():
 
     if fitinfo['claret']:
         T1,logg1,T2,logg2 = get_teffs_loggs(parm,vsys,ktot)
@@ -391,8 +706,8 @@ def plot_model(vals,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
         u1b = ldc1func(T2,logg2)[0][0]
         u2b = ldc2func(T2,logg2)[0][0]
         
-        q1a,q2a = utoq(u1a,u2a,limb=limb)        
-        q1b,q2b = utoq(u1b,u2b,limb=limb)
+        q1a,q2a = ebs.utoq(u1a,u2a,limb=limb)        
+        q1b,q2b = ebs.utoq(u1b,u2b,limb=limb)
         
         parm[eb.PAR_LDLIN1] = u1a  # u1 star 1
         parm[eb.PAR_LDNON1] = u2a  # u2 star 1
@@ -400,14 +715,12 @@ def plot_model(vals,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
         parm[eb.PAR_LDNON2] = u2b  # u2 star 2
 
     elif fitinfo['fit_limb']:
-        q1a = vals[variables == 'q1a'][0]  
-        q2a = vals[variables == 'q2a'][0]  
-        q1b = vals[variables == 'q1b'][0]  
-        q2b = vals[variables == 'q2b'][0]  
-#        u1a = vals[variables == 'u1a'][0]  
-#        u2a = 0
-#        u1b = vals[variables == 'u1b'][0]  
-#        u2b = 0
+        q1a = x[variables == 'q1a'][0]  
+        q2a = x[variables == 'q2a'][0]  
+        q1b = x[variables == 'q1b'][0]  
+        q2b = x[variables == 'q2b'][0]  
+    else:
+        pass
 
     print "Model parameters:"
     for vname, value, unit in zip(eb.parnames, parm, eb.parunits):
@@ -446,13 +759,14 @@ def plot_model(vals,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     if fitinfo['fit_ooe1']:
         coeff1 = []
         for i in range(fitorder+1):
-            coeff1 = np.append(coeff1,vals[variables == 'c'+str(i)+'_1'])
+            coeff1 = np.append(coeff1,x[variables == 'c'+str(i)+'_1'])
 
-    model1  = ebs.compute_eclipse(tprim+t0,parm,integration=ebpar['integration'],
+    # erased tprim+t0
+    model1  = ebs.compute_eclipse(tprim,parm,integration=ebpar['integration'],
                                   fitrvs=False,tref=t0,period=period)
 
-    tcomp1 = np.linspace(np.min(tprim),np.max(tprim),10000)
-    compmodel1  = ebs.compute_eclipse(tcomp1+t0,parm,integration=ebpar['integration'],
+    tcomp1 = np.linspace(np.min(tprim),np.max(tprim),10000) #+t0
+    compmodel1  = ebs.compute_eclipse(tcomp1,parm,integration=ebpar['integration'],
                                   fitrvs=False,tref=t0,period=period)
 
     phicomp1 = tcomp1/period
@@ -470,13 +784,14 @@ def plot_model(vals,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     if fitinfo['fit_ooe1']:
         coeff2 = []
         for i in range(fitorder+1):
-            coeff2 = np.append(coeff2,vals[variables == 'c'+str(i)+'_2'])
+            coeff2 = np.append(coeff2,x[variables == 'c'+str(i)+'_2'])
 
-    model2  = ebs.compute_eclipse(tsec+t0,parm,integration=ebpar['integration'],
+    # erased tsec+t0
+    model2  = ebs.compute_eclipse(tsec,parm,integration=ebpar['integration'],
                               fitrvs=False,tref=t0,period=period)
-
-    tcomp2 = np.linspace(np.min(tsec),np.max(tsec),10000)
-    compmodel2 = ebs.compute_eclipse(tcomp2+t0,parm,integration=ebpar['integration'],
+    
+    tcomp2 = np.linspace(np.min(tsec),np.max(tsec),10000) # +t0
+    compmodel2 = ebs.compute_eclipse(tcomp2,parm,integration=ebpar['integration'],
                                  fitrvs=False,tref=t0,period=period)
         
     phicomp2 = tcomp2/period
@@ -568,10 +883,11 @@ def plot_model(vals,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
 def params_of_interest(seq_num,chains=False,lp=False,network=None):
 
     path = reb.get_path(network=network)+str(seq_num)+'/'
-    
     ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
     data    = pickle.load( open( path+'data.p', 'rb' ) )
     fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
+    
+    run_num = seq_num
     
     nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
 
@@ -598,7 +914,6 @@ def params_of_interest(seq_num,chains=False,lp=False,network=None):
             print 'lnprob.txt does not exist. Exiting'
             return
 
-    path = ebpar['path']
     variables = fitinfo['variables']
     
     print "Deriving values for parameters of interest"
@@ -727,7 +1042,7 @@ def params_of_interest(seq_num,chains=False,lp=False,network=None):
 
 
 
-def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=3.0,network=None):
+def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0,network=None):
     import matplotlib.gridspec as gridspec
 
     tmaster = time.time()
@@ -737,10 +1052,12 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=3.0
     bindiv = 10
     
     path = reb.get_path(network=network)+str(seq_num)+'/'
-    
+
     ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
     data    = pickle.load( open( path+'data.p', 'rb' ) )
     fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
+
+    run_num = seq_num
     
     nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
 
@@ -767,7 +1084,6 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=3.0
             print 'lnprob.txt does not exist. Exiting'
             return
 
-    path = ebpar['path']
     variables = fitinfo['variables']
     
 
@@ -936,6 +1252,8 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=3.0
     top_plot(esinwdist,gs[7,7],val=esinwval,xlabel=r'$e\sin\omega$',sigfac=sigfac)    
     print done_in(t8)
 
+    plt.suptitle('2D posteriors for Run '+str(run_num))
+    
     print "Saving output figures"
     plt.savefig(path+'triangle1.png', dpi=300)
     plt.savefig(path+'triangle1.eps', dpi=300)
@@ -1190,28 +1508,28 @@ def corner_plot(dist1,dist2,position,val1=False,val2=False,\
 
 def distparams(dist):
 
-    vals = np.linspace(np.min(dist)*0.5,np.max(dist)*1.5,1000)
-    try:
-        kde = gaussian_kde(dist)
-        pdf = kde(vals)
-        dist_c = np.cumsum(pdf)/np.nansum(pdf)
-        func = sp.interpolate.interp1d(dist_c,vals,kind='linear')
-        lo = np.float(func(math.erfc(1./np.sqrt(2))))
-        hi = np.float(func(math.erf(1./np.sqrt(2))))
-        med = np.float(func(0.5))
-        mode = vals[np.argmax(pdf)]
-        disthi = np.linspace(.684,.999,100)
-        distlo = disthi-0.6827
-        disthis = func(disthi)
-        distlos = func(distlo)
-        interval = np.min(disthis-distlos)
-    except:
-        print 'KDE analysis failed! Using "normal" stats.'
-        interval = 2.0*np.std(dist)
-        med = np.median(dist)
-        mode = med
-        lo = med-interval/2.0
-        hi = med+interval/2.0
+#    vals = np.linspace(np.min(dist)*0.5,np.max(dist)*1.5,1000)
+#    try:
+#        kde = gaussian_kde(dist)
+#        pdf = kde(vals)
+#        dist_c = np.cumsum(pdf)/np.nansum(pdf)
+#        func = sp.interpolate.interp1d(dist_c,vals,kind='linear')
+#        lo = np.float(func(math.erfc(1./np.sqrt(2))))
+#        hi = np.float(func(math.erf(1./np.sqrt(2))))
+#        med = np.float(func(0.5))
+#        mode = vals[np.argmax(pdf)]
+#        disthi = np.linspace(.684,.999,100)
+#        distlo = disthi-0.6827
+#        disthis = func(disthi)
+#        distlos = func(distlo)
+#        interval = np.min(disthis-distlos)
+#    except:
+    print 'Using "normal" stats.'
+    interval = 2.0*np.std(dist)
+    med = np.median(dist)
+    mode = med
+    lo = med-interval/2.0
+    hi = med+interval/2.0
     
     return med,mode,np.abs(interval),lo,hi
 
