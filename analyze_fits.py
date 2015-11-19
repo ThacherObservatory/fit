@@ -30,10 +30,11 @@ def doug_test(network='doug'):
     for nrun in range(nruns):
         ste_m1s.append((bests[nrun][ival][1] - trues[nrun][ival])/bests[nrun][ival][3])
         i_times.append(initials[nrun][1])
-    plt.plot(i_times,ste_m1s, 'o')
+    plt.plot(i_times,ste_m1s, '.')
+    plt.xlim([0,2000])
     plt.xlabel('Integration Time')
     plt.ylabel('M1 Standard Error')
-        
+    plt.savefig('/home/administrator/Desktop/dougtest.png')    
     
     
 
