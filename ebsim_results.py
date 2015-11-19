@@ -342,7 +342,6 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
     f = open(path+'fitparams.txt','w')
     for i in np.arange(len(variables)):
         outstr = []
-        fmt = []
         outstr.append(variables[i])
         outstr.append("{:.8f}".format(bestvals[i]))
         outstr.append("{:.8f}".format(meds[i]))
