@@ -138,6 +138,9 @@ def fit_sequence(seq_num,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,
     params = params_from_seq(seq_num)
 
     path = get_path(network=network)
+    f = open(path + str(seq_num) + "/"+ "initialparams.txt","w")
+    f.writelines([str(p) + '\n' for p in params])
+    f.close()
 
     ebpar,data = make_model_data(photnoise=params[0],int=params[1],RVsamples=params[2],
                                   r1=0.5,r2=0.5*params[3],impact= params[4],
