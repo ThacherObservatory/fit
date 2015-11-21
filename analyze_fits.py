@@ -38,11 +38,10 @@ def doug_test(network='doug'):
         mean = np.average(bins_dict[val])
         std = np.std(bins_dict[val])
         plt.errorbar(val, mean, yerr=std,fmt='o')
-    
-            
+
     plt.xlabel('Integration Time')
     plt.ylabel('M1 Standard Error')
-        
+    plt.savefig('/home/administrator/Desktop/dougtest.png')    
     
     
 
