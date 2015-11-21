@@ -20,17 +20,26 @@ def doug_test(network='doug'):
     nruns = len(bests)
     
     
-    #standard error: (measured-real)/onesigma
+    #standard error: (measured-real)/(1/2 * onesigma)
     
     plt.figure()
     plt.ion()
     ival = 0 #m1
-    ste_m1s = []
-    i_times = []
+    bins_dict = {}
     for nrun in range(nruns):
-        ste_m1s.append((bests[nrun][ival][1] - trues[nrun][ival])/bests[nrun][ival][3])
-        i_times.append(initials[nrun][1])
-    plt.plot(i_times,ste_m1s, 'o')
+        ste = (bests[nrun][ival][1] - trues[nrun][ival])/(.5*bests[nrun][ival][3])
+        it = initials[nrun][1]
+        if it in bins_dict.keys():
+            bins_dict[it].append(ste)
+        else:
+            bins_dict[it] = [ste]
+            
+    for val in bins_dict.keys():
+        mean = np.average(bins_dict[val])
+        std = np.std(bins_dict[val])
+        plt.errorbar(val, mean, yerr=std,fmt='o')
+    
+            
     plt.xlabel('Integration Time')
     plt.ylabel('M1 Standard Error')
         
