@@ -1,5 +1,12 @@
 # TO DO:
 #-------
+# Restructure code to do runs based on the specifications from TESS mission. 
+# The idea is to do one run based on the full frame images (30 min cadence)
+# and one on the targeted sources (2 min cadence)
+#
+# TESS specs come from the Sullivan et al. (2015) paper
+# http://adsabs.harvard.edu/abs/2015ApJ...809...77S
+#
 # Parallelize code and test on bellerophon
 
 
@@ -77,13 +84,22 @@ def r_to_m(r):
     return (-b + np.sqrt(b**2 - 4*a*c))/(2*a)
 
 
-def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
-                    period=4.123456789, t0=2454833.0,int=60.0,
-                    q1a=None,q2a=None,q1b=None,q2b=None,J=None,L3=0.0,vsys=10.0,
-                    gravdark=False,reflection=False,ellipsoidal=False,
-                    photnoise=0.0003,RVnoise=1.0,RVsamples=100,
-                    lighttravel=True,durfac=1.5,ncycles=1,tsamp=60,
-                    write=False,network=None,limb='quad',path='./'):
+def make_model_data(m1=0.5,m2=0.5,                         # stellar masses
+                    r1=0.5,r2=0.5,                         # stellar radii
+                    ecc=0.0,omega=0.0,impact=0,            # orbital shape and orientation
+                    period=5.0,t0=2457998.0,               # ephemeris Sept 1, 2017 (~ TESS launch)
+                    J=1,                                   # surface brightness ratio
+                    q1a=None,q2a=None,q1b=None,q2b=None,   # limb darkening params
+                    limb='quad',
+                    L3=0.0,vsys=10.0,                      # third light and system velocity
+                    photnoise=0.0003,                      # photometric noise
+                    RVnoise=1.0,RVsamples=100,             # RV noise and sampling
+                    gravdark=False,reflection=False,       # higher order effects
+                    ellipsoidal=False,                     
+                    lighttravel=True,
+                    obsdur=27.4,int=120.0,                 # duration of obs, and int time
+                    durfac=1.5,                            # amount of data to keep around eclipses
+                    write=False,network=None,path='./'):   # network info
 
 
     """
@@ -117,7 +133,7 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
         
     # Integration time and reference time
     integration = int
-    bjd = 2454833.0
+    bjd = 2457998.0
 
     # For consistency with EB code
     NewtonG = eb.GMSUN*1e6/c.Msun
@@ -131,7 +147,7 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
     Mstar2 = m2*c.Msun
     sma = ((period*24.0*3600.0)**2*NewtonG*(Mstar1+Mstar2)/(4.0*np.pi**2))**(1.0/3.0)
 
-    # Winn 2010 to get inclination from impact parameter of the primary eclipse
+    # Use Winn (2010) to get inclination from impact parameter of the primary eclipse
     inc = np.arccos(impact*r1*c.Rsun*(1+esinw0)/(sma*(1-ecc0**2)))
     
     esq = ecosw0**2+esinw0**2
@@ -208,16 +224,17 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
 
     # Create initial ebpar dictionary
     ebpar = {'J':J, 'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
-              'Mratio':massratio, 'LDlin1':u1a, 'LDnon1':u2a, 'LDlin2':u1b, 'LDnon2':u2b,
-              'GD1':0.0, 'Ref1':0.0, 'GD2':0.0, 'Ref2':0.0, 'Rot1':0.0,
-              'ecosw':ecosw0, 'esinw':esinw0, 'Period':period, 't01':bjd, 't02':None, 
-              'et01':0.0, 'et02':0.0, 'dt12':None, 'tdur1':None, 'tdur2':None, 
-              'mag0':10.0,'vsys':vsys, 'Mstar1':m1, 'Mstar2':m2,
-              'ktot':ktot, 'L3':L3,'Period':period, 'ePeriod':0.1,
-              'integration':int,'bjd':bjd,'variables':variables,'ninput':0,
-              'lighttravel':lighttravel,'gravdark':gravdark,
-              'reflection':reflection,'path':path,'limb':limb,
-              'Rstar1':r1, 'Rstar2':r2,'cosi':np.cos(inc)}
+             'Mratio':massratio, 'LDlin1':u1a, 'LDnon1':u2a, 'LDlin2':u1b, 'LDnon2':u2b,
+             'GD1':0.0, 'Ref1':0.0, 'GD2':0.0, 'Ref2':0.0, 'Rot1':0.0,
+             'ecosw':ecosw0, 'esinw':esinw0, 'Period':period, 't01':bjd, 't02':None, 
+             'et01':0.0, 'et02':0.0, 'dt12':None, 'tdur1':None, 'tdur2':None, 
+             'mag0':10.0,'vsys':vsys, 'Mstar1':m1, 'Mstar2':m2,
+             'ktot':ktot, 'L3':L3,'Period':period, 'ePeriod':0.1,
+             'integration':int,'obsdur':obsdur,'bjd':bjd,
+             'variables':variables,'ninput':0,
+             'lighttravel':lighttravel,'gravdark':gravdark,
+             'reflection':reflection,'path':path,'limb':limb,
+             'Rstar1':r1, 'Rstar2':r2,'cosi':np.cos(inc)}
               
     #              'GD1':0.32, 'Ref1':0.4, 'GD2':0.32, 'Ref2':0.4, 'Rot1':0.0,
 
@@ -239,10 +256,13 @@ def make_model_data(m1=None,m2=None,r1=0.7,r2=0.5,ecc=0.0,omega=0.0,impact=0,
     # Contact points of the eclipses
     (ps, pe, ss, se) = eb.phicont(parm)
 
-    # Durations (in hourse) and secondary timing
+    # Durations (in hours) and secondary timing
     ebpar['tdur1'] = (pe+1 - ps)*period*24.0
     ebpar['tdur2'] = (se - ss)*period*24
     ebpar['t02'] = ebpar['t01'] + (se+ss)/2*period 
+
+
+    # !!! Need to update this to TESS specifications !!!
 
     # Photometry sampling
     tdprim = (pe+1 - ps)*period * durfac
