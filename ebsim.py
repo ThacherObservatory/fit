@@ -84,11 +84,11 @@ def r_to_m(r):
     return (-b + np.sqrt(b**2 - 4*a*c))/(2*a)
 
 
-def make_model_data(m1=0.5,m2=0.5,                         # stellar masses
-                    r1=0.5,r2=0.5,                         # stellar radii
+def make_model_data(m1=0.5,m2=0.3,                         # stellar masses
+                    r1=0.5,r2=0.3,                         # stellar radii
                     ecc=0.0,omega=0.0,impact=0,            # orbital shape and orientation
                     period=5.0,t0=2457998.0,               # ephemeris Sept 1, 2017 (~ TESS launch)
-                    J=1,                                   # surface brightness ratio
+                    J=None,                                # surface brightness ratio
                     q1a=None,q2a=None,q1b=None,q2b=None,   # limb darkening params
                     limb='quad',
                     L3=0.0,vsys=10.0,                      # third light and system velocity
@@ -97,8 +97,9 @@ def make_model_data(m1=0.5,m2=0.5,                         # stellar masses
                     gravdark=False,reflection=False,       # higher order effects
                     ellipsoidal=False,                     
                     lighttravel=True,
+                    short=False,long=False,                # Short or long cadence TESS data
                     obsdur=27.4,int=120.0,                 # duration of obs, and int time
-                    durfac=1.5,                            # amount of data to keep around eclipses
+                    durfac=1.75,                           # amount of data to keep around eclipses
                     write=False,network=None,path='./'):   # network info
 
 
@@ -109,6 +110,14 @@ def make_model_data(m1=0.5,m2=0.5,                         # stellar masses
     
     """
 
+    # If long or short is set, this trumps obsdur and int keywords
+    if short:
+        int = 120.0
+        obsdur = 27.4
+    if long:
+        int = 1800.0
+        obsdur = 27.4
+            
     # Set mass to be equal to radius in solar units if flag is set
     if not m1 and not m2:
         m1 = r_to_m(r1)
@@ -131,7 +140,7 @@ def make_model_data(m1=0.5,m2=0.5,                         # stellar masses
              q1a,q2a = get_limb_qs(Mstar=m1,Rstar=r1,Tstar=Teff1,limb=limb,network=network)
              q1b,q2b = get_limb_qs(Mstar=m2,Rstar=r2,Tstar=Teff2,limb=limb,network=network)
         
-    # Integration time and reference time
+    # Integration time and reference time (approximate date of TESS data)
     integration = int
     bjd = 2457998.0
 
@@ -262,27 +271,29 @@ def make_model_data(m1=0.5,m2=0.5,                         # stellar masses
     ebpar['t02'] = ebpar['t01'] + (se+ss)/2*period 
 
 
-    # !!! Need to update this to TESS specifications !!!
-
     # Photometry sampling
-    tdprim = (pe+1 - ps)*period * durfac
-    tdsec  = (se - ss)*period * durfac
-    t0sec = (se+ss)/2*period 
+    tstart = -pe*durfac*period
+    tstop  = tstart + obsdur
+    time  = np.arange(tstart,tstop,integration/86400.0)
+    tfold = time % period
+    phase = tfold/period
+    p0sec = (se+ss)/2
+    pprim = (pe-ps+1)*durfac
+    psec  = (se-ss)*durfac
+    pinds, = np.where((phase >= 1-pprim/2) | (phase <= pprim/2))
+    sinds, = np.where((phase >= p0sec-psec/2) & (phase <= p0sec+psec/2))
+    inds = np.append(pinds,sinds)
 
-    # Sample primary eclipse with the specified sampling, else use integration time as cadence
-    if tsamp:
-        tphot = np.append(np.arange(-tdprim/2,tdprim/2,tsamp/86400.0),
-                          np.arange(-tdsec/2+t0sec,tdsec/2+t0sec,tsamp/86400.0))
-    else:
-        tphot = np.append(np.arange(-tdprim/2,tdprim/2,integration/86400.0),
-                          np.arange(-tdsec/2+t0sec,tdsec/2+t0sec,integration/86400.0))
-        
+    tfinal = np.sort(time[inds])
+    pfinal = np.sort(phase[inds])
+    
     mr = parm[eb.PAR_Q]
     parm[eb.PAR_Q] = 0.0
 
-    lightmodel = compute_eclipse(tphot,parm,integration=ebpar['integration'],modelfac=11.0,
+    lightmodel = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=11.0,
                                  fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
                                  unsmooth=False)
+
     parm[eb.PAR_Q] = mr
     
     if photnoise != None:
@@ -330,10 +341,10 @@ def make_model_data(m1=0.5,m2=0.5,                         # stellar masses
         n2 = len(rv2)
         rv2 += np.random.normal(0,RVnoise,n2)
         rv2_err = np.ones(len(rv2))*RVnoise
-    
-    lout = np.array([tphot+2454833.0,lightmodel,lighterr])
-    r1out = np.array([tRV+2454833.0,rv1,rv1_err])
-    r2out = np.array([tRV+2454833.0,rv2,rv2_err])
+
+    lout = np.array([tfinal+bjd,lightmodel,lighterr])
+    r1out = np.array([tRV+bjd,rv1,rv1_err])
+    r2out = np.array([tRV+bjd,rv2,rv2_err])
 
     data = {'light':lout,'rv1':r1out,'rv2':r2out}
 
@@ -377,7 +388,7 @@ def check_model(data):
 
 
 def fit_params(ebpar,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
-              fit_period=False,fit_limb=True,claret=False,fit_rvs=True,fit_ooe1=False,fit_ooe2=False,
+              fit_period=True,fit_limb=True,claret=False,fit_rvs=True,fit_ooe1=False,fit_ooe2=False,
               fit_L3=False,fit_sp2=False,full_spot=False,fit_ellipsoidal=False,write=True,order=3,
               thin=1):
     """ 
@@ -395,7 +406,7 @@ def fit_params(ebpar,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
     return fitinfo
 
 
-def ebsim_fit(data,ebpar,fitinfo):
+def ebsim_fit(data,ebpar,fitinfo,debug=False):
     """
     Fit the simulated data using emcee with starting parameters based on the 
     ebpar dictionary and according to the fitting parameters outlined in
@@ -419,62 +430,45 @@ def ebsim_fit(data,ebpar,fitinfo):
     print ""
     print "Deriving starting values for chains"
     p0_0  = np.random.uniform(ebpar['J']*0.9999,ebpar['J']*1.0001,nw)             # surface brightness
-    p0_1  = np.random.uniform(ebpar['Rsum_a']*0.9999,ebpar['Rsum_a']*1.0001, nw)    # fractional radius
-    p0_2  = np.random.uniform(ebpar['Rratio']*0.9999,ebpar['Rratio']*1.0001, nw)    # radius ratio
-#    p0_3  = np.random.uniform(0,ebpar['Rsum_a'], nw)                          # cos i
-    if ebpar['cosi'] == 0:
+    p0_1  = np.random.uniform(ebpar['Rsum_a']*0.9999,ebpar['Rsum_a']*1.0001, nw)  # fractional radius
+    p0_2  = np.random.uniform(ebpar['Rratio']*0.9999,ebpar['Rratio']*1.0001, nw)  # radius ratio
+    if ebpar['cosi'] == 0:                                                        # cos i
         p0_3 = np.random.uniform(-.00001,.00001)
     else:
-        p0_3  = np.random.uniform(ebpar['cosi']*0.9999,ebpar['cosi']*1.0001, nw)     # cos i
-    #p0_4  = np.random.uniform(0,0.01, nw)                                      # ecosw
-    p0_4  = np.random.uniform(-.00001,.00001, nw)
-    #p0_5  = np.random.uniform(0,0.01, nw)                                      # esinw
-    p0_5  = np.random.uniform(-.00001,.00001, nw)
-    p0_6  = np.random.normal(ebpar['mag0'],0.1, nw)                          # mag zpt
-    #p0_7  = np.random.normal(ebpar['t01']-bjd,onesec,nw)                     # ephemeris
-    if ebpar['t01']-bjd == 0:
-        p0_7 = np.random.normal(0,onesec,nw)
-    else:
-        p0_7  = np.random.uniform((ebpar['t01']-bjd)*0.9999,(ebpar['t01']-bjd)*1.0001,nw)      
-    #p0_8  = np.random.normal(ebpar['Period'],onesec,nw)                       # Period
-    p0_8  = np.random.uniform(ebpar['Period']*0.9999,ebpar['Period']*1.0001,nw)
-    """
-    p0_9  = np.random.uniform(0,1,nw)                                         # Limb darkening q1a
-    p0_10 = np.random.uniform(0,1,nw)                                         # Limb darkening q2a
-    p0_11 = np.random.uniform(0,1,nw)                                         # Limb darkening q1b
-    p0_12 = np.random.uniform(0,1,nw)                                         # Limb darkening q2b
-    """
+        p0_3  = np.random.uniform(ebpar['cosi']*0.9999,ebpar['cosi']*1.0001, nw)
+    p0_4  = np.random.uniform(-.00001,.00001, nw)                                 # ecosw
+    p0_5  = np.random.uniform(-.00001,.00001, nw)                                 # esinw
+    p0_6  = np.random.normal(ebpar['mag0'],0.1, nw)                               # mag zpt
+    p0_7  = np.random.normal(ebpar['t01']-bjd,onesec,nw)                          # mid-eclipse time
+    p0_8  = np.random.uniform(ebpar['Period']-onesec,ebpar['Period']+onesec,nw)   # period
+
     q1a,q2a = utoq(ebpar['LDlin1'],ebpar['LDnon1'])
     q1b,q2b = utoq(ebpar['LDlin2'],ebpar['LDnon2'])
-    p0_9 = np.random.uniform(q1a*.999,q1a*1.001,nw)
-    p0_10 = np.random.uniform(q2a*.999,q2a*1.001,nw)
-    p0_11 = np.random.uniform(q1b*.999,q1b*1.001,nw)
-    p0_12 = np.random.uniform(q2b*.999,q2b*1.001,nw)
+    p0_9 = np.random.uniform(q1a*.999,q1a*1.001,nw)                               # Limb darkening q1a
+    p0_10 = np.random.uniform(q2a*.999,q2a*1.001,nw)                              # Limb darkening q2a
+    p0_11 = np.random.uniform(q1b*.999,q1b*1.001,nw)                              # Limb darkening q1b
+    p0_12 = np.random.uniform(q2b*.999,q2b*1.001,nw)                              # Limb darkening q2b
 
-    #p0_13 = np.abs(np.random.normal(ebpar['Mratio']*0.999,0.01,nw))                 # Mass ratio
-    p0_13 = np.abs(np.random.uniform(ebpar['Mratio']*0.9999,ebpar['Mratio']*1.0001,nw))
-    p0_14 = np.random.uniform(0,0.1,nw)                                       # Third Light
+    p0_13 = np.abs(np.random.uniform(ebpar['Mratio']*0.9999,                      # Mass ratio
+                                     ebpar['Mratio']*1.0001,nw))
+    p0_14 = np.random.uniform(0,0.1,nw)                                           # Third Light
     
-    p0_15 = np.random.normal(ebpar['Rot1'],0.001,nw)                         # Star 1 rotation
-    #p0_15 = np.random.normal(ebpar['Rot1']*0.999,ebpar['Rot1']*1.001,nw)
-    p0_16 = np.random.uniform(0,1,nw)                                         # Fraction of spots eclipsed
-    p0_17 = np.random.normal(0,0.001,nw)                                      # base spottedness
-    p0_18 = np.random.normal(0,0.0001,nw)                                     # Sin amplitude
-    p0_19 = np.random.normal(0,0.0001,nw)                                     # Cos amplitude
-    p0_20 = np.random.normal(0,0.0001,nw)                                     # SinCos amplitude
-    p0_21 = np.random.normal(0,0.0001,nw)                                     # Cos^2-Sin^2 amplitude
-    p0_22 = np.random.uniform(ebpar['Rot1'],0.001,nw)                        # Star 2 rotation
-    p0_23 = np.random.uniform(0,1,nw)                                         # Fraction of spots eclipsed
-    p0_24 = np.random.normal(0,0.001,nw)                                      # base spottedness
-    p0_25 = np.random.normal(0,0.001,nw)                                      # Sin amplitude
-    p0_26 = np.random.normal(0,0.001,nw)                                      # Cos amplitude
-    p0_27 = np.random.normal(0,0.001,nw)                                      # SinCos amplitude
-    p0_28 = np.random.normal(0,0.001,nw)                                      # Cos^2-Sin^2 amplitude
-    
-    #p0_29 = np.abs(np.random.normal(ebpar['ktot'],ebpar['ktot']*0.2,nw))    # Total radial velocity amp
-    p0_29 = np.abs(np.random.uniform(ebpar['ktot']*0.999,ebpar['ktot']*1.001,nw))
-    #p0_30 = np.random.normal(ebpar['vsys'],5.0,nw)                           # System velocity
-    p0_30 = np.random.uniform(ebpar['vsys']*.999,ebpar['vsys']*1.001,nw)   
+    p0_15 = np.random.normal(ebpar['Rot1'],0.001,nw)                              # Star 1 rotation
+    p0_16 = np.random.uniform(0,1,nw)                                             # Fraction of spots eclipsed
+    p0_17 = np.random.normal(0,0.001,nw)                                          # base spottedness
+    p0_18 = np.random.normal(0,0.0001,nw)                                         # Sin amplitude
+    p0_19 = np.random.normal(0,0.0001,nw)                                         # Cos amplitude
+    p0_20 = np.random.normal(0,0.0001,nw)                                         # SinCos amplitude
+    p0_21 = np.random.normal(0,0.0001,nw)                                         # Cos^2-Sin^2 amplitude
+    p0_22 = np.random.uniform(ebpar['Rot1'],0.001,nw)                             # Star 2 rotation
+    p0_23 = np.random.uniform(0,1,nw)                                             # Fraction of spots eclipsed
+    p0_24 = np.random.normal(0,0.001,nw)                                          # base spottedness
+    p0_25 = np.random.normal(0,0.001,nw)                                          # Sin amplitude
+    p0_26 = np.random.normal(0,0.001,nw)                                          # Cos amplitude
+    p0_27 = np.random.normal(0,0.001,nw)                                          # SinCos amplitude
+    p0_28 = np.random.normal(0,0.001,nw)                                          # Cos^2-Sin^2 amplitude
+    p0_29 = np.abs(np.random.uniform(ebpar['ktot']*0.999,ebpar['ktot']*1.001,nw)) # Total radial velocity amp
+    p0_30 = np.random.uniform(ebpar['vsys']*.999,ebpar['vsys']*1.001,nw)          # System velocity   
 
 
 # L3 at 14 ... 14 and beyond + 1
@@ -586,7 +580,7 @@ def ebsim_fit(data,ebpar,fitinfo):
 # Set up MCMC sampler
     print "... initializing emcee sampler"
     tstart = time.time()
-    sampler = emcee.EnsembleSampler(nw, ndim, lnprob, args=(data,ebpar,fitinfo))
+    sampler = emcee.EnsembleSampler(nw, ndim, lnprob, args=(data,ebpar,fitinfo),kwargs={'debug':debug})
 
 # Run burn-in
     print ""
@@ -648,6 +642,8 @@ def ebsim_fit(data,ebpar,fitinfo):
             np.savetxt(directory+variables[i]+'chain'+thinst+'.txt',sampler.flatchain[0::thin,i])
 
     return sampler.lnprobability.flatten(),sampler.flatchain
+
+
 
 
 def vec_to_params(x,ebpar,fitinfo=None):
@@ -1568,7 +1564,7 @@ def get_limb_coeff(Tstar,loggstar,filter='Kp',plot=False,network=None,limb='quad
     elif network == 'astro':
         path = '/home/jswift/Mdwarfs/'
     elif network == 'swift':
-        path = '/Users/jonswift/Astronomy/Exoplanets/TransitFits/'
+        path = '/Users/jonswift/python/fit/'
 
     # Get data from both the low and high temp files and then append
     limbdata1 = np.loadtxt(path+file1,dtype='string', delimiter='|',skiprows=skiprows)
