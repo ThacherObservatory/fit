@@ -214,8 +214,9 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
 
 
 # Second set of parameters
-    secinds, = np.where((np.array(variables) == 't0') ^ (np.array(variables) == 'massratio') ^ 
-                        (np.array(variables) == 'ktot') ^ (np.array(variables) == 'vsys'))
+    secinds, = np.where((np.array(variables) == 'period') ^(np.array(variables) == 't0') ^
+                        (np.array(variables) == 'massratio') ^ (np.array(variables) == 'ktot') ^
+                        (np.array(variables) == 'vsys'))
 
     plt.figure(5,figsize=(8.5,11),dpi=300)    
     plt.clf()
