@@ -433,7 +433,7 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
     p0_1  = np.random.uniform(ebpar['Rsum_a']*0.9999,ebpar['Rsum_a']*1.0001, nw)  # fractional radius
     p0_2  = np.random.uniform(ebpar['Rratio']*0.9999,ebpar['Rratio']*1.0001, nw)  # radius ratio
     if ebpar['cosi'] == 0:                                                        # cos i
-        p0_3 = np.random.uniform(-.00001,.00001)
+        p0_3 = np.random.uniform(-.0001,.0001,nw)
     else:
         p0_3  = np.random.uniform(ebpar['cosi']*0.9999,ebpar['cosi']*1.0001, nw)
     p0_4  = np.random.uniform(-.00001,.00001, nw)                                 # ecosw
