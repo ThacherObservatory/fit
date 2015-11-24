@@ -41,9 +41,10 @@ def ebsim_core(core,ncores=16,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobbe
         print '---------------------------------------'
         print 'Starting sequence number '+str(n)+' ...'
         print '---------------------------------------'
-        ppm = param[0]*1e6
+        print 'Cadence           = '+cadence
+        print 'Period            = %.2f days' % param[0]
+        ppm = param[1]*1e6
         print 'Photometric Noise = %.2f ppm' % ppm
-        print 'Integration Time  = %.2f s' % param[1]
         print 'RV Samples        = %.0f' % param[2]
         print 'Radius Ratio      = %.2f' % param[3]
         print 'Impact Parameter  = %.2f' % param[4]
@@ -74,7 +75,7 @@ def param_sequence():
     """
 
     # Period
-    periods = np.array([4,10,15])
+    periods = np.array([4.53,9.06,13.59])
     # number of eclipse pairs = 7, 3, 2
     
     # Photometric noise (as a fraction of total flux)
@@ -144,7 +145,7 @@ def check(seq_num,network=None,cadence='short'):
 
 
 def fit_sequence(seq_num,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,
-                 fit_period=False,fit_limb=True,claret=False,fit_rvs=True,
+                 fit_period=True,fit_limb=True,claret=False,fit_rvs=True,
                  fit_ooe1=False,fit_ooe2=False,fit_L3=False,fit_sp2=False,
                  fit_ellipsoidal=False,write=True,order=3,
                  reduce=10,network=None,thin=1,clobber=False,cadence='short'):

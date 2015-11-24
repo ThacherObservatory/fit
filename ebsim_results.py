@@ -16,21 +16,21 @@ import ebsim as ebs
 from done_in import done_in
 
 
-def analyze_run(run,network=None,thin=10,full=False):
+def analyze_run(run,network=None,thin=10,full=False,cadence='short'):
 
-    chains,lp = get_chains(run,network=network)
+    chains,lp = get_chains(run,network=network,cadence=cadence)
     
-    best_vals(run,chains=chains,lp=lp,network=network,thin=thin)
+    best_vals(run,chains=chains,lp=lp,network=network,thin=thin,cadence=cadence)
 
     if full:
-        params_of_interest(run,chains=chains,lp=lp,network=network)
-        triangle_plot(run,chains=chains,lp=lp,network=network,thin=thin)
+        params_of_interest(run,chains=chains,lp=lp,network=network,cadence=cadence)
+        triangle_plot(run,chains=chains,lp=lp,network=network,thin=thin,cadence=cadence)
     
     return
     
-def plot_chains(seq_num,network=None):
+def plot_chains(seq_num,network=None,cadence='short'):
     chains,lp = get_chains(seq_num, network=network)
-    path = reb.get_path(network=network)+str(seq_num)+'/'
+    path = reb.get_path(network=network)+cadence+'/'+str(seq_num)+'/'
     fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
     nwalkers = fitinfo['nwalkers']
     nsteps = fitinfo['mcmcsteps']
@@ -49,8 +49,8 @@ def plot_chains(seq_num,network=None):
     
 
 
-def get_chains(seq_num,network=None):
-    path = reb.get_path(network=network)+str(seq_num)+'/'
+def get_chains(seq_num,network=None,cadence='short'):
+    path = reb.get_path(network=network)+cadence+'/'+str(seq_num)+'/'
     ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
     data    = pickle.load( open( path+'data.p', 'rb' ) )
     fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
@@ -80,7 +80,7 @@ def get_chains(seq_num,network=None):
 
 
 
-def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
+def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='short',
                 thin=False,frac=0.001,nbins=100,rpmax=1,durmax=10,sigrange=5.0):
 
 
@@ -95,12 +95,12 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
 
     plot_params(linewidth=1.5,fontsize=12)
 
-    path = reb.get_path(network=network)+str(seq_num)+'/'
+    path = reb.get_path(network=network)+cadence+'/'+str(seq_num)+'/'
     
     ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
     data    = pickle.load( open( path+'data.p', 'rb' ) )
     fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
-    
+
     nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
 
     variables = fitinfo['variables']
@@ -251,7 +251,10 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
         # actual value
         ind, = np.where(np.array(var_init) == np.array(variables)[i])
         
-        val = p_init[ind]
+        if variables[i] == 'period': 
+            val = (p_init[ind] -  ebpar["Period"])*24*3600.0
+        else:
+            val = p_init[ind]
         
         # do plot
         plotnum += 1
@@ -373,7 +376,8 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
 
 #    ebs.lnprob(bestvals,data,ebpar,fitinfo,debug=True)
     
-    plot_model(bestvals,data,ebpar,fitinfo,data,tag='_fit',network=network)
+    plot_model(bestvals,data,ebpar,fitinfo,data,tag='_fit',
+               network=network,cadence=cadence)
 
     f = open(path+'fitparams.txt','w')
     for i in np.arange(len(variables)):
@@ -394,7 +398,8 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,
 
 
 def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
-               errorbars=False,durfac=5,enum=1,tag='',network=None):
+               errorbars=False,durfac=5,enum=1,tag='',network=None,
+               cadence='short'):
 
     """
     ----------------------------------------------------------------------
@@ -409,7 +414,7 @@ def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     # Check for output directory   
     path = ebpar['path']
     run_num = int(path.split('/')[-2])
-    directory = reb.get_path(network=network)+str(run_num)+'/'
+    directory = reb.get_path(network=network)+cadence+'/'+str(run_num)+'/'
     
     variables = fitinfo['variables']
 
@@ -475,8 +480,13 @@ def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
 
     # Primary eclipse
     t0 = parm[eb.PAR_T0]
-    
-    period = parm[eb.PAR_P]
+
+    # Period
+    if fitinfo['fit_period']:
+        period = x[variables == 'period']
+    else:
+        period = parm[eb.PAR_P]
+
     time   = data['light'][0,:]-ebpar['bjd']
     flux   = data['light'][1,:]
     eflux  = data['light'][2,:]
@@ -566,6 +576,9 @@ def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     ytop = ymax + (ymax-ymin)*0.1
     ybot = ymin - (ymax-ymin)*0.1
     plt.ylim(ybot,ytop)
+    xleft = -(pe-ps+1.0)
+    xright = (pe-ps+1.0)
+    plt.xlim(xleft,xright)
     plt.ylabel('Flux (normalized)')
     plt.xlabel('Phase')
     plt.title('Primary Eclipse',fontsize=12)
@@ -589,6 +602,10 @@ def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     ytop = ymax + (ymax-ymin)*0.1
     ybot = ymin - (ymax-ymin)*0.1
     plt.ylim(ybot,ytop)
+    x0 =(se+ss)/2
+    xleft = x0-(se-ss)
+    xright = x0+(se-ss)
+    plt.xlim(xleft,xright)
     plt.xlabel('Phase')
     plt.title('Secondary Eclipse',fontsize=12)
 
@@ -881,9 +898,9 @@ def old_crap():
 
 
 
-def params_of_interest(seq_num,chains=False,lp=False,network=None):
+def params_of_interest(seq_num,chains=False,lp=False,network=None,cadence='short'):
 
-    path = reb.get_path(network=network)+str(seq_num)+'/'
+    path = reb.get_path(network=network)+cadence+'/'+str(seq_num)+'/'
     ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
     data    = pickle.load( open( path+'data.p', 'rb' ) )
     fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
@@ -1043,7 +1060,7 @@ def params_of_interest(seq_num,chains=False,lp=False,network=None):
 
 
 
-def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0,network=None):
+def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0,network=None,cadence='short'):
     import matplotlib.gridspec as gridspec
 
     tmaster = time.time()
@@ -1052,7 +1069,7 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0
   
     bindiv = 10
     
-    path = reb.get_path(network=network)+str(seq_num)+'/'
+    path = reb.get_path(network=network)+cadence+'/'+str(seq_num)+'/'
 
     ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
     data    = pickle.load( open( path+'data.p', 'rb' ) )
@@ -1144,6 +1161,7 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0
         bestvals[i] = chains[imax,i]
 
 
+    pmax = pdist[imax]
     m1val = m1dist[imax]
     m2val = m2dist[imax]
     r1val = r1dist[imax]
@@ -1157,6 +1175,7 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0
     if thin:
         print "Thinning chains by a factor of "+str(thin)
         tthin = time.time()
+        pdist = pdist[0::thin]
         m1dist = m1dist[0::thin]
         m2dist = m2dist[0::thin]
         r1dist = r1dist[0::thin]
