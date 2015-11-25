@@ -99,7 +99,7 @@ def make_model_data(m1=0.5,m2=0.3,                         # stellar masses
                     lighttravel=True,
                     short=False,long=False,                # Short or long cadence TESS data
                     obsdur=27.4,int=120.0,                 # duration of obs, and int time
-                    durfac=2.0,                              # amount of data to keep around eclipses
+                    durfac=2.0,                            # amount of data to keep around eclipses
                     write=False,network=None,path='./'):   # network info
 
 

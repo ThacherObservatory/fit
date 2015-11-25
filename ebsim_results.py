@@ -1222,7 +1222,7 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0
     top_plot(r1dist,gs[0,0],val=r1val,sigfac=sigfac)
     print done_in(tcol)
     t = time.time()
-    print "... first column"
+    print "... first column 2D plot"
     column_plot(r1dist,r2dist,gs[1,0],val1=r1val,val2=r2val,ylabel=r'$R_2$',sigfac=sigfac)
     print done_in(t)
     column_plot(r1dist,m1dist,gs[2,0],val1=r1val,val2=m1val,ylabel=r'$M_1$',sigfac=sigfac)
@@ -1232,7 +1232,7 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0
     column_plot(r1dist,ecoswdist,gs[6,0],val1=r1val,val2=ecoswval,ylabel=r'$e\cos\omega$',sigfac=sigfac)
     corner_plot(r1dist,esinwdist,gs[7,0],val1=r1val,val2=esinwval,\
                 xlabel=r'$R_1$',ylabel=r'$e\sin\omega$',sigfac=sigfac)
-    print "First column: "
+    print "... first column"
     print done_in(tcol)
 
     print "... second column"
