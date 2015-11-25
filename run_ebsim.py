@@ -91,7 +91,7 @@ def param_sequence():
     Rratio = np.array([0.2,0.6,1.0])
 
     # Imapct parameters of the primary eclipse
-    impact = np.array([0,0.75,-999])
+    impact = np.array([0.05,0.75,-999])
 
     # Total number of iterations needed in full sequence
     niter = len(periods)*len(photnoise)*len(RVsamples)*len(Rratio)*len(impact)

@@ -397,7 +397,7 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
 
 
 
-def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
+def plot_model(x,data,ebpar,fitinfo,markersize=2,smallmark=1,nbins=100,
                errorbars=False,durfac=5,enum=1,tag='',network=None,
                cadence='short'):
 
@@ -579,6 +579,8 @@ def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     xleft = -(pe-ps+1.0)
     xright = (pe-ps+1.0)
     plt.xlim(xleft,xright)
+    plt.xticks([-0.02,-0.01,0,0.01,0.02],
+           ['-0.02','-0.01','0','0.01','0.02'])
     plt.ylabel('Flux (normalized)')
     plt.xlabel('Phase')
     plt.title('Primary Eclipse',fontsize=12)
@@ -606,6 +608,8 @@ def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     xleft = x0-(se-ss)
     xright = x0+(se-ss)
     plt.xlim(xleft,xright)
+    plt.xticks([0.48,0.49,0.50,0.51,0.52],
+               ['0.48','0.49','0.50','0.51','0.52'])
     plt.xlabel('Phase')
     plt.title('Secondary Eclipse',fontsize=12)
 
@@ -638,6 +642,9 @@ def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
 
     plt.savefig(directory+'MCMCfit.png',dpi=300)
 
+
+
+
     # Limb Darkening
     gamma = np.linspace(0,np.pi/2.0,1000,endpoint=True)
     theta = gamma*180.0/np.pi
@@ -645,7 +652,7 @@ def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     Imu1 = 1.0 - u1a*(1.0 - mu) - u2a*(1.0 - mu)**2.0
     Imu2 = 1.0 - u1b*(1.0 - mu) - u2b*(1.0 - mu)**2.0
 
-    
+
     fig = plt.figure(110,dpi=300)
     plt.clf()
     label1 = '%.2f, ' % u1a + '%.2f' % u2a +' (Primary)'
@@ -669,9 +676,13 @@ def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     plt.clf()
     plt.subplot(2, 2, 1)
     plt.plot(phiprim,(xprim-mprim)*100,'ko')
+    sig = np.std((xprim-mprim)*100)
     plt.axhline(y=0,color='r',linestyle='-')
     plt.axvline(x=ps-1.0,color='b',linestyle='--')
     plt.axvline(x=pe,color='b',linestyle='--')
+    plt.xticks([-0.02,-0.01,0,0.01,0.02],
+           ['-0.02','-0.01','0','0.01','0.02'])
+    plt.ylim(-5*sig,5*sig)
     plt.ylabel('Residual Flux (percent)')
     plt.xlabel('Phase')
     plt.title('Primary Eclipse',fontsize=12)
@@ -684,24 +695,29 @@ def plot_model(x,data,ebpar,fitinfo,markersize=5,smallmark=2,nbins=100,
     # Secondary eclipse
     plt.subplot(2, 2, 2)
     plt.plot(phisec,(xsec-msec)*100,'ko')
+    sig = np.std((xsec-msec)*100)
     plt.axhline(y=0,color='r',linestyle='-')
     plt.axvline(x=ss,color='b',linestyle='--')
     plt.axvline(x=se,color='b',linestyle='--')
+    plt.ylim(-5*sig,5*sig)
     plt.xlabel('Phase')
     plt.title('Secondary Eclipse',fontsize=12)
-
+    plt.xticks([0.48,0.49,0.50,0.51,0.52],
+               ['0.48','0.49','0.50','0.51','0.52'])
+    
     plt.subplot(2, 1, 2)
     plt.plot(phi1,rvdata1[1,:]-rv1,'ko')
 
-    plt.annotate(r'$\chi^2$ = %.2f' % -lfrv, [0.05,0.85],horizontalalignment='left',
+    plt.annotate(r'$\chi^2$ = %.1f' % -lfrv, [0.05,0.85],horizontalalignment='left',
                  xycoords='axes fraction',fontsize='large')
   
+    sig = np.std(rvdata2[1,:]-rv2)
     plt.plot(phi2,rvdata2[1,:]-rv2,'ro')
     plt.axhline(y=0,color='k',linestyle='--')
     plt.xlim(-0.5,0.5)
     plt.ylabel('RV Residuals (km/s)')
     plt.xlabel('Phase')
-
+    plt.ylim(-5*sig,5*sig)
     plt.suptitle('Fitting Residuals for Run ' + str(run_num))
 
     plt.savefig(directory+'MCMCres.png',dpi=300)
@@ -837,7 +853,7 @@ def old_crap():
     fig = plt.figure(109,dpi=300)
     plt.clf()
     plt.subplot(2, 2, 1)
-    plt.plot(phiprim,xprim,'ko',markersize=3)
+    plt.plot(phiprim,xprim,'ko',markersize=markersize)
 #    plt.plot(phiprim,model1,'rx')
     plt.plot(phicomp1,compmodel1,'r-')
     plt.axvline(x=ps-1.0,color='b',linestyle='--')
@@ -847,12 +863,14 @@ def old_crap():
     ytop = ymax + (ymax-ymin)*0.1
     ybot = ymin - (ymax-ymin)*0.1
     plt.ylim(ybot,ytop)
+    plt.xticks([-0.02,-0.01,0,0.01,0.02],
+           ['-0.02','-0.01','0','0.01','0.02'])
     plt.ylabel('Flux (normalized)')
     plt.xlabel('Phase')
     plt.title('Primary Eclipse',fontsize=12)
 
     plt.subplot(2, 2, 2)
-    plt.plot(phisec,xsec,'ko',markersize=3)
+    plt.plot(phisec,xsec,'ko',markersize=markersize)
 #    plt.plot(phisec,model2,'xo')
     plt.plot(phicomp2,compmodel2,'r-')
     plt.axvline(x=ss,color='b',linestyle='--')
@@ -862,13 +880,15 @@ def old_crap():
     ytop = ymax + (ymax-ymin)*0.1
     ybot = ymin - (ymax-ymin)*0.1
     plt.ylim(ybot,ytop)
+    plt.xticks([0.48,0.49,0.50,0.51,0.52],
+               ['0.48','0.49','0.50','0.51','0.52'])
     plt.xlabel('Phase')
     plt.title('Secondary Eclipse',fontsize=12)
 
     
     plt.subplot(2, 1, 2)
     phi1 = ebs.foldtime_pos(rvdata1[0,:]-ebpar['bjd'],t0=t0,period=period)/period
-    plt.plot(phi1,rvdata1[1,:],'ko',markersize=3)
+    plt.plot(phi1,rvdata1[1,:],'ko',markersize=markersize+1)
 #    plt.plot(phi1,rv1,'kx')
     tcomp = np.linspace(0,1,10000)*period+t0
     rvmodel1 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
@@ -878,7 +898,7 @@ def old_crap():
     plt.plot(np.linspace(0,1,10000),rvcomp1,'g--')
     
     phi2 = ebs.foldtime_pos(rvdata2[0,:]-ebpar['bjd'],t0=t0,period=period)/period
-    plt.plot(phi2,rvdata2[1,:],'ro',markersize=3)
+    plt.plot(phi2,rvdata2[1,:],'ro',markersize=markersize+1)
 #    plt.plot(phi2,rv2,'rx')
     tcomp = np.linspace(0,1,10000)*period+t0
     rvmodel2 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
@@ -1190,11 +1210,12 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0
 
     print " "
     print "Starting grid of posteriors..."
-    plt.figure(6,figsize=(8.5,8.5))
+    plt.figure(66,figsize=(8.5,8.5),dpi=300)
+    plt.clf()
     nx = 8
     ny = 8
 
-    gs = gridspec.GridSpec(nx,ny,wspace=0.1,hspace=0.1)
+    gs = gridspec.GridSpec(nx,ny,wspace=0.1,hspace=0.0)
     print " "
     print "... top plot of first column"
     tcol = time.time()
