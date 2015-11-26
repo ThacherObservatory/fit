@@ -193,9 +193,9 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
         print "Computing histogram of data"
         pinds, = np.where((dist >= minval) & (dist <= maxval))
         try:
-            plt.hist(dist[pinds],bins=nb,normed=True)
+            plt.hist(dist[pinds],bins=nb,normed=True,edgecolor='none')
         except:
-            plt.hist(dist,bins=nb,normed=True)
+            plt.hist(dist,bins=nb,normed=True,edgecolor='none')
             
         #    plt.xlim([minval,maxval])
         plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
@@ -262,9 +262,9 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
         print "Computing histogram of data"
         pinds, = np.where((dist >= minval) & (dist <= maxval))
         try:
-            plt.hist(dist[pinds],bins=nb,normed=True)
+            plt.hist(dist[pinds],bins=nb,normed=True,edgecolor='none')
         except:
-            plt.hist(dist,bins=nb,normed=True)
+            plt.hist(dist,bins=nb,normed=True,edgecolor='none')
         plt.xlim([minval,maxval])
         plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
         plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
@@ -340,9 +340,9 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
             print "Computing histogram of data"
             pinds, = np.where((dist >= minval) & (dist <= maxval))
             try:
-                plt.hist(dist[pinds],bins=nb,normed=True)
+                plt.hist(dist[pinds],bins=nb,normed=True,edgecolor='none')
             except:
-                plt.hist(dist,bins=nb,normed=True)
+                plt.hist(dist,bins=nb,normed=True,edgecolor='none')
             plt.xlim([minval,maxval])
             plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
             plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
@@ -397,13 +397,13 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
 
 
 
-def plot_model(x,data,ebpar,fitinfo,markersize=2,smallmark=1,nbins=100,
+def plot_model(x,data,ebpar,fitinfo,ms=5.0,nbins=100,
                errorbars=False,durfac=5,enum=1,tag='',network=None,
                cadence='short'):
 
     """
     ----------------------------------------------------------------------
-    plot_model_single:
+    plot_model:
     ------------------
     Plot transit model given model params.
 
@@ -559,13 +559,19 @@ def plot_model(x,data,ebpar,fitinfo,markersize=2,smallmark=1,nbins=100,
     ################################################
     # Plotting
 
+    xticks = np.array([-0.05,-0.04,-0.03,-0.02,-0.01,0,0.01,0.02,0.03,0.04,0.05])
+    xvals  = np.array(['-0.05','-0.04','-0.03','-0.02','-0.01','0','0.01','0.02','0.03','0.04','0.05'])
+
+    sticks = np.array([0.45,0.46,0.47,0.48,0.49,0.50,0.51,0.52,0.53,0.54,0.55])
+    svals  = np.array(['0.45','0.46','0.47','0.48','0.49','0.50','0.51','0.52','0.53','0.54','0.55'])
+    
     # Primary eclipse
     fig = plt.figure(109,dpi=300)
     plt.clf()
     plt.subplot(2, 2, 1)
     phiprim = tprim/period
     phicomp1 = tcomp1/period
-    plt.plot(phiprim,xprim,'ko')
+    plt.plot(phiprim,xprim,'ko',ms=6.0)
 #    plt.plot(phiprim,mprim,'gx')
     plt.plot(phicomp1,lcomp1,'r-')
 
@@ -576,11 +582,15 @@ def plot_model(x,data,ebpar,fitinfo,markersize=2,smallmark=1,nbins=100,
     ytop = ymax + (ymax-ymin)*0.1
     ybot = ymin - (ymax-ymin)*0.1
     plt.ylim(ybot,ytop)
-    xleft = -(pe-ps+1.0)
-    xright = (pe-ps+1.0)
-    plt.xlim(xleft,xright)
-    plt.xticks([-0.02,-0.01,0,0.01,0.02],
-           ['-0.02','-0.01','0','0.01','0.02'])
+
+#    xleft = -(pe-ps+1.0)
+#    xright = (pe-ps+1.0)
+#    plt.xlim(xleft,xright)
+#    plt.xticks([-0.02,-0.01,0,0.01,0.02],
+#           ['-0.02','-0.01','0','0.01','0.02'])
+    xinds, = np.where( (xticks > np.min(phiprim)) & (xticks < np.max(phiprim)))
+    plt.xticks(xticks[xinds],xvals[xinds])
+    plt.xlim(np.min(phiprim),np.max(phiprim))
     plt.ylabel('Flux (normalized)')
     plt.xlabel('Phase')
     plt.title('Primary Eclipse',fontsize=12)
@@ -594,7 +604,7 @@ def plot_model(x,data,ebpar,fitinfo,markersize=2,smallmark=1,nbins=100,
     phisec = tsec/period
     phicomp2 = tcomp2/period
     plt.subplot(2, 2, 2)
-    plt.plot(phisec,xsec,'ko')
+    plt.plot(phisec,xsec,'ko',ms=6.0)
 #    plt.plot(phisec,msec,'gx')
     plt.plot(phicomp2,lcomp2,'r-')
     plt.axvline(x=ss,color='b',linestyle='--')
@@ -605,17 +615,20 @@ def plot_model(x,data,ebpar,fitinfo,markersize=2,smallmark=1,nbins=100,
     ybot = ymin - (ymax-ymin)*0.1
     plt.ylim(ybot,ytop)
     x0 =(se+ss)/2
-    xleft = x0-(se-ss)
-    xright = x0+(se-ss)
-    plt.xlim(xleft,xright)
-    plt.xticks([0.48,0.49,0.50,0.51,0.52],
-               ['0.48','0.49','0.50','0.51','0.52'])
+#    xleft = x0-(se-ss)
+#    xright = x0+(se-ss)
+#    plt.xlim(xleft,xright)
+#    plt.xticks([0.48,0.49,0.50,0.51,0.52],
+#               ['0.48','0.49','0.50','0.51','0.52'])
+    xinds, = np.where( (sticks > np.min(phisec)) & (sticks < np.max(phisec)))
+    plt.xticks(sticks[xinds],svals[xinds])
+    plt.xlim(np.min(phisec),np.max(phisec))
     plt.xlabel('Phase')
     plt.title('Secondary Eclipse',fontsize=12)
 
     plt.subplot(2, 1, 2)
     phi1 = ebs.foldtime(rvdata1[0,:]-ebpar['bjd'],t0=t0,period=period)/period
-    plt.plot(phi1,rvdata1[1,:],'ko')
+    plt.plot(phi1,rvdata1[1,:],'ko',ms=7.0)
 #    plt.plot(phi1,rv1,'gx')
     tcomp = np.linspace(-0.5,0.5,10000)*period+t0
     rvmodel1 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
@@ -628,7 +641,7 @@ def plot_model(x,data,ebpar,fitinfo,markersize=2,smallmark=1,nbins=100,
     #             xycoords='axes fraction',fontsize='large')
   
     phi2 = ebs.foldtime(rvdata2[0,:]-ebpar['bjd'],t0=t0,period=period)/period
-    plt.plot(phi2,rvdata2[1,:],'ro')
+    plt.plot(phi2,rvdata2[1,:],'ro',ms=7.0)
 #    plt.plot(phi2,rv2,'gx')
     tcomp = np.linspace(-0.5,0.5,10000)*period+t0
     rvmodel2 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
@@ -675,13 +688,15 @@ def plot_model(x,data,ebpar,fitinfo,markersize=2,smallmark=1,nbins=100,
     fig = plt.figure(111,dpi=300)
     plt.clf()
     plt.subplot(2, 2, 1)
-    plt.plot(phiprim,(xprim-mprim)*100,'ko')
+    plt.plot(phiprim,(xprim-mprim)*100,'ko',ms=6.0)
     sig = np.std((xprim-mprim)*100)
     plt.axhline(y=0,color='r',linestyle='-')
     plt.axvline(x=ps-1.0,color='b',linestyle='--')
     plt.axvline(x=pe,color='b',linestyle='--')
-    plt.xticks([-0.02,-0.01,0,0.01,0.02],
-           ['-0.02','-0.01','0','0.01','0.02'])
+    xinds, = np.where( (xticks > np.min(phiprim)) & (xticks < np.max(phiprim)))
+    plt.xticks(xticks[xinds],xvals[xinds])
+    plt.xlim(np.min(phiprim),np.max(phiprim))
+
     plt.ylim(-5*sig,5*sig)
     plt.ylabel('Residual Flux (percent)')
     plt.xlabel('Phase')
@@ -694,25 +709,26 @@ def plot_model(x,data,ebpar,fitinfo,markersize=2,smallmark=1,nbins=100,
 
     # Secondary eclipse
     plt.subplot(2, 2, 2)
-    plt.plot(phisec,(xsec-msec)*100,'ko')
+    plt.plot(phisec,(xsec-msec)*100,'ko',ms=6.0)
     sig = np.std((xsec-msec)*100)
     plt.axhline(y=0,color='r',linestyle='-')
     plt.axvline(x=ss,color='b',linestyle='--')
     plt.axvline(x=se,color='b',linestyle='--')
     plt.ylim(-5*sig,5*sig)
+    xinds, = np.where( (sticks > np.min(phisec)) & (sticks < np.max(phisec)))
+    plt.xticks(sticks[xinds],svals[xinds])
+    plt.xlim(np.min(phisec),np.max(phisec))
     plt.xlabel('Phase')
     plt.title('Secondary Eclipse',fontsize=12)
-    plt.xticks([0.48,0.49,0.50,0.51,0.52],
-               ['0.48','0.49','0.50','0.51','0.52'])
     
     plt.subplot(2, 1, 2)
-    plt.plot(phi1,rvdata1[1,:]-rv1,'ko')
+    plt.plot(phi1,rvdata1[1,:]-rv1,'ko',ms=7.0)
 
     plt.annotate(r'$\chi^2$ = %.1f' % -lfrv, [0.05,0.85],horizontalalignment='left',
                  xycoords='axes fraction',fontsize='large')
   
     sig = np.std(rvdata2[1,:]-rv2)
-    plt.plot(phi2,rvdata2[1,:]-rv2,'ro')
+    plt.plot(phi2,rvdata2[1,:]-rv2,'ro',ms=7.0)
     plt.axhline(y=0,color='k',linestyle='--')
     plt.xlim(-0.5,0.5)
     plt.ylabel('RV Residuals (km/s)')
@@ -1329,7 +1345,7 @@ def top_plot(dist,position,val=False,sigfac=3.0,frac=0.001,bindiv=10,aspect=1,xl
     nb = np.round((max-min) / (sig/bindiv))
     ax = plt.subplot(position)
     inds, = np.where((dist >= min) & (dist <= max))
-    plt.hist(dist[inds],bins=nb,normed=True,color='black')
+    plt.hist(dist[inds],bins=nb,normed=True,color='black',edgecolor='none')
     if not xlabel: 
         ax.set_xticklabels(())
     ax.set_yticklabels(())
