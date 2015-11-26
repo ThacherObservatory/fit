@@ -502,7 +502,7 @@ def plot_model(x,data,ebpar,fitinfo,ms=5.0,nbins=100,
 
     tcomp1 = np.linspace(np.min(tprim),np.max(tprim),10000)
     lcomp1  = ebs.compute_eclipse(tcomp1,parm,integration=ebpar['integration'],fitrvs=False,
-                              tref=t0,period=period)
+                              tref=0,period=period)
     
     tfold_pos = ebs.foldtime_pos(time,t0=t0,period=period)
     ph_pos = tfold_pos/period
@@ -514,7 +514,7 @@ def plot_model(x,data,ebpar,fitinfo,ms=5.0,nbins=100,
 
     tcomp2 = np.linspace(np.min(tsec),np.max(tsec),10000)
     lcomp2  = ebs.compute_eclipse(tcomp2,parm,integration=ebpar['integration'],fitrvs=False,
-                              tref=t0,period=period)
+                              tref=0,period=period)
 
 
     # Log Likelihood Vector
