@@ -55,18 +55,22 @@ def load_bestparams(network='bellerophon'):
     shorts = glob.glob(path + 'short/*/bestparams.txt')
     longs = glob.glob(path + 'long/*/bestparams.txt')
     
-    bests = {'short':[],'long':[]}
+    bests = {'short':np.ndarray(324, pd.DataFrame),'long':np.ndarray(324, pd.DataFrame)}
     for bestparams in shorts:
+        run = int(bestparams.split('/')[-2])
         vals = [float(val) for val in open(bestparams).readline().strip().replace("  "," ").split(" ")[1:]]
         vals = np.reshape(vals, [5,4])
-        bests['short'].append(pd.DataFrame(vals,index=['M1', 'M2', 'R1', 'R2', 'E'], columns=['Val', 'Med', 'Mode', 'Onesig']))
+        bests['short'][run] = pd.DataFrame(vals,index=['M1', 'M2', 'R1', 'R2', 'E'], columns=['Val', 'Med', 'Mode', 'Onesig'])
         
     for bestparams in longs:
+        run = int(bestparams.split('/')[-2])
         vals = [float(val) for val in open(bestparams).readline().strip().replace("  "," ").split(" ")[1:]]
         vals = np.reshape(vals, [5,4])
-        bests['long'].append(pd.DataFrame(vals,index=['M1', 'M2', 'R1', 'R2', 'E'], columns=['Val', 'Med', 'Mode', 'Onesig']))
+        bests['long'][run] = pd.DataFrame(vals,index=['M1', 'M2', 'R1', 'R2', 'E'], columns=['Val', 'Med', 'Mode', 'Onesig'])
     
     
+    #bests['short'].sort_index()
+    #bests['long'].sort_index()
     #output shape: {short long} x runs x [Val Med Mode Onesig] x [M1 M2 R1 R2 E] 
     return bests
 
@@ -74,24 +78,26 @@ def load_truevalues(network='bellerophon'):
     """loads the contents of all ebpar.p's into an array"""
     path = reb.get_path(network)
     filenames = glob.glob(path + 'long/*/') #long and short trues identical
+    trues = []
     runs = []
     for name in filenames:
-        runs.append(pickle.load( open( name+'ebpar.p', 'rb' ) ))
-    
-    trues = []
-    for params in runs:
+        runs.append(name.split('/')[-2])
+        params = pickle.load( open( name+'ebpar.p', 'rb' ) )
         trues.append([params['Mstar1'],params['Mstar2'],params['Rstar1'],params['Rstar2'],np.sqrt(params['ecosw']**2 + params['esinw']**2)])
     
+   
     #shape: runs x [m1,m2,r1,r2,e]
-    return pd.DataFrame(trues, columns=['m1','m2','r1','r2','e'])
+    return pd.DataFrame(trues, columns=['m1','m2','r1','r2','e'], index=runs).sort_index()
 
 def load_initialparams(network='bellerophon'):
     """loads the contents of all initialparams.txt's into an array"""
     path = reb.get_path(network)
     filenames = glob.glob(path + 'long/*/initialparams.txt') #initialparams identical for longs and shorts
     initials = []
+    runs = []
     for name in filenames:
+        runs.append(int(name.split('/')[-2]))
         initials.append([float(a.strip()) for a in open(name).readlines()])
     
     #shape: runs x [period, photnoise, RVsamples, Rratio, impact]
-    return pd.DataFrame(initials , columns=['period','photnoise','rvsamples','rratio','impact'])
+    return pd.DataFrame(initials , columns=['period','photnoise','rvsamples','rratio','impact'], index=runs).sort_index()
