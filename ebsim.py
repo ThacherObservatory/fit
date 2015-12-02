@@ -84,7 +84,7 @@ def r_to_m(r):
     return (-b + np.sqrt(b**2 - 4*a*c))/(2*a)
 
 
-def make_model_data(m1=0.5,m2=0.3,                         # stellar masses
+def make_model_data(m1=None,m2=None,                       # stellar masses
                     r1=0.5,r2=0.3,                         # stellar radii
                     ecc=0.0,omega=0.0,impact=0,            # orbital shape and orientation
                     period=5.0,t0=2457998.0,               # ephemeris Sept 1, 2017 (~ TESS launch)
@@ -119,8 +119,9 @@ def make_model_data(m1=0.5,m2=0.3,                         # stellar masses
         obsdur = 27.4
             
     # Set mass to be equal to radius in solar units if flag is set
-    if not m1 and not m2:
+    if not m1:
         m1 = r_to_m(r1)
+    if not m2:
         m2 = r_to_m(r2)
 
     # Mass ratio is not used unless gravity darkening is considered.
