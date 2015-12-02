@@ -46,11 +46,27 @@ def doug_test(network='doug'):
     plt.xlabel('Integration Time')
     plt.ylabel('M1 Confidence Interval (%)')
     if network=='bellerophon':
-        plt.savefig('/home/administrator/Desktop/dougtest.png')    
+        plt.savefig('/home/administrator/Desktop/dougtest.png')   
+    
+def plot_relative_error(input_param, stellar_param, network='bellerophon'):
+    """Plots input param vs relative error % of the stellar param
+    input params: ['period','photnoise','rvsamples','rratio','impact']
+    stellar params: ['m1', 'm2', 'r1', 'r2', 'e']"""
+    
+    best_params = load_bestparams(network)
+    true_values = load_truevalues(network)
+    initial_params = load_initialparams(network)
+    
+    #short cadences
+    input_vals = initial_params[input_param]
+    rel_err = [.5*run['onesig'][stellar_param] for run in best_params['short']]/(true_values['m1'])
+    
+    plt.plot(input_vals, rel_err, 'o')
     
     
 def load_bestparams(network='bellerophon'):
-    """Loads the contents of all bestparams.txt's""" 
+    """Loads the contents of all bestparams.txt's
+    output shape: {short long} x runs x [Val Med Mode Onesig] x [M1 M2 R1 R2 E]""" 
     path = reb.get_path(network)
     shorts = glob.glob(path + 'short/*/bestparams.txt')
     longs = glob.glob(path + 'long/*/bestparams.txt')
@@ -60,22 +76,23 @@ def load_bestparams(network='bellerophon'):
         run = int(bestparams.split('/')[-2])
         vals = [float(val) for val in open(bestparams).readline().strip().replace("  "," ").split(" ")[1:]]
         vals = np.reshape(vals, [5,4])
-        bests['short'][run] = pd.DataFrame(vals,index=['M1', 'M2', 'R1', 'R2', 'E'], columns=['Val', 'Med', 'Mode', 'Onesig'])
+        bests['short'][run] = pd.DataFrame(vals,index=['m1', 'm2', 'r1', 'r2', 'e'], columns=['val', 'med', 'mode', 'onesig'])
         
     for bestparams in longs:
         run = int(bestparams.split('/')[-2])
         vals = [float(val) for val in open(bestparams).readline().strip().replace("  "," ").split(" ")[1:]]
         vals = np.reshape(vals, [5,4])
-        bests['long'][run] = pd.DataFrame(vals,index=['M1', 'M2', 'R1', 'R2', 'E'], columns=['Val', 'Med', 'Mode', 'Onesig'])
+        bests['long'][run] = pd.DataFrame(vals,index=['m1', 'm2', 'r1', 'r2', 'e'], columns=['val', 'med', 'mode', 'onesig'])
     
+    bests['short'] = [x for x in bests['short'] if x is not None]
+    bests['long'] = [x for x in bests['long'] if x is not None]
     
-    #bests['short'].sort_index()
-    #bests['long'].sort_index()
     #output shape: {short long} x runs x [Val Med Mode Onesig] x [M1 M2 R1 R2 E] 
     return bests
 
 def load_truevalues(network='bellerophon'):
-    """loads the contents of all ebpar.p's into an array"""
+    """loads the contents of all ebpar.p's into a sorted DataFrame
+    output shape: runs x [m1,m2,r1,r2,e]"""
     path = reb.get_path(network)
     filenames = glob.glob(path + 'long/*/') #long and short trues identical
     trues = []
@@ -90,7 +107,8 @@ def load_truevalues(network='bellerophon'):
     return pd.DataFrame(trues, columns=['m1','m2','r1','r2','e'], index=runs).sort_index()
 
 def load_initialparams(network='bellerophon'):
-    """loads the contents of all initialparams.txt's into an array"""
+    """loads the contents of all initialparams.txt's into a sorted DataFrame
+    output shape: runs x [period, photnoise, RVsamples, Rratio, impact]"""
     path = reb.get_path(network)
     filenames = glob.glob(path + 'long/*/initialparams.txt') #initialparams identical for longs and shorts
     initials = []
