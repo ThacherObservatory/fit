@@ -81,7 +81,7 @@ def load_truevalues(network='bellerophon'):
     trues = []
     runs = []
     for name in filenames:
-        runs.append(name.split('/')[-2])
+        runs.append(int(name.split('/')[-2]))
         params = pickle.load( open( name+'ebpar.p', 'rb' ) )
         trues.append([params['Mstar1'],params['Mstar2'],params['Rstar1'],params['Rstar2'],np.sqrt(params['ecosw']**2 + params['esinw']**2)])
     
