@@ -76,6 +76,8 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon'):
         pts = bins_dict[val]
         meds.append(np.median(pts))
         yerrs.append(rb.std(np.array(pts)))
+    meds = np.array(meds)
+    yerrs = np.array(yerrs)
     plt.figure()
     plt.ion()
     plt.errorbar(bins_dict.keys(), meds, yerr=yerrs,fmt='o')
