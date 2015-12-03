@@ -64,7 +64,15 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon'):
     plt.figure()
     plt.ion()
     plt.plot(input_vals, rel_err, 'o')
-    #plt.savefig(input_param + 'vs' + stellar_param + '.png')
+    plt.xlabel(input_param)
+    plt.ylabel('Relative error of '+stellar_param)
+    xmin = np.min(input_vals) - np.ptp(input_vals)/5
+    xmax = np.max(input_vals) + np.ptp(input_vals)/5
+    ymin = np.min(rel_err) - np.ptp(rel_err)/5
+    ymax = np.min(rel_err) + np.ptp(rel_err)/5
+    plt.xlim(xmin, xmax)
+    plt.ylim(ymin, ymax)
+    plt.savefig(input_param + 'vs' + stellar_param + '.png')
     
     
 def load_bestparams(network='bellerophon'):
