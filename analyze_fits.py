@@ -14,42 +14,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import robust as rb
+import os
 
-def doug_test(network='doug'):
-    bests = np.array(load_bestparams(network))
-    trues = load_truevalues(network)
-    initials = load_initialparams(network)
-    nruns = len(bests)
-    
-    
-    #standard error: (measured-real)/(1/2 * onesigma)
-    #confidence interval: (1/2 * onesigma)/(real value)
-    
-    plt.figure()
-    plt.ion()
-    ival = 0 #m1
-    bins_dict = {}
-    for nrun in range(nruns):
-        ste = (bests[nrun][ival][1] - trues[nrun][ival])/(.5*bests[nrun][ival][3])
-        CI = (.5*bests[nrun][ival][3])/(trues[nrun][ival]) * 100
-        t = initials[nrun][1]
-        if t in bins_dict.keys():
-            bins_dict[t].append(CI)
-        else:
-            bins_dict[t] = [CI]
-    for val in bins_dict.keys():
-        mean = np.average(bins_dict[val])
-        std = np.std(bins_dict[val])
-        plt.plot([val]*len(bins_dict[val]), bins_dict[val], 'o')
-        #plt.errorbar(v al, mean, yerr=std,fmt='o')
-       # plt.plot()
+def plot_suite(network='bellerophon-old'):
+    input_params = ['period','photnoise','rvsamples','rratio','impact']
+    stellar_params = ['m1', 'm2', 'r1', 'r2', 'e']
+    for i in input_params:
+        for s in stellar_params:
+            plot_relative_error(i, s, network, view=False)
 
-    plt.xlabel('Integration Time')
-    plt.ylabel('M1 Confidence Interval (%)')
-    if network=='bellerophon':
-        plt.savefig('/home/administrator/Desktop/dougtest.png')   
     
-def plot_relative_error(input_param, stellar_param, network='bellerophon'):
+def plot_relative_error(input_param, stellar_param, network='bellerophon',view=True):
     """Plots input param vs relative error % of the stellar param
     input params: ['period','photnoise','rvsamples','rratio','impact']
     stellar params: ['m1', 'm2', 'r1', 'r2', 'e']"""
@@ -94,8 +69,9 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon'):
     plt.xlim(xmin, xmax)
     plt.ylim(ymin, ymax)
 
-    plt.show()
-    plt.savefig(input_param + ' vs ' + stellar_param + '.png')
+    if view:
+        plt.show()
+    plt.savefig(reb.get_path(network) + 'plots/' + input_param + ' vs ' + stellar_param + '.png')
     
     
 def load_bestparams(network='bellerophon'):
