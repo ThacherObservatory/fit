@@ -66,7 +66,7 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon'):
     plt.plot(input_vals, rel_err, 'o')
     plt.xlabel(input_param)
     plt.ylabel('Relative error of '+stellar_param)
-    if stellar_param == 'photnoise':
+    if input_param == 'photnoise':
         xmax = np.max(input_vals) + np.ptp(input_vals)/5
         ymin = np.min(rel_err) - np.ptp(rel_err)/5
         ymax = np.min(rel_err) + np.ptp(rel_err)/5
