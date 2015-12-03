@@ -53,8 +53,8 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon',view=T
         yerrs.append(rb.std(np.array(pts)))
     meds = np.array(meds)
     yerrs = np.array(yerrs)
+    plt.ioff()
     plt.figure()
-    plt.ion()
     plt.errorbar(bins_dict.keys(), meds, yerr=yerrs,fmt='o')
     plt.xlabel(input_param)
     plt.ylabel(stellar_param + ' % relative error')
@@ -70,6 +70,7 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon',view=T
     plt.ylim(ymin, ymax)
 
     if view:
+        plt.ion()
         plt.show()
     plt.savefig(reb.get_path(network) + 'plots/' + input_param + ' vs ' + stellar_param + '.png')
     
