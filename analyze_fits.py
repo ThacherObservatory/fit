@@ -59,19 +59,20 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon'):
     
     #short cadences
     input_vals = initial_params[input_param]
-    rel_err = [.5*run['onesig'][stellar_param] for run in best_params['short']]/(true_values['m1'])
+    rel_err = [50*run['onesig'][stellar_param] for run in best_params['short']]/(true_values['m1'])
     
     plt.figure()
     plt.ion()
     plt.plot(input_vals, rel_err, 'o')
     plt.xlabel(input_param)
-    plt.ylabel('Relative error of '+stellar_param)
+    plt.ylabel(stellar_param + ' % relative error')
     if input_param == 'photnoise':
+	xmin = np.min(input_vals) - np.log(np.ptp(input_vals)/5)
         xmax = np.max(input_vals) + np.ptp(input_vals)/5
         ymin = np.min(rel_err) - np.ptp(rel_err)/5
-        ymax = np.min(rel_err) + np.ptp(rel_err)/5
-        plt.xlim(0, xmax)
-        plt.ylim(ymin, ymax)
+        ymax = np.max(rel_err) + np.ptp(rel_err)/5
+        plt.xlim(.000005, .015)
+	plt.ylim(0, 5)
         plt.xscale('log')
     plt.show()
     plt.savefig(input_param + ' vs ' + stellar_param + '.png')
