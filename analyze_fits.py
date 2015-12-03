@@ -13,6 +13,7 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import robust as rb
 
 def doug_test(network='doug'):
     bests = np.array(load_bestparams(network))
@@ -60,19 +61,35 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon'):
     #short cadences
     input_vals = initial_params[input_param]
     rel_err = [50*run['onesig'][stellar_param] for run in best_params['short']]/(true_values['m1'])
+
+    #bin the data
+    bins_dict = {}
+    for val, err in zip(input_vals, rel_err):
+        if val in bins_dict.keys():
+            bins_dict[val].append(err)
+        else:
+            bins_dict[val] = [err]  
+    print bins_dict
     
+    meds = []
+    yerrs = []
+    for val in bins_dict.keys():
+        pts = bins_dict[val]
+        meds.append(np.median(pts))
+        yerrs.append(rb.std(np.array(pts)))
     plt.figure()
     plt.ion()
-    plt.plot(input_vals, rel_err, 'o')
+    plt.errorbar(bins_dict.keys(), meds, yerr=yerrs,fmt='o')
+    #plt.plot(input_vals, rel_err, 'o')
     plt.xlabel(input_param)
     plt.ylabel(stellar_param + ' % relative error')
     if input_param == 'photnoise':
-	xmin = np.min(input_vals) - np.log(np.ptp(input_vals)/5)
+        xmin = np.min(input_vals) - np.log(np.ptp(input_vals)/5)
         xmax = np.max(input_vals) + np.ptp(input_vals)/5
         ymin = np.min(rel_err) - np.ptp(rel_err)/5
         ymax = np.max(rel_err) + np.ptp(rel_err)/5
         plt.xlim(.000005, .015)
-	plt.ylim(0, 5)
+        plt.ylim(0, 5)
         plt.xscale('log')
     plt.show()
     plt.savefig(input_param + ' vs ' + stellar_param + '.png')
