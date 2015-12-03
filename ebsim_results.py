@@ -1085,12 +1085,12 @@ def params_of_interest(seq_num,chains=False,lp=False,network=None,cadence='short
     meds   = np.append(meds,med)
     modes  = np.append(modes,mode)
     onesig = np.append(onesig,interval)
-
+    
     outstr = 'Run'+str(seq_num)+ ' %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f' % (vals[0],meds[0],modes[0],onesig[0],vals[1],meds[1],modes[1],onesig[1],vals[2],meds[2],modes[2],onesig[2],vals[3],meds[3],modes[3],onesig[3],vals[4],meds[4],modes[4],onesig[4])
 
     f = open(path+'bestparams.txt','w')
     f.write(outstr+'\n')
-    f.closed
+    f.close()
 
     return 
 
