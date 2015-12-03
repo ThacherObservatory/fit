@@ -61,7 +61,10 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon'):
     input_vals = initial_params[input_param]
     rel_err = [.5*run['onesig'][stellar_param] for run in best_params['short']]/(true_values['m1'])
     
+    plt.figure()
+    plt.ion()
     plt.plot(input_vals, rel_err, 'o')
+    #plt.savefig(input_param + 'vs' + stellar_param + '.png')
     
     
 def load_bestparams(network='bellerophon'):
