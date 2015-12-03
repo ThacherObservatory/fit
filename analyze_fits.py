@@ -81,10 +81,10 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon'):
     plt.errorbar(bins_dict.keys(), meds, yerr=yerrs,fmt='o')
     plt.xlabel(input_param)
     plt.ylabel(stellar_param + ' % relative error')
-    xmin = np.min(input_vals) - np.ptp(input_vals)/5
-    xmax = np.max(input_vals) + np.ptp(input_vals)/5
-    ymin = np.min(rel_err) - np.ptp(rel_err)/5
-    ymax = np.max(rel_err) + np.ptp(rel_err)/5
+    xmin = np.min(bins_dict.keys()) - np.ptp(bins_dict.keys())/5
+    xmax = np.max(bins_dict.keys()) + np.ptp(bins_dict.keys())/5
+    ymin = np.min(meds - yerrs) - np.ptp(meds)/5
+    ymax = np.max(meds + yerrs) + np.ptp(meds)/5
     if input_param == 'photnoise':
         plt.xscale('log')
         xmin = .000005
