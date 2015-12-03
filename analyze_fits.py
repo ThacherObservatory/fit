@@ -72,7 +72,9 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon'):
     ymax = np.min(rel_err) + np.ptp(rel_err)/5
     plt.xlim(xmin, xmax)
     plt.ylim(ymin, ymax)
-    plt.savefig(input_param + 'vs' + stellar_param + '.png')
+    plt.xscale('log')
+    plt.show()
+    plt.savefig(input_param + ' vs ' + stellar_param + '.png')
     
     
 def load_bestparams(network='bellerophon'):
