@@ -69,7 +69,6 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon'):
             bins_dict[val].append(err)
         else:
             bins_dict[val] = [err]  
-    print bins_dict
     
     meds = []
     yerrs = []
@@ -80,17 +79,19 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon'):
     plt.figure()
     plt.ion()
     plt.errorbar(bins_dict.keys(), meds, yerr=yerrs,fmt='o')
-    #plt.plot(input_vals, rel_err, 'o')
     plt.xlabel(input_param)
     plt.ylabel(stellar_param + ' % relative error')
+    xmin = np.min(input_vals) - np.ptp(input_vals)/5
+    xmax = np.max(input_vals) + np.ptp(input_vals)/5
+    ymin = np.min(rel_err) - np.ptp(rel_err)/5
+    ymax = np.max(rel_err) + np.ptp(rel_err)/5
     if input_param == 'photnoise':
-        xmin = np.min(input_vals) - np.log(np.ptp(input_vals)/5)
-        xmax = np.max(input_vals) + np.ptp(input_vals)/5
-        ymin = np.min(rel_err) - np.ptp(rel_err)/5
-        ymax = np.max(rel_err) + np.ptp(rel_err)/5
-        plt.xlim(.000005, .015)
-        plt.ylim(0, 5)
         plt.xscale('log')
+        xmin = .000005
+        xmax = .015
+    plt.xlim(xmin, xmax)
+    plt.ylim(ymin, ymax)
+
     plt.show()
     plt.savefig(input_param + ' vs ' + stellar_param + '.png')
     
