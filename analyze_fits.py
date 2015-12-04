@@ -54,6 +54,7 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon',view=T
         yerrs.append(rb.std(np.array(pts)))
     meds = np.array(meds)
     yerrs = np.array(yerrs)
+    plt.clf()
     plt.ioff
     plt.errorbar(bins_dict.keys(), meds, yerr=yerrs,fmt='o')
     plt.xlabel(input_param)
