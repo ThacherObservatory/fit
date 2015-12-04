@@ -21,10 +21,11 @@ def plot_suite(network='bellerophon-old'):
     stellar_params = ['m1', 'm2', 'r1', 'r2', 'e']
     for i in input_params:
         for s in stellar_params:
-            plot_relative_error(i, s, network, view=False)
+            plot_relative_error(i, s, network, view=False,cadence='short')
+            plot_relative_error(i,s,network,view=False,cadence='long')
 
     
-def plot_relative_error(input_param, stellar_param, network='bellerophon',view=True):
+def plot_relative_error(input_param, stellar_param, network='bellerophon',view=True,cadence='short'):
     """Plots input param vs relative error % of the stellar param
     input params: ['period','photnoise','rvsamples','rratio','impact']
     stellar params: ['m1', 'm2', 'r1', 'r2', 'e']"""
@@ -35,7 +36,7 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon',view=T
     
     #short cadences
     input_vals = initial_params[input_param]
-    rel_err = [50*run['onesig'][stellar_param] for run in best_params['short']]/(true_values['m1'])
+    rel_err = [50*run['onesig'][stellar_param] for run in best_params[cadence]]/(true_values['m1'])
 
     #bin the data
     bins_dict = {}
@@ -53,8 +54,7 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon',view=T
         yerrs.append(rb.std(np.array(pts)))
     meds = np.array(meds)
     yerrs = np.array(yerrs)
-    plt.ioff()
-    plt.figure()
+    plt.ioff
     plt.errorbar(bins_dict.keys(), meds, yerr=yerrs,fmt='o')
     plt.xlabel(input_param)
     plt.ylabel(stellar_param + ' % relative error')
@@ -72,7 +72,7 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon',view=T
     if view:
         plt.ion()
         plt.show()
-    plt.savefig(reb.get_path(network) + 'plots/' + input_param + ' vs ' + stellar_param + '.png')
+    plt.savefig(reb.get_path(network) + 'plots/' + input_param + ' vs ' + stellar_param + '-'+cadence+'.png')
     
     
 def load_bestparams(network='bellerophon'):
