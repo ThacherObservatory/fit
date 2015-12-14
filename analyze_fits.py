@@ -159,7 +159,7 @@ def noise_to_mag(noise_in,debug=False):
         plt.clf()
         plt.plot(mag,noise,'o')
         plt.yscale('log')
-        plt.plot([noise_in],[mag_out],'rx',markersize=20)
+        plt.plot([mag_out],[noise_in],'rx',markersize=20)
 
     return mag_out
     
