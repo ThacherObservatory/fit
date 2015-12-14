@@ -131,3 +131,35 @@ def load_initialparams(network='bellerophon'):
     
     #shape: runs x [period, photnoise, RVsamples, Rratio, impact]
     return pd.DataFrame(initials , columns=['period','photnoise','rvsamples','rratio','impact'], index=runs).sort_index()
+
+
+def noise_to_mag(noise_in,debug=False):
+    from scipy.interpolate import interp1d
+
+    if noise_in < 60.0 or noise_in > 22775.486:
+        return np.nan
+    
+    # These data were taken from Sullivan et al. (2015) figure using GraphClick
+    mag = np.array([4.000, 4.703, 5.382, 5.822, 6.493, 7.050, 7.539, 8.104, 
+                    8.639, 9.170, 9.823, 10.653, 11.313, 11.942, 12.419, 13.065,
+                    13.669,14.182, 14.646,15.328,15.784,16.025, 16.956])
+
+    noise = np.array([60.000, 61.527, 62.717, 65.357, 68.866, 74.845, 82.670,	 
+                      95.163, 114.670, 137.554, 180.130, 264.020, 375.210,	 
+                      531.251, 708.058, 1055.581, 1535.950, 2333.945, 3338.925, 
+                      5901.051, 8586.475, 10238.113, 22775.486])
+
+    func = interp1d(noise,mag,kind='cubic')
+
+    mag_out = func(noise_in)
+    
+    if debug:
+        plt.ion()
+        plt.figure(1)
+        plt.clf()
+        plt.plot(mag,noise,'o')
+        plt.yscale('log')
+        plt.plot([noise_in],[mag_out],'rx',markersize=20)
+
+    return mag_out
+    
