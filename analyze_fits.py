@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import robust as rb
 import os
+from scipy.interpolate import interp1d as interp
+from plot_params import *
 
 def plot_suite(network='bellerophon-old'):
     input_params = ['period','photnoise','rvsamples','rratio','impact']
@@ -26,9 +28,11 @@ def plot_suite(network='bellerophon-old'):
 
     
 def plot_relative_error(input_param, stellar_param, network='bellerophon',view=True,cadence='short'):
-    """Plots input param vs relative error % of the stellar param
+    """
+    Plots input param vs relative error % of the stellar param
     input params: ['period','photnoise','rvsamples','rratio','impact']
-    stellar params: ['m1', 'm2', 'r1', 'r2', 'e']"""
+    stellar params: ['m1', 'm2', 'r1', 'r2', 'e']
+    """
     
     best_params = load_bestparams(network)
     true_values = load_truevalues(network)
@@ -36,8 +40,11 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon',view=T
     
     #short cadences
     input_vals = initial_params[input_param]
+
+    # !!! is the 'm1' index a bug? !!!
     rel_err = [50*run['onesig'][stellar_param] for run in best_params[cadence]]/(true_values['m1'])
 
+    
     #bin the data
     bins_dict = {}
     for val, err in zip(input_vals, rel_err):
@@ -77,8 +84,11 @@ def plot_relative_error(input_param, stellar_param, network='bellerophon',view=T
     
     
 def load_bestparams(network='bellerophon'):
-    """Loads the contents of all bestparams.txt's
-    output shape: {short long} x runs x [Val Med Mode Onesig] x [M1 M2 R1 R2 E]""" 
+    """
+    Loads the contents of all bestparams.txt's
+    output shape: {short long} x runs x [Val Med Mode Onesig] x [M1 M2 R1 R2 E]
+    """ 
+
     path = reb.get_path(network)
     shorts = glob.glob(path + 'short/*/bestparams.txt')
     longs = glob.glob(path + 'long/*/bestparams.txt')
@@ -164,9 +174,125 @@ def noise_to_mag(noise_in,debug=False):
     return mag_out
     
 
-def final_plots(network='external'):
-    bests = load_bestparams(network=network)
-    trues = load_truevalues(network=network)
+def get_plot_data(input_param,stellar_param,cadence='short',network='external',nograze=True,
+                  accuracy=False):
+    """
+    Loads vectors of param, relative error or absolute error, and error on the distribution of
+    errors.
+    
+    input params: ['period','photnoise','rvsamples','rratio','impact']
+    stellar params: ['m1', 'm2', 'r1', 'r2', 'e']
+    """
+
+    # Load best, true and initial values
+    best_params = load_bestparams(network)
+    true_values = load_truevalues(network)
+    initial_params = load_initialparams(network)
+    
+    # Short cadences
+    input_vals = initial_params[input_param]
+
+
+    # Get accuracy of fitted parameter, else get relative error.
+    if accuracy:
+        err = ([run['onesig'][stellar_param] for run in best_params[cadence]] - \
+               true_values[stellar_param])/ true_values[stellar_param]
+    else:
+    # Relative error in percent (half of 1 sigma interval)
+        err = [0.5*100*run['onesig'][stellar_param] for run in best_params[cadence]]/ \
+              (true_values[stellar_param])
+
+    if nograze:
+        inds, = np.where(initial_params['impact'] < 1.0)
+        input_vals = input_vals[inds]
+        err = err[inds]
+        
+    # Bin the data
+    bins_dict = {}
+    for val, err in zip(input_vals, err):
+        if val in bins_dict.keys():
+            bins_dict[val].append(err)
+        else:
+            bins_dict[val] = [err]  
+
+    meds = []
+    yerrs = []
+    for val in bins_dict.keys():
+        pts = bins_dict[val]
+        meds.append(np.median(pts))
+        yerrs.append(rb.std(np.array(pts)))
+    meds = np.array(meds)
+    yerrs = np.array(yerrs)
+
+    return bins_dict.keys(), meds, yerrs
+
+
+def accuracy_plot():
+    pass
+
+
+def mass_plots(network='external',nograze=True,view=True,region=True):
+
+    """
+    Plots input param vs relative error % of the stellar param
+    input params: ['period','photnoise','rvsamples','rratio','impact']
+    stellar params: ['m1', 'm2', 'r1', 'r2', 'e']
+    """
+
+    # Get the plot data
+    nrvs1, rvmed1, err1 = get_plot_data('rvsamples','m1',cadence='short',network='external',nograze=True)
+    nrvs2, rvmed2, err2 = get_plot_data('rvsamples','m2',cadence='short',network='external',nograze=True)
+    
+    plt.clf()
+    plt.ioff()
+    plot_params(fontsize=20)
+    if region:
+        e1f = interp(nrvs1,rvmed1,kind='linear')
+        e1ft = interp(nrvs1,rvmed1+err1,kind='linear')
+        e1fb = interp(nrvs1,rvmed1-err1,kind='linear')
+        x1 = np.linspace(np.min(nrvs1),np.max(nrvs1),1000)
+        et1 = e1ft(x1)
+        eb1 = e1fb(x1)
+        plt.plot(x1,et1,'b-',linewidth=1)
+        plt.plot(x1,eb1,'b-',linewidth=1)
+        plt.fill_between(x1,et1,eb1,where=et1>=eb1, facecolor='blue', interpolate=True,alpha=0.5)        
+        plt.plot(x1,e1f(x1),'b-',linewidth=5)
+        plt.plot(nrvs1,rvmed1,'bo',markersize=20)
+
+        e2f = interp(nrvs2,rvmed2,kind='linear')
+        e2ft = interp(nrvs2,rvmed2+err2,kind='linear')
+        e2fb = interp(nrvs2,rvmed2-err2,kind='linear')
+        x2 = np.linspace(np.min(nrvs2),np.max(nrvs2),1000)
+        et2 = e2ft(x2)
+        eb2 = e2fb(x2)
+        plt.plot(x2,et,'-',color='darkgoldenrod',linewidth=1)
+        plt.plot(x2,eb,'-',color='darkgoldenrod',linewidth=1)
+        plt.fill_between(x2,et2,eb2,where=et2>=eb2, facecolor='darkgoldenrod', interpolate=True,alpha=0.5)        
+        plt.plot(x2,e2f(x2),'-',color='darkgoldenrod',linewidth=5)
+        plt.plot(nrvs2,rvmed2,'o',color='darkgoldenrod',markersize=20)
+
+    else:
+        
+
+
+        plt.errorbar(bins_dict.keys(), meds, yerr=yerrs,fmt='o')
+    plt.xlabel(input_param)
+    plt.ylabel(stellar_param + ' % relative error')
+    xmin = np.min(bins_dict.keys()) - np.ptp(bins_dict.keys())/5
+    xmax = np.max(bins_dict.keys()) + np.ptp(bins_dict.keys())/5
+    ymin = np.min(meds - yerrs) - np.ptp(meds)/5
+    ymax = np.max(meds + yerrs) + np.ptp(meds)/5
+    if input_param == 'photnoise':
+        plt.xscale('log')
+        xmin = .000005
+        xmax = .015
+    plt.xlim(xmin, xmax)
+    plt.ylim(ymin, ymax)
+
+    if view:
+        plt.ion()
+        plt.show()
+    #plt.savefig(reb.get_path(network) + 'plots/' + input_param + ' vs ' + stellar_param + '-'+cadence+'.png')
 
     
     return
