@@ -214,6 +214,8 @@ def get_path(network=None):
         path = '/home/douglas/Simulations/'
     elif network=='bellerophon-old':
         path = '/home/administrator/old_Simulations/old_02December2015/'
+    elif network =='external':
+        path = '/Volumes/Pegasus/EBs/Simulations/'
 
     return path
 

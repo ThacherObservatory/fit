@@ -163,3 +163,10 @@ def noise_to_mag(noise_in,debug=False):
 
     return mag_out
     
+
+def final_plots(network='external'):
+    bests = load_bestparams(network=network)
+    trues = load_truevalues(network=network)
+
+    
+    return
