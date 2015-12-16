@@ -194,8 +194,10 @@ def get_plot_data(input_param,stellar_param,cadence='short',network='external',n
 
     # Get accuracy of fitted parameter, else get relative error.
     if accuracy:
-        err = ([run['onesig'][stellar_param] for run in best_params[cadence]] - \
-               true_values[stellar_param])/ true_values[stellar_param]
+        # !!! Check this !!!
+        sig = [0.5*run['onesig'][stellar_param] for run in best_params[cadence]]
+        err = ([run['med'][stellar_param] for run in best_params[cadence]] - \
+               true_values[stellar_param])/ sig
     else:
     # Relative error in percent (half of 1 sigma interval)
         err = [0.5*100*run['onesig'][stellar_param] for run in best_params[cadence]]/ \
@@ -215,7 +217,7 @@ def get_plot_data(input_param,stellar_param,cadence='short',network='external',n
         err_val = err[inds]
     else:
         in_val = input_vals[range(len(input_vals))]
-        err_val = err[range(len(err_val))]
+        err_val = err[range(len(err))]
 
         
     # Bin the data
@@ -239,10 +241,36 @@ def get_plot_data(input_param,stellar_param,cadence='short',network='external',n
 
 
 def accuracy_plot():
-    pass
+    # Get the plot data
+    phot1, r1med, err1 = af.get_plot_data('photnoise','r1',cadence='short',network='external',
+                                           nograze=False,highrvs=False,accuracy=True)
+    phot2, r2med, err2 = af.get_plot_data('photnoise','r2',cadence='short',network='external',
+                                           nograze=True,highrvs=False,accuracy=True)
+
+    plt.figure(3)
+    plt.clf()
+    plt.gcf().subplots_adjust(bottom=0.15,left=0.15)
+    plot_params(fontsize=20)
+    
+    plt.errorbar(phot1,r1med,yerr=err1,fmt='o',color='black',lw=3,markersize=15,label='Primary')
+    plt.errorbar(phot2,r2med,yerr=err2,fmt='o',color='darkgoldenrod',lw=3,markersize=15,label='Secondary')
+    plt.xscale('log')
+    plt.xlim(5e-6,2e-2)
+    plt.ylim(-2,3)
+    plt.xlabel('Photometric Noise (ppm)',fontsize=20)
+    plt.ylabel(r'$(R - R_{true})/\sigma$',fontsize=20)
+
+    plt.legend(loc='upper left',fontsize=18,numpoints=1)
+    plt.title('Stellar Radius Accuracy vs. Photometric Noise',fontsize=18)
+    plt.axhline(y=0,ls='--',lw=3,color='purple')
+ 
+    plt.savefig('Radius_Abs_Error.png',dpi=300)
 
 
-def mass_plots(network='external',nograze=True,view=True,region=True):
+    return
+
+
+def mass_plots_old(network='external',nograze=True,view=True,region=True):
 
     """
     Plots input param vs relative error % of the stellar param
@@ -299,6 +327,67 @@ def mass_plots(network='external',nograze=True,view=True,region=True):
     return
 
 
+def mass_plots(network='external',nograze=True,view=True,region=True):
+
+    """
+    Plots input param vs relative error % of the stellar param
+    input params: ['period','photnoise','rvsamples','rratio','impact']
+    stellar params: ['m1', 'm2', 'r1', 'r2', 'e']
+    """
+
+    # Get the plot data
+    nrvs1, m1med, err1 = get_plot_data('rvsamples','m1',cadence='short',network='external',
+                                           nograze=True,highrvs=False)
+    nrvs2, m2med, err2 = get_plot_data('rvsamples','m2',cadence='short',network='external',
+                                           nograze=True,highrvs=False)
+    n1val = 130
+    m1val = 0.55
+    s1 = np.argsort(nrvs1)
+    n1 = np.append(np.array(nrvs1)[s1],np.array(n1val),)
+    m1 = np.append(np.array(m1med)[s1],np.array(m1val))
+    e1 = np.append(np.array(err1)[s1],np.array(0.1))
+
+    n2val = 130
+    m2val = 0.6
+    s2 = np.argsort(nrvs2)
+    n2 = np.append(np.array(nrvs2)[s2],np.array(n2val),)
+    m2 = np.append(np.array(m2med)[s2],np.array(m2val))
+    e2 = np.append(np.array(err2)[s2],np.array(0.1))
+
+
+    
+    plt.figure(1)
+    plt.gcf().subplots_adjust(bottom=0.15)
+    plt.clf()
+    plot_params(fontsize=20)
+
+    plt.plot(n1[:-1],m1[:-1],'ko',markersize=20)
+
+    m1f = interp(n1,m1,kind='quadratic')
+    x1 = np.linspace(np.min(n1[:-1]),np.max(n1[:-1]),1000)
+    m1fit = m1f(x1)
+    plt.plot(x1,m1fit,'k-',linewidth=5,label='Primary')
+
+
+    plt.plot(n2[:-1],m2[:-1],'o',color='darkgoldenrod',markersize=20)
+
+    m2f = interp(n2,m2,kind='quadratic')
+    x2 = np.linspace(np.min(n2[:-1]),np.max(n2[:-1]),1000)
+    m2fit = m2f(x2)
+    plt.plot(x2,m2fit,'-',color='darkgoldenrod',linewidth=5,label='Secondary')
+
+    plt.xlabel('Number of RV Data Points',fontsize=20)
+    plt.ylabel('Relative Error (%)',fontsize=20)
+    plt.title('Stellar Mass Precision vs. RV Samples',fontsize=20)
+    plt.legend(loc='upper right',fontsize=18)
+    plt.axhline(y=1,ls='--',lw=3,color='purple')
+    
+    plt.savefig('Mass_Rel_Error.png',dpi=300)
+
+
+    return
+
+
 def radius_plots(network='external',nograze=True,view=True,region=True,cadence='short'):
 
     """
@@ -308,9 +397,9 @@ def radius_plots(network='external',nograze=True,view=True,region=True,cadence='
     """
 
     # Get the plot data
-    phot1, r1med, err1 = af.get_plot_data('photnoise','r1',cadence='short',network='external',
+    phot1, r1med, err1 = get_plot_data('photnoise','r1',cadence=cadence,network='external',
                                        nograze=True,highrvs=True)
-    phot2, r2med, err2 = af.get_plot_data('photnoise','r2',cadence='short',network='external',
+    phot2, r2med, err2 = get_plot_data('photnoise','r2',cadence=cadence,network='external',
                                        nograze=True,highrvs=True)
     p1val = 1e-6
     r1val = 0.5
@@ -327,37 +416,41 @@ def radius_plots(network='external',nograze=True,view=True,region=True,cadence='
     e2 = np.append(np.array(0.1),np.array(err2)[s2])
 
     
-    plt.figure(1,figsize=(8,7))
+    plt.figure(2)
+    plt.gcf().subplots_adjust(bottom=0.15)
     plt.clf()
     plot_params(fontsize=20)
 
     logphot2 = np.log10(p2)
 
-    plt.plot(p2[1:],r2[1:],'o',color='darkgoldenrod',markersize=20)
+    plt.plot(p2[1:]*1e6,r2[1:],'o',color='darkgoldenrod',markersize=20)
     plt.xscale('log')
 
     r2f = interp(logphot2,r2,kind='cubic')
     x2 = np.linspace(np.min(logphot2[1:]),np.max(logphot2[1:]),1000)
     r2fit = r2f(x2)
-    plt.plot(10**x2,r2fit,'-',color='darkgoldenrod',linewidth=5)
+    plt.plot(10**x2*1e6,r2fit,'-',color='darkgoldenrod',linewidth=5)
 
     logphot1 = np.log10(p1)
 
-    plt.plot(p1[1:],r1[1:],'ko',markersize=20)
+    plt.plot(p1[1:]*1e6,r1[1:],'ko',markersize=20)
     plt.xscale('log')
 
     r1f = interp(logphot1,r1,kind='cubic')
     x1 = np.linspace(np.min(logphot1[1:]),np.max(logphot1[1:]),1000)
     r1fit = r1f(x1)
-    plt.plot(10**x1,r1fit,'k-',linewidth=5,label='Radius 1')
-    plt.plot([1e-5],[0],'-',color='darkgoldenrod',linewidth=5,label='Radius 2')
+    plt.plot(10**x1*1e6,r1fit,'k-',linewidth=5,label='Primary')
+    plt.plot([10],[0],'-',color='darkgoldenrod',linewidth=5,label='Secondary')
     
     
-    plt.xlabel('Photometric Noise',fontsize=20)
-    plt.ylabel('Relative Error',fontsize=20)
+    plt.xlabel('Photometric Noise (ppm)',fontsize=20)
+    plt.ylabel('Relative Error (%)',fontsize=20)
 
     plt.legend(loc='upper left',fontsize=18)
-    plt.title('Stellar Radius Precision vs. Photometric Noise',fontsize=20)
+    plt.title('Stellar Radius Precision vs. Photometric Noise',fontsize=18)
+    plt.axhline(y=1,ls='--',lw=3,color='purple')
+ 
+    plt.savefig('Radius_Rel_Error_'+cadence+'.png',dpi=300)
 
 
     return
