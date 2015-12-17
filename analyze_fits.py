@@ -354,7 +354,6 @@ def mass_plots(network='external',nograze=True,view=True,region=True):
     m2 = np.append(np.array(m2med)[s2],np.array(m2val))
     e2 = np.append(np.array(err2)[s2],np.array(0.1))
 
-
     
     plt.figure(1)
     plt.gcf().subplots_adjust(bottom=0.15)
@@ -376,6 +375,8 @@ def mass_plots(network='external',nograze=True,view=True,region=True):
     m2fit = m2f(x2)
     plt.plot(x2,m2fit,'-',color='darkgoldenrod',linewidth=5,label='Secondary')
 
+    plt.xlim(5,105)
+    
     plt.xlabel('Number of RV Data Points',fontsize=20)
     plt.ylabel('Relative Error (%)',fontsize=20)
     plt.title('Stellar Mass Precision vs. RV Samples',fontsize=20)
@@ -441,7 +442,8 @@ def radius_plots(network='external',nograze=True,view=True,region=True,cadence='
     r1fit = r1f(x1)
     plt.plot(10**x1*1e6,r1fit,'k-',linewidth=5,label='Primary')
     plt.plot([10],[0],'-',color='darkgoldenrod',linewidth=5,label='Secondary')
-    
+    plt.ylim(-0.5,10.5)
+    plt.xlim(5,20000)
     
     plt.xlabel('Photometric Noise (ppm)',fontsize=20)
     plt.ylabel('Relative Error (%)',fontsize=20)
