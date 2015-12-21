@@ -1,14 +1,10 @@
 # TO DO:
 #-------
-# Restructure code to do runs based on the specifications from TESS mission. 
-# The idea is to do one run based on the full frame images (30 min cadence)
-# and one on the targeted sources (2 min cadence)
+# Generalize so that this code can be used to test TESS, Kepler, K2, and/or ground based
+# data
 #
-# TESS specs come from the Sullivan et al. (2015) paper
-# http://adsabs.harvard.edu/abs/2015ApJ...809...77S
+# Parallelize
 #
-# Parallelize code and test on bellerophon
-
 
 import sys,math,pdb,time,glob,re,os,eb,emcee,pickle
 import numpy as np
