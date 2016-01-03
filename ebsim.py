@@ -1,5 +1,7 @@
 # TO DO:
 #-------
+# Implement spot modeling
+#
 # Generalize so that this code can be used to test TESS, Kepler, K2, and/or ground based
 # data
 #
@@ -84,6 +86,9 @@ def r_to_m(r):
     
     return (-b + np.sqrt(b**2 - 4*a*c))/(2*a)
 
+
+#def sin_cos_amps(amp):
+    
 ################################################################################
 # Make model data
 ################################################################################
@@ -147,6 +152,8 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
         spph1 = np.random.uniform(0,np.pi*2,1)[0]
         sinamp1 = spa1*np.cos(spph1)
         cosamp1 = np.sqrt(spa1**2-sinamp1**2)
+    else:
+        spotP1 = 0.0 ; spa1 = 0.0 ; spph1 = 0.0 ; sinamp1 = 0.0 ; cosamp1 = 0.0
     if spotamp2:
         if spotP2 == 0.0:
             print "Spot Period 2 = 0: Spots on star 2 will not be implemented!"
@@ -154,6 +161,8 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
         spph2 = np.random.uniform(0,np.pi*2,1)[0]
         sinamp2 = spa2*np.cos(spph2)
         cosamp2 = np.sqrt(spa2**2-sinamp2**2)
+    else:
+        spotP2 = 0.0 ; spa2 = 0.0 ; spph2 = 0.0 ; sinamp2 = 0.0 ; cosamp2 = 0.0
 
     # Effective temperatures
     Teff1 = (l1*c.Lsun/(4*np.pi*(r1*c.Rsun)**2*c.sb ))**(0.25)
@@ -284,6 +293,8 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
         variables.append("spSin1") ; ebpar['spSin1'] = p0_18
         p0_init = np.append(p0_init,[p0_19],axis=0)
         variables.append("spCos1") ; ebpar['spCos1'] = p0_19
+        ebpar['spSinCos1'] = 0.0 ; ebpar['spSqSinCos1'] = 0.0
+        
     if spotP2 != 0.0:
         p0_init = np.append(p0_init,[p0_22],axis=0)
         variables.append("Rot2") ; ebpar['Rot2'] = p0_22
@@ -295,10 +306,11 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
         variables.append("spSin2") ; ebpar['spSin2'] = p0_25
         p0_init = np.append(p0_init,[p0_26],axis=0)
         variables.append("spCos2") ; ebpar['spCos2'] = p0_26
+        ebpar['spSinCos2'] = 0.0 ; ebpar['spSqSinCos2'] = 0.0
 
 
     # Make "parm" vector
-    parm,vder = vec_to_params(p0_init,ebpar)
+    parm,vder = vec_to_params(p0_init,ebpar,verbose=False)
 
     debug = False
     if debug:
@@ -320,6 +332,10 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
     ebpar['t02'] = ebpar['t01'] + (se+ss)/2*period 
 
 
+    if spotP1 !=0 or spotP2 !=0:
+        fullobsdur = obsdur
+        obsdur     = period
+    
     # Photometry sampling
     tstart = -pe*durfac*period
     tstop  = tstart + obsdur
@@ -343,10 +359,47 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
     if not ellipsoidal:
         parm[eb.PAR_Q] = 0.0
 
-    lightmodel = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=11.0,
+    if spotP1 != 0.0 or spotP2 !=0:
+        print "... Generating spot moduluated data."
+        nfull = fullobsdur // period
+        res = fullobsdur % (fullobsdur // period)
+        lightmodel = []
+        tf = []
+        pf = []
+        tin = np.copy(tfinal)
+        tin[tin < 0] = tin[tin < 0]+period
+        for i in range(np.int(np.round(nfull))):
+            parm,vder = vec_to_params(p0_init,ebpar,verbose=False)
+            lm = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=11.0,
                                  fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
                                  unsmooth=False)
+#                                 fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
+            lightmodel = np.append(lightmodel,lm)
+            plt.clf()
+            plt.plot(tfinal,lm,'.')
+            pdb.set_trace()
+            if i == 0:
+                tf = tfinal
+                pf = pfinal
+            else:
+                tf = np.append(tf,tfinal+i*period)
+                pf = np.append(pf,pfinal)
+            if spotP1 !=0.0:
+                spph1 = np.random.uniform(0,np.pi*2,1)[0]
+                ebpar['spSin1'] = spa1*np.cos(spph1)
+                ebpar['spCos1'] = np.sqrt(spa1**2-(spa1*np.cos(spph1))**2)
+            if spotP2 !=0.0:
+                spph2 = np.random.uniform(0,np.pi*2,1)[0]
+                ebpar['spSin2'] = spa2*np.cos(spph2)
+                ebpar['spCos2'] = np.sqrt(spa2**2-(spa2*np.cos(spph2))**2)
+        tfinal = tf
+        pfinal = pf
 
+    else:
+        lightmodel = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=11.0,
+                                     fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
+                                     unsmooth=False)
+        
     parm[eb.PAR_Q] = mr
     
     if photnoise != None:
@@ -371,7 +424,7 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
 
     ebpar['p_init'] = p0_init
 
-    parm,vder = vec_to_params(p0_init,ebpar)
+    parm,vder = vec_to_params(p0_init,ebpar,verbose=False)
 
     # RV sampling
 #    tRV = np.random.uniform(0,1,RVsamples)*period
@@ -704,7 +757,7 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
 ################################################################################
 # Input vector to EB parameters
 ################################################################################
-def vec_to_params(x,ebpar,fitinfo=None):
+def vec_to_params(x,ebpar,fitinfo=None,verbose=True):
     """
     ----------------------------------------------------------------------
     vec_to_params:
@@ -761,7 +814,8 @@ def vec_to_params(x,ebpar,fitinfo=None):
         if len(variables) != len(x):
             print 'Length of variables not equal to length of input vector'
     else:
-        print 'vec_to_params: Using default values from ebpar'
+        if verbose:
+            print 'vec_to_params: Using default values from ebpar'
         variables = None
         fitooe1 = None
         fitooe2 = None
