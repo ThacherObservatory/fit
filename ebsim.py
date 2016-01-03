@@ -282,6 +282,7 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
     #              'GD1':0.32, 'Ref1':0.4, 'GD2':0.32, 'Ref2':0.4, 'Rot1':0.0,
 
     # Spots
+    spotflag=False
     if spotP1 != 0.0:
         p0_init = np.append(p0_init,[p0_15],axis=0)
         variables.append("Rot1") ; ebpar['Rot1'] = p0_15
@@ -294,7 +295,7 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
         p0_init = np.append(p0_init,[p0_19],axis=0)
         variables.append("spCos1") ; ebpar['spCos1'] = p0_19
         ebpar['spSinCos1'] = 0.0 ; ebpar['spSqSinCos1'] = 0.0
-        
+        spotflag=True
     if spotP2 != 0.0:
         p0_init = np.append(p0_init,[p0_22],axis=0)
         variables.append("Rot2") ; ebpar['Rot2'] = p0_22
@@ -307,7 +308,7 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
         p0_init = np.append(p0_init,[p0_26],axis=0)
         variables.append("spCos2") ; ebpar['spCos2'] = p0_26
         ebpar['spSinCos2'] = 0.0 ; ebpar['spSqSinCos2'] = 0.0
-
+        spotflag=True
 
     # Make "parm" vector
     parm,vder = vec_to_params(p0_init,ebpar,verbose=False)
@@ -330,11 +331,6 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
     ebpar['tdur1'] = (pe+1 - ps)*period*24.0
     ebpar['tdur2'] = (se - ss)*period*24
     ebpar['t02'] = ebpar['t01'] + (se+ss)/2*period 
-
-
-    if spotP1 !=0 or spotP2 !=0:
-        fullobsdur = obsdur
-        obsdur     = period
     
     # Photometry sampling
     tstart = -pe*durfac*period
@@ -359,46 +355,10 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
     if not ellipsoidal:
         parm[eb.PAR_Q] = 0.0
 
-    if spotP1 != 0.0 or spotP2 !=0:
-        print "... Generating spot moduluated data."
-        nfull = fullobsdur // period
-        res = fullobsdur % (fullobsdur // period)
-        lightmodel = []
-        tf = []
-        pf = []
-        tin = np.copy(tfinal)
-        tin[tin < 0] = tin[tin < 0]+period
-        for i in range(np.int(np.round(nfull))):
-            parm,vder = vec_to_params(p0_init,ebpar,verbose=False)
-            lm = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=11.0,
-                                 fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
-                                 unsmooth=False)
-#                                 fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
-            lightmodel = np.append(lightmodel,lm)
-            plt.clf()
-            plt.plot(tfinal,lm,'.')
-            pdb.set_trace()
-            if i == 0:
-                tf = tfinal
-                pf = pfinal
-            else:
-                tf = np.append(tf,tfinal+i*period)
-                pf = np.append(pf,pfinal)
-            if spotP1 !=0.0:
-                spph1 = np.random.uniform(0,np.pi*2,1)[0]
-                ebpar['spSin1'] = spa1*np.cos(spph1)
-                ebpar['spCos1'] = np.sqrt(spa1**2-(spa1*np.cos(spph1))**2)
-            if spotP2 !=0.0:
-                spph2 = np.random.uniform(0,np.pi*2,1)[0]
-                ebpar['spSin2'] = spa2*np.cos(spph2)
-                ebpar['spCos2'] = np.sqrt(spa2**2-(spa2*np.cos(spph2))**2)
-        tfinal = tf
-        pfinal = pf
 
-    else:
-        lightmodel = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=11.0,
+    lightmodel = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=11.0,
                                      fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
-                                     unsmooth=False)
+                                     unsmooth=False,spotflag=spotflag)
         
     parm[eb.PAR_Q] = mr
     
@@ -1048,7 +1008,7 @@ def vec_to_params(x,ebpar,fitinfo=None,verbose=True):
 
 
 def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None,
-                    period=None,ooe1fit=None,ooe2fit=None,unsmooth=False):
+                    period=None,ooe1fit=None,ooe2fit=None,unsmooth=False,spotflag=False):
 
     """
     ----------------------------------------------------------------------
@@ -1113,15 +1073,18 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
         # can use eb.OBS_LIGHT to get light output or
         # eb.OBS_MAG to get mag output        
         typ.fill(eb.OBS_LIGHT)
-        if length(ol1) == length(phiarr) and length(ol2) == length(phiarr):
-            yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI, ol1=ol1, ol2=ol2)
-        if length(ol1) == length(phiarr) and not length(ol2) == length(phiarr):
-            yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI, ol1=ol1)
-        if length(ol2) == length(phiarr) and not length(ol1) == length(phiarr):
-            yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI, ol2=ol2)
-        if ol1 == None and ol2 == None:
-            yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI)
-            
+        if spotflag:
+            yarr = eb.model(parm, tdarr, typ)
+        else:
+            if length(ol1) == length(phiarr) and length(ol2) == length(phiarr):
+                yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI, ol1=ol1, ol2=ol2)
+            if length(ol1) == length(phiarr) and not length(ol2) == length(phiarr):
+                yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI, ol1=ol1)
+            if length(ol2) == length(phiarr) and not length(ol1) == length(phiarr):
+                yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI, ol2=ol2)
+            if ol1 == None and ol2 == None:
+                yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI)
+                
         # Average over each integration time
         smoothmodel = np.sum(yarr,axis=0)/np.float(modelfac)
         model = yarr[(modelfac-1)/2,:]
