@@ -94,6 +94,7 @@ def r_to_m(r):
 ################################################################################
 def make_model_data(m1=None,m2=None,                       # stellar masses
                     r1=0.5,r2=0.3,                         # stellar radii
+                    l1=None,l2=None,                         # stellar radii
                     ecc=0.0,omega=0.0,impact=0,            # orbital shape and orientation
                     period=5.0,t0=2457998.0,               # ephemeris Sept 1, 2017 (~ TESS launch)
                     J=None,                                # surface brightness ratio
@@ -139,8 +140,10 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
     massratio = m2/m1 #if gravdark else 0.0
 
     # Surface brightness ratio
-    l1 = r_to_l(r1)
-    l2 = r_to_l(r2)
+    if not l1:
+        l1 = r_to_l(r1)
+    if not l2:
+        l2 = r_to_l(r2)
     if not J:
         J = l2/l1    
 
