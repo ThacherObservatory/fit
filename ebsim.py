@@ -16,7 +16,6 @@ import scipy as sp
 import robust as rb
 from scipy.io.idl import readsav
 from length import length
-import pyfits as pf
 from statsmodels.nonparametric.kernel_density import KDEMultivariate as KDE
 from stellar import rt_from_m, flux2mag, mag2flux
 
@@ -59,6 +58,7 @@ def RV_sampling(N,T):
     x = find_base(N)
     
     k = np.arange(N)
+
     return (x**k - 1)/(x**(N-1) - 1) * T
 
 
@@ -101,7 +101,7 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
                     limb='quad',                           # LD type
                     L3=0.0,vsys=10.0,                      # third light and system velocity
                     photnoise=0.0003,                      # photometric noise
-                    RVnoise=1.0,RVsamples=100,             # RV noise and sampling
+                    tRV=None,RVnoise=1.0,RVsamples=100,    # RV noise and sampling
                     gravdark=False,reflection=False,       # higher order effects
                     ellipsoidal=False,                     # Ellipsoidal variations (caution!)
                     lighttravel=True,                      # Roemer delay
@@ -139,10 +139,10 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
     massratio = m2/m1 #if gravdark else 0.0
 
     # Surface brightness ratio
+    l1 = r_to_l(r1)
+    l2 = r_to_l(r2)
     if not J:
-        l1 = r_to_l(r1)
-        l2 = r_to_l(r2)
-        J = l2/l1
+        J = l2/l1    
 
     # Spot amplitudes with random phase
     if spotamp1:
@@ -387,9 +387,9 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
     parm,vder = vec_to_params(p0_init,ebpar,verbose=False)
 
     # RV sampling
-#    tRV = np.random.uniform(0,1,RVsamples)*period
-
-    tRV = RV_sampling(RVsamples,period)
+    #    tRV = np.random.uniform(0,1,RVsamples)*period
+    if tRV == None:
+        tRV = RV_sampling(RVsamples,period)
 
     rvs = compute_eclipse(tRV,parm,modelfac=11.0,fitrvs=True,tref=0.0,
                           period=period,ooe1fit=None,ooe2fit=None,unsmooth=False)
@@ -400,6 +400,7 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
     rv1 = rvs*k1 + vsys
     rv2 = -1.0*rvs*k2 + vsys
 
+    # make this so that one can determine RV error for each RV point
     if RVnoise != None:
         n1 = len(rv1)
         rv1 += np.random.normal(0,RVnoise,n1)
