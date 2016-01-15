@@ -25,20 +25,25 @@ int = 1800.0
 # Adjust this so that the out of eclipse light variations are 2% peak to peak
 spotamp1 = 0.13
 # From Swift AC analysis
-spotP1 = 3.99*86400/period
+spotP1 = 3.9*86400/period
 # Just a guess, could be anything
 spotfrac1 = 0.75
 spotbase1 = -0.012
 # Estimated from preliminary fit residuals to Kepler data
 photnoise=300.0/1e6
 
+P1double = 0.8
+P2double = False
 
 ebpar,data = ebs.make_model_data(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2/c.Rsun,
                                  impact=impact, period=period/86400.0, t0=t0, L3=0.0,
                                  vsys=vsys, photnoise=photnoise, RVnoise=RVnoise,
                                  RVsamples=RVsamples, obsdur=obsdur, int=int, durfac=20.0,
                                  spotamp1=spotamp1, spotP1=spotP1, spotfrac1=spotfrac1,
-                                 spotbase1=spotbase1, network='swift', J=J, l1=l1/c.Lsun, l2=l2/c.Lsun)
+                                 spotbase1=spotbase1, network='swift', J=J,
+                                 l1=l1/c.Lsun, l2=l2/c.Lsun,
+                                 P1double=P1double, P2double=P2double,
+                                 write=True)
                                  
 
 ebs.check_model(data)

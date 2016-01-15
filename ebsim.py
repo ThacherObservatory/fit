@@ -92,28 +92,28 @@ def r_to_m(r):
 ################################################################################
 # Make model data
 ################################################################################
-def make_model_data(m1=None,m2=None,                       # stellar masses
-                    r1=0.5,r2=0.3,                         # stellar radii
-                    l1=None,l2=None,                         # stellar radii
-                    ecc=0.0,omega=0.0,impact=0,            # orbital shape and orientation
-                    period=5.0,t0=2457998.0,               # ephemeris Sept 1, 2017 (~ TESS launch)
-                    J=None,                                # surface brightness ratio
-                    q1a=None,q2a=None,q1b=None,q2b=None,   # LD params
-                    limb='quad',                           # LD type
-                    L3=0.0,vsys=10.0,                      # third light and system velocity
-                    photnoise=0.0003,                      # photometric noise
-                    tRV=None,RVnoise=1.0,RVsamples=100,    # RV noise and sampling
-                    gravdark=False,reflection=False,       # higher order effects
-                    ellipsoidal=False,                     # Ellipsoidal variations (caution!)
-                    lighttravel=True,                      # Roemer delay
-                    short=False,long=False,                # Short or long cadence TESS data
-                    obsdur=27.4,int=120.0,                 # duration of obs, and int time
-                    durfac=2.0,                            # amount of data to keep around eclipses
-                    spotamp1=None,spotP1=0.0,              # Spot amplitude and period frac for star 1
-                    spotfrac1=0.0,spotbase1=0.0,           # Fraction of spots eclipsed, and base
-                    spotamp2=None,spotP2=0.0,              # Spot amplitude and period frac for star 2
-                    spotfrac2=0.0,spotbase2=0.0,           # Fraction of spots eclipsed, and base
-                    write=False,network=None,path='./'):   # network info
+def make_model_data(m1=None,m2=None,                        # Stellar masses
+                    r1=0.5,r2=0.3,                          # Stellar radii
+                    l1=None,l2=None,                        # Stellar luminosity
+                    ecc=0.0,omega=0.0,impact=0,             # Orbital shape and orientation
+                    period=5.0,t0=2457998.0,                # Ephemeris Sept 1, 2017 (~ TESS launch)
+                    J=None,                                 # Surface brightness ratio
+                    q1a=None,q2a=None,q1b=None,q2b=None,    # LD params
+                    limb='quad',                            # LD type
+                    L3=0.0,vsys=10.0,                       # Third light and system velocity
+                    photnoise=0.0003,                       # Photometric noise
+                    tRV=None,RVnoise=1.0,RVsamples=100,     # RV noise and sampling
+                    gravdark=False,reflection=False,        # Higher order effects
+                    ellipsoidal=False,                      # Ellipsoidal variations (caution!)
+                    lighttravel=True,                       # Roemer delay
+                    short=False,long=False,                 # Short or long cadence TESS data
+                    obsdur=27.4,int=120.0,                  # Duration of obs, and int time
+                    durfac=2.0,                             # Amount of data to keep around eclipses
+                    spotamp1=None,spotP1=0.0,P1double=False,# Spot amplitude and period frac for star 1
+                    spotfrac1=0.0,spotbase1=0.0,            # Fraction of spots eclipsed, and base
+                    spotamp2=None,spotP2=0.0,P2double=False,# Spot amplitude and period frac for star 2
+                    spotfrac2=0.0,spotbase2=0.0,            # Fraction of spots eclipsed, and base
+                    write=False,network=None,path='./'):    # Network info
 
     """
     Generator of model EB data
@@ -155,8 +155,18 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
         spph1 = np.random.uniform(0,np.pi*2,1)[0]
         sinamp1 = spa1*np.cos(spph1)
         cosamp1 = np.sqrt(spa1**2-sinamp1**2)
+        if P1double:
+            p2 = np.random.uniform(0,2.*np.pi)
+            sincosamp1  = P1double*sinamp1 * np.sin(p2)
+            squaredamp1 = P1double*sinamp1 * np.cos(p2)
+            sinamp1     = (1.0 - P1double)*sinamp1
+        else:
+            sincosamp1  = 0.0
+            squaredamp1 = 0.0            
     else:
-        spotP1 = 0.0 ; spa1 = 0.0 ; spph1 = 0.0 ; sinamp1 = 0.0 ; cosamp1 = 0.0
+        spotP1 = 0.0 ; spa1 = 0.0 ; spph1 = 0.0 ; sinamp1 = 0.0 ; cosamp1 = 0.0 ; sincosamp1  = 0.0
+        squaredamp1 = 0.0 
+
     if spotamp2:
         if spotP2 == 0.0:
             print "Spot Period 2 = 0: Spots on star 2 will not be implemented!"
@@ -164,8 +174,17 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
         spph2 = np.random.uniform(0,np.pi*2,1)[0]
         sinamp2 = spa2*np.cos(spph2)
         cosamp2 = np.sqrt(spa2**2-sinamp2**2)
+        if P2double:
+            p2 = np.random.uniform(0,2.*np.pi)
+            sincosamp2  = P2double*sinamp2 * np.sin(p2)
+            squaredamp2 = P2double*sinamp2 * np.cos(p2)
+            sinamp2     = (1.0 - P2double)*sinamp2
+        else:
+            sincosamp2  = 0.0
+            squaredamp2 = 0.0            
     else:
-        spotP2 = 0.0 ; spa2 = 0.0 ; spph2 = 0.0 ; sinamp2 = 0.0 ; cosamp2 = 0.0
+        spotP2 = 0.0 ; spa2 = 0.0 ; spph2 = 0.0 ; sinamp2 = 0.0 ; cosamp2 = 0.0 ; sincosamp2  = 0.0
+        squaredamp2 = 0.0 
 
     # Effective temperatures
     Teff1 = (l1*c.Lsun/(4*np.pi*(r1*c.Rsun)**2*c.sb ))**(0.25)
@@ -175,7 +194,7 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
     if not q1a or not q1b or not q2a or not q2b:
              q1a,q2a = get_limb_qs(Mstar=m1,Rstar=r1,Tstar=Teff1,limb=limb,network=network)
              q1b,q2b = get_limb_qs(Mstar=m2,Rstar=r2,Tstar=Teff2,limb=limb,network=network)
-        
+             
     # Integration time and reference time (approximate date of TESS data)
     integration = int
     bjd = 2457998.0
@@ -225,18 +244,17 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
     p0_17 = spotbase1                       # base spottedness
     p0_18 = sinamp1                         # Sin amplitude
     p0_19 = cosamp1                         # Cos amplitude
-    p0_20 = 0.0                             # SinCos amplitude
-    p0_21 = 0.0                             # Cos^2-Sin^2 amplitude
+    p0_20 = sincosamp1                      # SinCos amplitude
+    p0_21 = squaredamp1                     # Cos^2-Sin^2 amplitude
     p0_22 = spotP2                          # Star 2 rotation
     p0_23 = spotfrac2                       # Fraction of spots eclipsed
     p0_24 = spotbase2                       # base spottedness
     p0_25 = sinamp2                         # Sin amplitude
     p0_26 = cosamp2                         # Cos amplitude
-    p0_27 = 0.0                             # SinCos amplitude
-    p0_28 = 0.0                             # Cos^2-Sin^2 amplitude
+    p0_27 = sincosamp2                      # SinCos amplitude
+    p0_28 = squaredamp2                     # Cos^2-Sin^2 amplitude
     p0_29 = ktot                            # Total radial velocity amp
     p0_30 = vsys                            # System velocity
-
 
     # Third light (L3) at 14 ... 14 and beyond + 1
 
@@ -297,7 +315,11 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
         variables.append("spSin1") ; ebpar['spSin1'] = p0_18
         p0_init = np.append(p0_init,[p0_19],axis=0)
         variables.append("spCos1") ; ebpar['spCos1'] = p0_19
-        ebpar['spSinCos1'] = 0.0 ; ebpar['spSqSinCos1'] = 0.0
+        p0_init = np.append(p0_init,[p0_20],axis=0)
+        variables.append("spSinCos1") ; ebpar['spSinCos1'] = p0_20
+        p0_init = np.append(p0_init,[p0_21],axis=0)
+        variables.append("spSqSinCos1") ; ebpar['spSqSinCos1'] = p0_21
+#        ebpar['spSinCos1'] = 0.0 ; ebpar['spSqSinCos1'] = 0.0
         spotflag=True
     if spotP2 != 0.0:
         p0_init = np.append(p0_init,[p0_22],axis=0)
@@ -310,7 +332,11 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
         variables.append("spSin2") ; ebpar['spSin2'] = p0_25
         p0_init = np.append(p0_init,[p0_26],axis=0)
         variables.append("spCos2") ; ebpar['spCos2'] = p0_26
-        ebpar['spSinCos2'] = 0.0 ; ebpar['spSqSinCos2'] = 0.0
+        p0_init = np.append(p0_init,[p0_27],axis=0)
+        variables.append("spSinCos2") ; ebpar['spSinCos2'] = p0_27
+        p0_init = np.append(p0_init,[p0_28],axis=0)
+        variables.append("spSqSinCos2") ; ebpar['spSqSinCos2'] = p0_28
+#        ebpar['spSinCos2'] = 0.0 ; ebpar['spSqSinCos2'] = 0.0
         spotflag=True
 
     # Make "parm" vector
@@ -357,7 +383,6 @@ def make_model_data(m1=None,m2=None,                       # stellar masses
     # Do other higher order effects depend on the mass ratio?
     if not ellipsoidal:
         parm[eb.PAR_Q] = 0.0
-
 
     lightmodel = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=11.0,
                                      fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
