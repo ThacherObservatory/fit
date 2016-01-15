@@ -13,7 +13,6 @@ import robust as rb
 from scipy.io.idl import readsav
 import eb
 from length import *
-import pyfits as pf
 from statsmodels.nonparametric.kernel_density import KDEMultivariate as KDE
 
 def get_limb_coeff(Tstar,loggstar,filter='Kp',plot=False,network=None,limb='quad',interp='linear'):
