@@ -13,7 +13,11 @@ impact = sma/r1 * np.cos(np.radians(83.84))
 vsys=-4.764
 RVnoise = 5.0
 RVsamples= 10
-J = 0.113586
+T1 = 4320.0
+l1 = 4*np.pi*r1**2*c.sb*T1**4
+T2 = 2750.0
+l2 = 4*np.pi*r2**2*c.sb*T2**4
+J  = l2/l1
 
 obsdur = 130.0
 int = 1800.0
@@ -34,8 +38,7 @@ ebpar,data = ebs.make_model_data(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2
                                  vsys=vsys, photnoise=photnoise, RVnoise=RVnoise,
                                  RVsamples=RVsamples, obsdur=obsdur, int=int, durfac=20.0,
                                  spotamp1=spotamp1, spotP1=spotP1, spotfrac1=spotfrac1,
-                                 spotbase1=spotbase1, network='swift', J=J)
+                                 spotbase1=spotbase1, network='swift', J=J, l1=l1/c.Lsun, l2=l2/c.Lsun)
                                  
-
 
 ebs.check_model(data)
