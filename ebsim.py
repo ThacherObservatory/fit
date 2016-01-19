@@ -232,7 +232,7 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     p0_4  = ecc * np.cos(np.radians(omega)) # ecosw
     p0_5  = ecc * np.sin(np.radians(omega)) # esinw
     p0_6  = 10.0                            # mag zpt
-    p0_7  = t0                              # ephemeris
+    p0_7  = 0.0                             # ephemeris (needs to be zero)
     p0_8  = period                          # Period
     p0_9  = q1a                             # Limb darkening
     p0_10 = q2a                             # Limb darkening
@@ -343,7 +343,10 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     # Make "parm" vector
     parm,vder = vec_to_params(p0_init,ebpar,verbose=False)
 
-    debug = False
+    # Time of mid-eclipse will be added later.
+    parm[eb.PAR_T0] = 0.0
+
+    debug = True
     if debug:
         print "Model parameters:"
         for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
@@ -363,13 +366,13 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     ebpar['t02'] = ebpar['t01'] + (se+ss)/2*period 
     
     # Photometry sampling
-    tstart = -pe*durfac*period
+    tstart = -pe*durfac*period # ?
     tstop  = tstart + obsdur
     time  = np.arange(tstart,tstop,integration/86400.0)
     tfold = time % period
     phase = tfold/period
     p0sec = (se+ss)/2
-    pprim = (pe-ps+1)*durfac
+    pprim = (pe-ps+1)*durfac # add one because ps is positive (near 1) not negative
     psec  = (se-ss)*durfac
     pinds, = np.where((phase >= 1-pprim/2) | (phase <= pprim/2))
     sinds, = np.where((phase >= p0sec-psec/2) & (phase <= p0sec+psec/2))
@@ -585,8 +588,6 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
         p0_init = np.append(p0_init,[p0_8],axis=0)
         variables.append("period")
 
-# Start from here 10/22/15
-
     if fitinfo['fit_limb'] and fitinfo['claret']:
         sys.exit('Cannot fit for LD parameters and constrain them according to the other fit parameters!')
 
@@ -601,6 +602,9 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
         p0_init = np.append(p0_init,[p0_14],axis=0)
         variables.append('L3')
 
+
+    #######################################################################
+    # Need to add as many groups of ooe parameters as # of eclipses!!!
     if fitinfo['fit_ooe1']:
         fitorder1 = fitinfo['fit_ooe1']
         p0_init = np.append(p0_init,[p0_16],axis=0)
