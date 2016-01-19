@@ -4,9 +4,6 @@
 #
 # Generalize so that this code can be used to test TESS, Kepler, K2, and/or ground based
 # data
-#
-# Parallelize
-#
 
 import sys,math,pdb,time,glob,re,os,eb,emcee,pickle
 import numpy as np
@@ -18,7 +15,6 @@ from scipy.io.idl import readsav
 from length import length
 from statsmodels.nonparametric.kernel_density import KDEMultivariate as KDE
 from stellar import rt_from_m, flux2mag, mag2flux
-
 
 ################################################################################
 # Find geometric base
@@ -231,7 +227,7 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     p0_4  = ecc * np.cos(np.radians(omega)) # ecosw
     p0_5  = ecc * np.sin(np.radians(omega)) # esinw
     p0_6  = 10.0                            # mag zpt
-    p0_7  = 0.0                             # ephemeris
+    p0_7  = t0                              # ephemeris
     p0_8  = period                          # Period
     p0_9  = q1a                             # Limb darkening
     p0_10 = q2a                             # Limb darkening
@@ -289,7 +285,7 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     ebpar = {'J':J, 'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
              'Mratio':massratio, 'LDlin1':u1a, 'LDnon1':u2a, 'LDlin2':u1b, 'LDnon2':u2b,
              'GD1':0.0, 'Ref1':0.0, 'GD2':0.0, 'Ref2':0.0, 'Rot1':0.0,
-             'ecosw':ecosw0, 'esinw':esinw0, 'Period':period, 't01':bjd, 't02':None, 
+             'ecosw':ecosw0, 'esinw':esinw0, 'Period':period, 't01':t0, 't02':None, 
              'et01':0.0, 'et02':0.0, 'dt12':None, 'tdur1':None, 'tdur2':None, 
              'mag0':10.0,'vsys':vsys, 'Mstar1':m1, 'Mstar2':m2,
              'ktot':ktot, 'L3':L3,'Period':period, 'ePeriod':0.1,
@@ -358,7 +354,7 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
 
     # Durations (in hours) and secondary timing
     ebpar['tdur1'] = (pe+1 - ps)*period*24.0
-    ebpar['tdur2'] = (se - ss)*period*24
+    ebpar['tdur2'] = (se - ss)*period*24.0
     ebpar['t02'] = ebpar['t01'] + (se+ss)/2*period 
     
     # Photometry sampling
@@ -384,6 +380,7 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     if not ellipsoidal:
         parm[eb.PAR_Q] = 0.0
 
+    # tref remains zero so that the ephemeris within parm manifests correctly
     lightmodel = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=11.0,
                                      fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
                                      unsmooth=False,spotflag=spotflag)
@@ -492,6 +489,10 @@ def fit_params(ebpar,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
               thin=1):
     """ 
     Generate a dictionary that contains all the information about the fit
+
+    fit_ooe1 and fit_ooe2 if not False should be the order of the polynomial that you would like
+    to fit the out of eclipse data with.
+
     """
 
     fitinfo = {'ooe_order':order, 'fit_period':fit_period, 'thin':thin,
@@ -596,60 +597,26 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
         variables.append('L3')
 
     if fitinfo['fit_ooe1']:
+        fitorder1 = fitinfo['fit_ooe1']
         p0_init = np.append(p0_init,[p0_16],axis=0)
         variables.append('spFrac1')
-        for i in range(fitorder+1):
+        for i in range(fitorder1+1):
             p0_init = np.append(p0_init,[np.random.normal(0,0.05,nw)],axis=0)
-            variables.append('c'+str(i)+'_1')
-        for i in range(fitorder+1):
+            variables.append('p'+str(i)+'_1')
+        for i in range(fitorder1+1):
             p0_init = np.append(p0_init,[np.random.normal(0,0.05,nw)],axis=0)
-            variables.append('c'+str(i)+'_2')
+            variables.append('p'+str(i)+'_2')
 
     if fitinfo['fit_ooe2']:
-        sys.exit('Not ready for this yet!')
-
-    
-#    if fitsp1:
-#        sys.exit('conflicting inputs!')
-#        spot0 = np.array([p0_15,p0_16,p0_17,p0_18,p0_19])
-#        spvars = ["Rot1","spFrac1","spBase1","spSin1","spCos1"]
-#        p0_init = np.append(p0_init,spot0,axis=0)
-#        for var in spvars:
-#            variables.append(var)
-#        if fullspot:
-#            spot0 = np.array([p0_20,p0_21])
-#            spvars = ["spSinCos1","spSqSinCos1"]
-#            p0_init = np.append(p0_init,spot0,axis=0)
-#            for var in spvars:
-#                variables.append(var)
-
-#    if fitsp2 and not fitsp1:
-#        sys.exit('conflicting inputs!')
-#        spot0 = np.array([p0_15,p0_16,p0_17,p0_18,p0_19])
-#        spvars = ["Rot2","spFrac2","spBase2","spSin2","spCos2"]
-#        p0_init = np.append(p0_init,spot0,axis=0)
-#        for var in spvars:
-#            variables.append(var)
-#        if fullspot:
-#            spot0 = np.array([p0_20,p0_21])
-#            spvars = ["spSinCos2","spSqSinCos2"]
-#            p0_init = np.append(p0_init,spot0,axis=0)
-#            for var in spvars:
-#                variables.append(var)
-#
-#    if fitsp2 and fitsp1:
-#        sys.exit('conflicting inputs!')
-#        spot0 = np.array([p0_22,p0_23,p0_24,p0_25,p0_26])
-#        spvars = ["Rot2","spFrac2","spBase2","spSin2","spCos2"]
-#        p0_init = np.append(p0_init,spot0,axis=0)
-#        for var in spvars:
-#            variables.append(var)
-#        if fullspot:
-#            spot0 = np.array([p0_27,p0_28])
-#            spvars = ["spSinCos2","spSqSinCos2"]
-#            p0_init = np.append(p0_init,spot0,axis=0)
-#            for var in spvars:
-#                variables.append(var)
+        fitorder2 = fitinfo['fit_ooe1']
+        p0_init = np.append(p0_init,[p0_23],axis=0)
+        variables.append('spFrac2')
+        for i in range(fitorder2+1):
+            p0_init = np.append(p0_init,[np.random.normal(0,0.05,nw)],axis=0)
+            variables.append('s'+str(i)+'_1')
+        for i in range(fitorder2+1):
+            p0_init = np.append(p0_init,[np.random.normal(0,0.05,nw)],axis=0)
+            variables.append('s'+str(i)+'_2')
 
     if fitinfo['fit_rvs']:
         p0_init = np.append(p0_init,[p0_13],axis=0)
@@ -662,6 +629,7 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
     variables = np.array(variables)
 
     fitinfo['variables'] = variables
+
     
 # Transpose array of initial guesses
     p0 = np.array(p0_init).T
@@ -1103,6 +1071,8 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
         # eb.OBS_MAG to get mag output        
         typ.fill(eb.OBS_LIGHT)
         if spotflag:
+            # To create spots modulations using sines and cosines built into eb code
+            # need to use time array.
             yarr = eb.model(parm, tdarr, typ)
         else:
             if length(ol1) == length(phiarr) and length(ol2) == length(phiarr):
@@ -1191,8 +1161,6 @@ def lnprob(x,data,ebpar,fitinfo,debug=False):
         return -np.inf        
     if q1a > 1 or q1a < 0 or q2a > 1 or q2a < 0 or np.isnan(q1a) or np.isnan(q2a):
         return -np.inf        
-#    if u1a < 0 or u1b < 0 or  u1a > 1 or u1b > 1 or np.isnan(u1a) or np.isnan(u1b):
-#        return -np.inf        
     
     # Priors
     if fitinfo['fit_L3']:
@@ -1202,22 +1170,6 @@ def lnprob(x,data,ebpar,fitinfo,debug=False):
     # No gravitational lensing or other exotic effects allowed.
     if parm[eb.PAR_J] < 0:
         return -np.inf
-    
-    # Need to understand exactly what this parameter is!!
-    if fitinfo['fit_ooe1']:
-        if parm[eb.PAR_FSPOT1] < 0 or parm[eb.PAR_FSPOT1] > 1:
-            return -np.inf
-        coeff1 = []
-        for i in range(fitorder+1):
-            coeff1 = np.append(coeff1,x[variables == 'c'+str(i)+'_1'])
-        
-### Compute eclipse model for given input parameters ###
-    massratio = parm[eb.PAR_Q]
-    if massratio < 0 or massratio > 10:
-        return -np.inf
-
-    if not fitinfo['fit_ellipsoidal']:
-        parm[eb.PAR_Q] = 0.0
 
     # Primary eclipse
     t0 = parm[eb.PAR_T0]
@@ -1228,6 +1180,47 @@ def lnprob(x,data,ebpar,fitinfo,debug=False):
     time   = data['light'][0,:]-ebpar['bjd']
     flux   = data['light'][1,:]
     eflux  = data['light'][2,:]
+
+    # If spots are being fit, there needs to be a fundamentally different way that
+    # the eclipses are approached. Each primary and secondary eclipse will need
+    # different spot parameters.
+
+    if fitinfo['fit_ooe1'] or fitinfo['fit_ooe2']:
+        # Loop through each primary and secondary eclipse and fit each event using
+        # individual spot parameters.
+        ttm1 = foldtime(time,t0=t0,period=period)
+        
+        # Phases of contact points
+        (ps, pe, ss, se) = eb.phicont(parm)
+
+        
+    # Fit spots on primary star
+    if fitinfo['fit_ooe1']:
+        fitorder1 = fitinfo['fit_ooe1']
+        if parm[eb.PAR_FSPOT1] < 0 or parm[eb.PAR_FSPOT1] > 1:
+            return -np.inf
+        coeff1 = []
+        for i in range(fitorder1+1):
+            coeff1 = np.append(coeff1,x[variables == 'p'+str(i)+'_1'])
+
+    # Fit spots on secondary star
+    if fitinfo['fit_ooe2']:
+        fitorder2 = fitinfo['fit_ooe2']
+        if parm[eb.PAR_FSPOT2] < 0 or parm[eb.PAR_FSPOT2] > 1:
+            return -np.inf
+        coeff2 = []
+        for i in range(fitorder2+1):
+            coeff2 = np.append(coeff2,x[variables == 's'+str(i)+'_1'])
+    
+
+### Compute eclipse model for given input parameters ###
+    massratio = parm[eb.PAR_Q]
+    if massratio < 0 or massratio > 10:
+        return -np.inf
+
+    if not fitinfo['fit_ellipsoidal']:
+        parm[eb.PAR_Q] = 0.0
+
 
     sm  = compute_eclipse(time,parm,integration=ebpar['integration'],fitrvs=False,tref=t0,period=period)
 
