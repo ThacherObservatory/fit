@@ -143,6 +143,11 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     if not J:
         J = l2/l1    
 
+
+    ###########################################################################
+    # Input Doug's luminosity coversion thing here to get proper amplitudes of
+    # spot moduluation
+        
     # Spot amplitudes with random phase
     if spotamp1:
         if spotP1 == 0.0:

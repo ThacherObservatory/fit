@@ -19,6 +19,7 @@ l1 = 4*np.pi*r1**2*c.sb*T1**4
 T2 = 2750.0
 l2 = 4*np.pi*r2**2*c.sb*T2**4
 J  = l2/l1
+network = 'swift'
 
 obsdur = 130.0
 int = 1800.0
@@ -42,7 +43,7 @@ ebpar,data = ebs.make_model_data(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2
                                  vsys=vsys, photnoise=photnoise, RVnoise=RVnoise,
                                  RVsamples=RVsamples, obsdur=obsdur, int=int, durfac=5.0,
                                  spotamp1=spotamp1, spotP1=spotP1, spotfrac1=spotfrac1,
-                                 spotbase1=spotbase1, network='swift', J=J,
+                                 spotbase1=spotbase1, network=network, J=J,
                                  l1=l1/c.Lsun, l2=l2/c.Lsun,
                                  P1double=P1double, P2double=P2double,
                                  write=True)
