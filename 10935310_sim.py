@@ -19,7 +19,7 @@ l1 = 4*np.pi*r1**2*c.sb*T1**4
 T2 = 2750.0
 l2 = 4*np.pi*r2**2*c.sb*T2**4
 J  = l2/l1
-network = 'swift'
+network = 'doug'
 
 obsdur = 130.0
 int = 1800.0
@@ -49,7 +49,7 @@ ebpar,data = ebs.make_model_data(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2
                                  write=True)
                                  
 plt.ion()
-ebs.check_model(data)
+#ebs.check_model(data)
 time = data['light'][0,:]
 flux = data['light'][1,:]
 ttm1 = 86400.0*ebs.foldtime(time,t0=t0,period=period/86400.0)/period
@@ -63,5 +63,12 @@ bi  = np.where((dtm < 0) & (dte < 0))
 plt.figure(3)
 plt.clf()
 #phase = 86400.0*ebs.foldtime(time,t0=t0,period=period/86400.0)/period
-plt.plot(time[0:100],flux[0:100],'k.')
+endpoint = 100
+plt.plot(time[0:endpoint],flux[0:endpoint],'k.')
 plt.plot(time[0:20],flux[0:20],'r-')
+
+#calculate number of eclipses via number of big gaps in data + 1
+num_eclipses = len(np.where(np.diff(time[0:endpoint]) > 1)[0]) + 1
+print "there were {} eclipses in this graph".format(num_eclipses)
+
+#problematic: breaks if data begins and stops before eclipse: for example, set endpoint to 200
