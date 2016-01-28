@@ -144,9 +144,9 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
         J = l2/l1    
 
 
-    ###########################################################################
-    # Input Doug's luminosity coversion thing here to get proper amplitudes of
-    # spot moduluation
+    #####################################################################
+    # Input luminosity coversion thing here to get proper amplitudes spot
+    # moduluation
         
     # Spot amplitudes with random phase
     if spotamp1:
@@ -289,7 +289,7 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     # Create initial ebpar dictionary
     ebpar = {'J':J, 'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
              'Mratio':massratio, 'LDlin1':u1a, 'LDnon1':u2a, 'LDlin2':u1b, 'LDnon2':u2b,
-             'GD1':0.0, 'Ref1':0.0, 'GD2':0.0, 'Ref2':0.0, 'Rot1':0.0,
+             'GD1':0.0, 'Ref1':0.0, 'GD2':0.0, 'Ref2':0.0,
              'ecosw':ecosw0, 'esinw':esinw0, 'Period':period, 't01':t0, 't02':None, 
              'et01':0.0, 'et02':0.0, 'dt12':None, 'tdur1':None, 'tdur2':None, 
              'mag0':10.0,'vsys':vsys, 'Mstar1':m1, 'Mstar2':m2,
@@ -372,7 +372,7 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     tfold = time % period
     phase = tfold/period
     p0sec = (se+ss)/2
-    pprim = (pe-ps+1)*durfac # add one because ps is positive (near 1) not negative
+    pprim = (pe-ps+1)*durfac # add one because ps is positive and near 1, not negative
     psec  = (se-ss)*durfac
     pinds, = np.where((phase >= 1-pprim/2) | (phase <= pprim/2))
     sinds, = np.where((phase >= p0sec-psec/2) & (phase <= p0sec+psec/2))
@@ -520,7 +520,13 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
     ebpar dictionary and according to the fitting parameters outlined in
     fitinfo
     """
-    
+
+    time   = data['light'][0,:]-ebpar['bjd']
+    flux   = data['light'][1,:]
+    eflux  = data['light'][2,:]
+    sigflux = rb.std(flux)
+    deltat = np.max(time)-np.min(time)
+
     directory = ebpar['path']
     if not os.path.exists(directory):
         os.makedirs(directory)
@@ -561,20 +567,34 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
                                      ebpar['Mratio']*1.0001,nw))
     p0_14 = np.random.uniform(0,0.1,nw)                                           # Third Light
     
-    p0_15 = np.random.normal(ebpar['Rot1'],0.001,nw)                              # Star 1 rotation
-    p0_16 = np.random.uniform(0,1,nw)                                             # Fraction of spots eclipsed
-    p0_17 = np.random.normal(0,0.001,nw)                                          # base spottedness
-    p0_18 = np.random.normal(0,0.0001,nw)                                         # Sin amplitude
-    p0_19 = np.random.normal(0,0.0001,nw)                                         # Cos amplitude
-    p0_20 = np.random.normal(0,0.0001,nw)                                         # SinCos amplitude
-    p0_21 = np.random.normal(0,0.0001,nw)                                         # Cos^2-Sin^2 amplitude
-    p0_22 = np.random.uniform(ebpar['Rot1'],0.001,nw)                             # Star 2 rotation
-    p0_23 = np.random.uniform(0,1,nw)                                             # Fraction of spots eclipsed
-    p0_24 = np.random.normal(0,0.001,nw)                                          # base spottedness
-    p0_25 = np.random.normal(0,0.001,nw)                                          # Sin amplitude
-    p0_26 = np.random.normal(0,0.001,nw)                                          # Cos amplitude
-    p0_27 = np.random.normal(0,0.001,nw)                                          # SinCos amplitude
-    p0_28 = np.random.normal(0,0.001,nw)                                          # Cos^2-Sin^2 amplitude
+    p0_15 = np.random.normal(ebpar['Rot1'],0.01,nw)                               # Star 1 rotation
+    p0_16 = np.random.uniform(0,1,nw)                                             # Amplitude for FSC 1 kernel
+    p0_17 = np.random.normal(deltat,deltat/10.,nw)                                # Width of FSC 1 kernel
+    p0_18 = np.random.normal(sigflux,sigflux/10,nw)                               # Amplitude of flux 1 kernel
+    p0_19 = np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw)             # Width of flux 1 kernel
+    p0_20 = np.random.uniform(0.1,0.2,nw)                                         # Gamma of flux 1 kernel
+
+    p0_22 = np.random.uniform(ebpar['Rot2'],0.001,nw)                             # Star 2 rotation
+    p0_23 = np.random.uniform(0,1,nw)                                             # Amplitude for FSC 2 kernel
+    p0_24 = np.random.normal(deltat,deltat/10.,nw)                                # Width of FSC 2 kernel
+    p0_25 = np.random.normal(sigflux,sigflux/10,nw)                               # Amplitude of flux 2 kernel
+    p0_26 = np.random.uniform(ebpar['Rot2']*0.1,ebpar['Rot2']*1.1,nw)             # Width of flux 2 kernel
+    p0_27 = np.random.uniform(0.1,0.2,nw)                                         # Gamma of flux 2 kernel
+
+#    p0_16 = np.random.uniform(0,1,nw)                                             # Fraction of spots eclipsed
+#    p0_17 = np.random.normal(0,0.001,nw)                                          # base spottedness
+#    p0_18 = np.random.normal(0,0.0001,nw)                                         # Sin amplitude
+#    p0_19 = np.random.normal(0,0.0001,nw)                                         # Cos amplitude
+#    p0_20 = np.random.normal(0,0.0001,nw)                                         # SinCos amplitude
+#    p0_21 = np.random.normal(0,0.0001,nw)                                         # Cos^2-Sin^2 amplitude
+
+#    p0_23 = np.random.uniform(0,1,nw)                                             # Fraction of spots eclipsed
+#    p0_24 = np.random.normal(0,0.001,nw)                                          # base spottedness
+#    p0_25 = np.random.normal(0,0.001,nw)                                          # Sin amplitude
+#    p0_26 = np.random.normal(0,0.001,nw)                                          # Cos amplitude
+#    p0_27 = np.random.normal(0,0.001,nw)                                          # SinCos amplitude
+#    p0_28 = np.random.normal(0,0.001,nw)                                          # Cos^2-Sin^2 amplitude
+
     p0_29 = np.abs(np.random.uniform(ebpar['ktot']*0.999,ebpar['ktot']*1.001,nw)) # Total radial velocity amp
     p0_30 = np.random.uniform(ebpar['vsys']*.999,ebpar['vsys']*1.001,nw)          # System velocity   
 
@@ -604,29 +624,44 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
 
 
     #######################################################################
-    # Need to add as many groups of ooe parameters as # of eclipses!!!
+    # Spot modeling
+    #######################################################################
+
+    # Fraction of spots covered could vary from eclipse to eclipse.
+    # Need GP kernel for each star
+    # Use exponential squared kernel
+    # Params = a and l
+
+    
     if fitinfo['fit_ooe1']:
-        fitorder1 = fitinfo['fit_ooe1']
         p0_init = np.append(p0_init,[p0_16],axis=0)
-        variables.append('spFrac1')
-        for i in range(fitorder1+1):
-            p0_init = np.append(p0_init,[np.random.normal(0,0.05,nw)],axis=0)
-            variables.append('p'+str(i)+'_1')
-        for i in range(fitorder1+1):
-            p0_init = np.append(p0_init,[np.random.normal(0,0.05,nw)],axis=0)
-            variables.append('p'+str(i)+'_2')
+        variables.append('FSCAmp1')
+        p0_init = np.append(p0_init,[p0_17],axis=0)
+        variables.append('FSCWid1')
+        p0_init = np.append(p0_init,[p0_18],axis=0)
+        variables.append('FAmp1')
+        p0_init = np.append(p0_init,[p0_19],axis=0)
+        variables.append('FWid1')
+        p0_init = np.append(p0_init,[p0_20],axis=0)
+        variables.append('FGam1')
+        p0_init = np.append(p0_init,[p0_15],axis=0)
+        variables.append('FPer1')
 
     if fitinfo['fit_ooe2']:
-        fitorder2 = fitinfo['fit_ooe1']
         p0_init = np.append(p0_init,[p0_23],axis=0)
-        variables.append('spFrac2')
-        for i in range(fitorder2+1):
-            p0_init = np.append(p0_init,[np.random.normal(0,0.05,nw)],axis=0)
-            variables.append('s'+str(i)+'_1')
-        for i in range(fitorder2+1):
-            p0_init = np.append(p0_init,[np.random.normal(0,0.05,nw)],axis=0)
-            variables.append('s'+str(i)+'_2')
+        variables.append('FSCAmp2')
+        p0_init = np.append(p0_init,[p0_24],axis=0)
+        variables.append('FSCWid2')
+        p0_init = np.append(p0_init,[p0_25],axis=0)
+        variables.append('FAmp2')
+        p0_init = np.append(p0_init,[p0_26],axis=0)
+        variables.append('FWid2')
+        p0_init = np.append(p0_init,[p0_27],axis=0)
+        variables.append('FGam2')
+        p0_init = np.append(p0_init,[p0_22],axis=0)
+        variables.append('FPer2')
 
+        
     if fitinfo['fit_rvs']:
         p0_init = np.append(p0_init,[p0_13],axis=0)
         variables.append('massratio')

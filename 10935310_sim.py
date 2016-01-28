@@ -19,7 +19,7 @@ l1 = 4*np.pi*r1**2*c.sb*T1**4
 T2 = 2750.0
 l2 = 4*np.pi*r2**2*c.sb*T2**4
 J  = l2/l1
-network = 'doug'
+network = 'swift'
 
 obsdur = 130.0
 int = 1800.0
@@ -48,17 +48,19 @@ ebpar,data = ebs.make_model_data(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2
                                  P1double=P1double, P2double=P2double,
                                  write=True)
                                  
+#import sys
+#sys.exit()
+
 plt.ion()
-#ebs.check_model(data)
+ebs.check_model(data)
 time = data['light'][0,:]
 flux = data['light'][1,:]
 ttm1 = 86400.0*ebs.foldtime(time,t0=t0,period=period/86400.0)/period
-dtb = np.diff(np.roll(ttm1,1))
+dtb = np.diff(np.roll(ttm1,-1))
 dtm = np.diff(ttm1)
-dte = np.diff(np.roll(ttm1,-1))
+dte = np.diff(np.roll(ttm1,1))
 ei  = np.where((dtb < 0) & (dtm < 0))
 bi  = np.where((dtm < 0) & (dte < 0))
-
 
 plt.figure(3)
 plt.clf()

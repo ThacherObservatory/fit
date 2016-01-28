@@ -1,6 +1,5 @@
 # TO DO:
 #-------
-# - What EXACTLY does "spFrac1" represent???
 
 import sys,math,pdb,time,glob,re,os,eb,emcee
 import numpy as np
