@@ -15,6 +15,8 @@ from scipy.io.idl import readsav
 from length import length
 from statsmodels.nonparametric.kernel_density import KDEMultivariate as KDE
 from stellar import rt_from_m, flux2mag, mag2flux
+import george
+from george.kernels import ExpSine2Kernel, ExpSquaredKernel, WhiteKernel
 
 ################################################################################
 # Find geometric base
@@ -573,15 +575,16 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
     p0_18 = np.random.normal(sigflux,sigflux/10,nw)                               # Amplitude of flux 1 kernel
     p0_19 = np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw)             # Width of flux 1 kernel
     p0_20 = np.random.uniform(0.1,0.2,nw)                                         # Gamma of flux 1 kernel
-
+  # no p0_21
     p0_22 = np.random.uniform(ebpar['Rot2'],0.001,nw)                             # Star 2 rotation
     p0_23 = np.random.uniform(0,1,nw)                                             # Amplitude for FSC 2 kernel
     p0_24 = np.random.normal(deltat,deltat/10.,nw)                                # Width of FSC 2 kernel
     p0_25 = np.random.normal(sigflux,sigflux/10,nw)                               # Amplitude of flux 2 kernel
     p0_26 = np.random.uniform(ebpar['Rot2']*0.1,ebpar['Rot2']*1.1,nw)             # Width of flux 2 kernel
     p0_27 = np.random.uniform(0.1,0.2,nw)                                         # Gamma of flux 2 kernel
+  # no p0_28
 
-#    p0_16 = np.random.uniform(0,1,nw)                                             # Fraction of spots eclipsed
+#    p0_16 = np.random.uniform(0,1,nw)                                             # Fraction spots eclipsed
 #    p0_17 = np.random.normal(0,0.001,nw)                                          # base spottedness
 #    p0_18 = np.random.normal(0,0.0001,nw)                                         # Sin amplitude
 #    p0_19 = np.random.normal(0,0.0001,nw)                                         # Cos amplitude
@@ -634,18 +637,33 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
 
     
     if fitinfo['fit_ooe1']:
+        # Fraction of spots covered = exponential squared kernel
+        # Amplitude of fraction of spots covered
+        # This should vary from 0 to 1
         p0_init = np.append(p0_init,[p0_16],axis=0)
         variables.append('FSCAmp1')
+        # Width of the fraction of spots covered
+        # How fast is this expected to vary? Maybe quickly for
+        # not tidally locked.
         p0_init = np.append(p0_init,[p0_17],axis=0)
         variables.append('FSCWid1')
+
+        # Out of eclipse variations = Quasi-periodic kernel
+        # Amplitude for the out of eclipse flux
         p0_init = np.append(p0_init,[p0_18],axis=0)
         variables.append('FAmp1')
+        # Width of the out of eclipse flux
         p0_init = np.append(p0_init,[p0_19],axis=0)
         variables.append('FWid1')
+        # Not sure how this affects the kernel
         p0_init = np.append(p0_init,[p0_20],axis=0)
         variables.append('FGam1')
+        # Period of the kernel. 
         p0_init = np.append(p0_init,[p0_15],axis=0)
         variables.append('FPer1')
+
+        # Base spottedness  = exponential squared kernel
+        
 
     if fitinfo['fit_ooe2']:
         p0_init = np.append(p0_init,[p0_23],axis=0)
