@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as op
 import kplr
+import emcee
 
 client = kplr.API()
 
@@ -42,21 +43,18 @@ plt.plot(time,flux,'ko-',markersize=8)
 #plt.xlabel('Time (BKJD)')
 plt.ylabel('Flux (ADU)')
 
-k =  10.0**2 * ExpSquaredKernel(2.0) * ExpSine2Kernel(0.5,1)
+k =  9.8 * ExpSquaredKernel(1) * ExpSine2Kernel(1,.5)
 
 gp = george.GP(k,mean=np.mean(flux))
 
-def nll(theta):
+def lnprob(theta):
     #theta[0] = amplitude
     #theta[1] = width
     #theta[2] = width of semi periodic kernel
     #theta[3] = period
-    #theta[4] = noise term
 
     gp.kernel[:] = theta
 
-    if np.any(np.isnan(theta)) or np.any(theta < 0):
-        return np.inf
     
     try:
         gp.compute(time,4,sort=True)
@@ -64,23 +62,24 @@ def nll(theta):
         print('WTF!')
         return np.inf
 
-    neglike = -gp.lnlikelihood(flux, quiet=True)
-    return neglike
-
-
-def grad_nll(theta):
-    # Update the kernel parameters and compute the likelihood.
-    gp.kernel[:] = theta
-    return -gp.grad_lnlikelihood(flux, quiet=True)
+    return gp.lnlikelihood(flux, quiet=True)
 
 gp.compute(time,4,sort=True)
 print(gp.lnlikelihood(flux))
 
 p0 = gp.kernel.vector
-results = op.minimize(nll, p0,jac=grad_nll)
+nwalkers = 100
+nsteps = 1000
+ndim = len(p0)
+#drop the MCMC hammer
 
-gp.kernel[:] = np.abs(results.x)
-print(results.x)
+sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob)
+
+pos,prob,state = sampler.run_mcmc(p0, nsteps)
+
+sampler.reset()
+pos, prob, state = sampler.run_mcmc(pos,1000)
+
 print(gp.lnlikelihood(flux))
 
 x = np.linspace(np.min(time), np.max(time), 5000)
