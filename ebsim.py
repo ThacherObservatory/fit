@@ -1,6 +1,6 @@
 # TO DO:
 #-------
-# Implement spot modeling
+# Update vec_to_params to recognize GP kernel parameters.
 #
 # Generalize so that this code can be used to test TESS, Kepler, K2, and/or ground based
 # data
@@ -516,6 +516,9 @@ def fit_params(ebpar,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
     return fitinfo
 
 
+
+
+
 def ebsim_fit(data,ebpar,fitinfo,debug=False):
     """
     Fit the simulated data using emcee with starting parameters based on the 
@@ -569,37 +572,43 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
                                      ebpar['Mratio']*1.0001,nw))
     p0_14 = np.random.uniform(0,0.1,nw)                                           # Third Light
     
-    p0_15 = np.random.normal(ebpar['Rot1'],0.01,nw)                               # Star 1 rotation
-    p0_16 = np.random.uniform(0,1,nw)                                             # Amplitude for FSC 1 kernel
-    p0_17 = np.random.normal(deltat,deltat/10.,nw)                                # Width of FSC 1 kernel
-    p0_18 = np.random.normal(sigflux,sigflux/10,nw)                               # Amplitude of flux 1 kernel
-    p0_19 = np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw)             # Width of flux 1 kernel
-    p0_20 = np.random.uniform(0.1,0.2,nw)                                         # Gamma of flux 1 kernel
-  # no p0_21
-    p0_22 = np.random.uniform(ebpar['Rot2'],0.001,nw)                             # Star 2 rotation
-    p0_23 = np.random.uniform(0,1,nw)                                             # Amplitude for FSC 2 kernel
-    p0_24 = np.random.normal(deltat,deltat/10.,nw)                                # Width of FSC 2 kernel
-    p0_25 = np.random.normal(sigflux,sigflux/10,nw)                               # Amplitude of flux 2 kernel
-    p0_26 = np.random.uniform(ebpar['Rot2']*0.1,ebpar['Rot2']*1.1,nw)             # Width of flux 2 kernel
-    p0_27 = np.random.uniform(0.1,0.2,nw)                                         # Gamma of flux 2 kernel
-  # no p0_28
 
-#    p0_16 = np.random.uniform(0,1,nw)                                             # Fraction spots eclipsed
-#    p0_17 = np.random.normal(0,0.001,nw)                                          # base spottedness
-#    p0_18 = np.random.normal(0,0.0001,nw)                                         # Sin amplitude
-#    p0_19 = np.random.normal(0,0.0001,nw)                                         # Cos amplitude
-#    p0_20 = np.random.normal(0,0.0001,nw)                                         # SinCos amplitude
-#    p0_21 = np.random.normal(0,0.0001,nw)                                         # Cos^2-Sin^2 amplitude
+    ##############################
+    # Spot Modeling (use GP)
+    ##############################
+    # Star 1
+    # Quasi-Periodic Kernel for Out of Eclipse Variations
+    p0_15 = np.log(np.random.normal(0.05,0.2,nw))                                 # Amplitude for QP kernel 1
+    p0_16 = np.log(np.random.uniform(0,10,nw))                                    # Sine Amplitude for QP kernel 1
+    p0_17 = np.log(np.random.normal(ebpar['Rot1'],0.1*ebpar['Rot1'],nw))          # Period for QP kernel 1 (star rotation)
+    p0_18 = np.log(np.random.uniform(0.1,2*ebpar['Rot1'],nw))                     # Decay of QP kernel 1
 
-#    p0_23 = np.random.uniform(0,1,nw)                                             # Fraction of spots eclipsed
-#    p0_24 = np.random.normal(0,0.001,nw)                                          # base spottedness
-#    p0_25 = np.random.normal(0,0.001,nw)                                          # Sin amplitude
-#    p0_26 = np.random.normal(0,0.001,nw)                                          # Cos amplitude
-#    p0_27 = np.random.normal(0,0.001,nw)                                          # SinCos amplitude
-#    p0_28 = np.random.normal(0,0.001,nw)                                          # Cos^2-Sin^2 amplitude
+    # Exponential Kernel for Fraction of Spots Covered
+    p0_19 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # FSC Amplitude for E kernel 1
+    p0_20 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
 
-    p0_29 = np.abs(np.random.uniform(ebpar['ktot']*0.999,ebpar['ktot']*1.001,nw)) # Total radial velocity amp
-    p0_30 = np.random.uniform(ebpar['vsys']*.999,ebpar['vsys']*1.001,nw)          # System velocity   
+    # Exponential Kernel for Base Spottedness
+    p0_21 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # BS Amplitude for E kernel 1
+    p0_22 = np.log(np.random.uniform(0.1,0.2,nw))                                 # BS Width for E kernel 1
+
+    ##############################
+    # Star 2
+    # Quasi-Periodic Kernel for Out of Eclipse Variations
+    p0_23 = np.log(np.random.normal(0.05,0.2,nw))                                 # Amplitude for QP kernel 1
+    p0_24 = np.log(np.random.uniform(0,10,nw))                                    # Sine Amplitude for QP kernel 1
+    p0_25 = np.log(np.random.normal(ebpar['Rot1'],0.1*ebpar['Rot1'],nw))          # Period for QP kernel 1 (star rotation)
+    p0_26 = np.log(np.random.uniform(0.1,2*ebpar['Rot1'],nw))                     # Decay of QP kernel 1
+
+    # Exponential Kernel for Fraction of Spots Covered
+    p0_27 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # FSC Amplitude for E kernel 1
+    p0_28 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
+
+    # Exponential Kernel for Base Spottedness
+    p0_29 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # BS Amplitude for E kernel 1
+    p0_30 = np.log(np.random.uniform(0.1,0.2,nw))                                 # BS Width for E kernel 1
+
+    p0_31 = np.abs(np.random.uniform(ebpar['ktot']*0.999,ebpar['ktot']*1.001,nw)) # Total radial velocity amp
+    p0_32 = np.random.uniform(ebpar['vsys']*.999,ebpar['vsys']*1.001,nw)          # System velocity   
 
 
 # L3 at 14 ... 14 and beyond + 1
@@ -637,55 +646,51 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
 
     
     if fitinfo['fit_ooe1']:
+
+        # Out of eclipse variations = Quasi-periodic kernel
+        # Amplitude for the out of eclipse flux
+        p0_init = np.append(p0_init,[p0_15],axis=0)
+        variables.append('SAmp1')
+        # Sine amplitude, makes periodic peaks sharper for higher numbers.
+        p0_init = np.append(p0_init,[p0_16],axis=0)
+        variables.append('SSineAmp1')
+        # Period
+        p0_init = np.append(p0_init,[p0_17],axis=0)
+        variables.append('SPer1')
+        # Period of the kernel. 
+        p0_init = np.append(p0_init,[p0_18],axis=0)
+        variables.append('SDecay1')
+
         # Fraction of spots covered = exponential squared kernel
         # Amplitude of fraction of spots covered
         # This should vary from 0 to 1
-        p0_init = np.append(p0_init,[p0_16],axis=0)
+        p0_init = np.append(p0_init,[p0_19],axis=0)
         variables.append('FSCAmp1')
         # Width of the fraction of spots covered
         # How fast is this expected to vary? Maybe quickly for
         # not tidally locked.
-        p0_init = np.append(p0_init,[p0_17],axis=0)
+        p0_init = np.append(p0_init,[p0_20],axis=0)
         variables.append('FSCWid1')
 
-        # Out of eclipse variations = Quasi-periodic kernel
-        # Amplitude for the out of eclipse flux
-        p0_init = np.append(p0_init,[p0_18],axis=0)
-        variables.append('FAmp1')
-        # Width of the out of eclipse flux
-        p0_init = np.append(p0_init,[p0_19],axis=0)
-        variables.append('FWid1')
-        # Not sure how this affects the kernel
-        p0_init = np.append(p0_init,[p0_20],axis=0)
-        variables.append('FGam1')
-        # Period of the kernel. 
-        p0_init = np.append(p0_init,[p0_15],axis=0)
-        variables.append('FPer1')
-
         # Base spottedness  = exponential squared kernel
-        
+        p0_init = np.append(p0_init,[p0_21],axis=0)
+        variables.append('BSAmp1')
+        # Width of the fraction of spots covered
+        # How fast is this expected to vary? Maybe quickly for
+        # not tidally locked.
+        p0_init = np.append(p0_init,[p0_22],axis=0)
+        variables.append('BSWid1')
+
 
     if fitinfo['fit_ooe2']:
-        p0_init = np.append(p0_init,[p0_23],axis=0)
-        variables.append('FSCAmp2')
-        p0_init = np.append(p0_init,[p0_24],axis=0)
-        variables.append('FSCWid2')
-        p0_init = np.append(p0_init,[p0_25],axis=0)
-        variables.append('FAmp2')
-        p0_init = np.append(p0_init,[p0_26],axis=0)
-        variables.append('FWid2')
-        p0_init = np.append(p0_init,[p0_27],axis=0)
-        variables.append('FGam2')
-        p0_init = np.append(p0_init,[p0_22],axis=0)
-        variables.append('FPer2')
-
+        pass
         
     if fitinfo['fit_rvs']:
         p0_init = np.append(p0_init,[p0_13],axis=0)
         variables.append('massratio')
-        p0_init = np.append(p0_init,[p0_29],axis=0)
+        p0_init = np.append(p0_init,[p0_31],axis=0)
         variables.append('ktot')
-        p0_init = np.append(p0_init,[p0_30],axis=0)
+        p0_init = np.append(p0_init,[p0_32],axis=0)
         variables.append("vsys")
 
     variables = np.array(variables)
@@ -800,6 +805,7 @@ def vec_to_params(x,ebpar,fitinfo=None,verbose=True):
     x[13] = mass ratio
     x[14] = third light
     *** Spot models ***
+    !!! To Be Updated !!!
     * Star 1
     x[15] = rotation parameter (Prot/Porbit)    
     x[16] = fraction of spots eclipsed
@@ -816,13 +822,12 @@ def vec_to_params(x,ebpar,fitinfo=None,verbose=True):
     x[26] = amplitude of cos component   
     x[27] = amplitude of sincos component
     x[28] = amplitude of (cos^2 - sin^2) component
+
     *** system velocity and mag offset is last since it is not in any of the eb attributes
-    x[29] = total radial velocity amplitude
-    x[30] = system velocity
+    x[30] = total radial velocity amplitude
+    x[31] = system velocity
 
 
-    !!! Need to think carefully about default parameters for spot modelling !!!
-    Use fit_ooe1 and fit_ooe2 params in fit_params to make decisions
 
     """
     
@@ -948,37 +953,8 @@ def vec_to_params(x,ebpar,fitinfo=None,verbose=True):
         parm[eb.PAR_REFL2]  = ebpar['Ref2']  # albedo, std. value
 
 
-    # Spot modelling
-    if fitooe1:
-        try:
-            parm[eb.PAR_ROT1]   = x[variables == 'Rot1'][0] # rotation parameter (1 = sync.)
-        except:
-            pass
-        try:
-            parm[eb.PAR_FSPOT1] = x[variables == 'spFrac1'][0]  # fraction of spots eclipsed
-        except:
-            pass
-        try:
-            parm[eb.PAR_OOE1O]  = x[variables == 'spBase1'][0]  # base spottedness out of eclipse
-        except:
-            pass
-        try:
-            parm[eb.PAR_OOE11A] = x[variables == 'spSin1'][0] # amplitude of sine component
-        except:
-            pass
-        try:
-            parm[eb.PAR_OOE11B] = x[variables == 'spCos1'][0] # amplitude of cosine component
-        except:
-            pass
-        try:
-            parm[eb.PAR_OOE12A] = x[variables == 'spSinCos1'][0] # amplitude of sincos cross term
-        except:
-            pass
-        try:
-            parm[eb.PAR_OOE12B] = x[variables == 'spSqSinCos1'][0] # amplitude of sin^2 + cos^2 term
-        except:
-            pass
-    elif ebpar['Rot1'] and fitinfo == None:
+
+    if ebpar['Rot1'] and fitinfo == None:
         parm[eb.PAR_ROT1]   = ebpar['Rot1']        # rotation parameter (1 = sync.)
         parm[eb.PAR_FSPOT1] = ebpar['spFrac1']     # fraction of spots eclipsed
         parm[eb.PAR_OOE1O]  = ebpar['spBase1']     # base spottedness out of eclipse
@@ -987,38 +963,7 @@ def vec_to_params(x,ebpar,fitinfo=None,verbose=True):
         parm[eb.PAR_OOE12A] = ebpar['spSinCos1']   # amplitude of sincos cross term
         parm[eb.PAR_OOE12B] = ebpar['spSqSinCos1'] # amplitude of sin^2 + cos^2 term
             
-
-    if fitooe2:
-        try:
-            parm[eb.PAR_ROT2]   = x[variables == 'Rot2'][0] # rotation parameter (1 = sync.)
-        except:
-            pass
-        try:
-            parm[eb.PAR_FSPOT2] = x[variables == 'spFrac2'][0]  # fraction of spots eclipsed
-        except:
-            pass
-        try:
-            parm[eb.PAR_OOE2O]  = x[variables == 'spBase2'][0]  # base spottedness out of eclipse
-        except:
-            pass
-        try:
-            parm[eb.PAR_OOE21A] = x[variables == 'spSin2'][0] # amplitude of sine component
-        except:
-            pass
-        try:
-            parm[eb.PAR_OOE21B] = x[variables == 'spCos2'][0] # amplitude of cosine component
-        except:
-            pass
-        try:
-            parm[eb.PAR_OOE22A] = x[variables == 'spSinCos2'][0] # amplitude of sincos cross term
-        except:
-            pass
-        try:
-            parm[eb.PAR_OOE22B] = x[variables == 'spSqSinCos2'][0] # amplitude of sin^2 + cos^2 term
-        except:
-            pass
-
-    elif ebpar['Rot2'] and fitinfo == None:
+    if ebpar['Rot2'] and fitinfo == None:
         parm[eb.PAR_ROT2]   = ebpar['Rot2']        # rotation parameter (1 = sync.)
         parm[eb.PAR_FSPOT2] = ebpar['spFrac2']     # fraction of spots eclipsed
         parm[eb.PAR_OOE2O]  = ebpar['spBase2']     # base spottedness out of eclipse
@@ -1116,16 +1061,16 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
         if (np.max(phiarr) - np.min(phiarr)) > 0.5:
             phiarr[phiarr < 0] += 1.0
         
-        # Compute ol1 and ol2 vectors if needed
-        if np.shape(ooe1fit):
-            ol1 = np.polyval(ooe1fit,phiarr)
-        else:
-            ol1 = None
-
-        if np.shape(ooe2fit):
-            ol2 = np.polyval(ooe2fit,phiarr)
-        else:
-            ol2 = None
+#        # Compute ol1 and ol2 vectors if needed
+#        if np.shape(ooe1fit):
+#            ol1 = np.polyval(ooe1fit,phiarr)
+#        else:
+#            ol1 = None
+#
+#        if np.shape(ooe2fit):
+#            ol2 = np.polyval(ooe2fit,phiarr)
+#        else:
+#            ol2 = None
 
         typ = np.empty_like(tdarr, dtype=np.uint8)
 
@@ -1255,25 +1200,6 @@ def lnprob(x,data,ebpar,fitinfo,debug=False):
         # Phases of contact points
         (ps, pe, ss, se) = eb.phicont(parm)
 
-        
-    # Fit spots on primary star
-    if fitinfo['fit_ooe1']:
-        fitorder1 = fitinfo['fit_ooe1']
-        if parm[eb.PAR_FSPOT1] < 0 or parm[eb.PAR_FSPOT1] > 1:
-            return -np.inf
-        coeff1 = []
-        for i in range(fitorder1+1):
-            coeff1 = np.append(coeff1,x[variables == 'p'+str(i)+'_1'])
-
-    # Fit spots on secondary star
-    if fitinfo['fit_ooe2']:
-        fitorder2 = fitinfo['fit_ooe2']
-        if parm[eb.PAR_FSPOT2] < 0 or parm[eb.PAR_FSPOT2] > 1:
-            return -np.inf
-        coeff2 = []
-        for i in range(fitorder2+1):
-            coeff2 = np.append(coeff2,x[variables == 's'+str(i)+'_1'])
-    
 
 ### Compute eclipse model for given input parameters ###
     massratio = parm[eb.PAR_Q]
@@ -1286,32 +1212,39 @@ def lnprob(x,data,ebpar,fitinfo,debug=False):
 
     sm  = compute_eclipse(time,parm,integration=ebpar['integration'],fitrvs=False,tref=t0,period=period)
 
-    # Log Likelihood Vector
-    lfi = -1.0*(sm - flux)**2/(2.0*eflux**2)
+    ##############################
+    # Spot modeling
+    ################################
+    # Spots on primary
+    if fitinfo['fit_ooe1'] and not fitinfo['fit_ooe2']:
+        res = flux-sm
+        theta =np.exp(np.array([x[variables=='SAmp1'],x[variables=='SSineAmp1'],
+                                x[variables=='SPer1'],x['SDecay1']]))
+        k =  theta[0] * ExpSquaredKernel(theta[1]) * ExpSine2Kernel(theta[2],theta[3])
+        gp = george.GP(k,mean=np.mean(res))
+        try:
+            gp.compute(time, 4,sort=True)
+        except (ValueError, np.linalg.LinAlgError):
+            return -np.inf
+        lf = gp.lnlikelihood(res, quiet=True))
+        
+    ################################
+    # Spots on secondary
+    if fitinfo['fit_ooe2'] and not fitinfo['fit_ooe1']:
+        pass
 
-    # Log likelihood
-    lf1 = np.sum(lfi)
+    ################################
+    # Spots on primary and secondary    
+    if fitinfo['fit_ooe1'] and fitinfo['fit_ooe2']:
+        pass
+    
+    ##############################
+    # No spots
+    if not fitinfo['fit_ooe2'] and not fitinfo['fit_ooe1']:
+        # Log Likelihood
+        lf = np.sum(-1.0*(sm - flux)**2/(2.0*eflux**2))
 
-#    # Secondary eclipse
-#    tsec = fitdict['tsec']
-#    xsec = fitdict['xsec']/norm
-#    esec = fitdict['esec']/norm
-#
-#    if fitsp1:
-#        coeff2 = []
-#        for i in range(fitorder+1):
-#            coeff2 = np.append(coeff2,x[variables == 'c'+str(i)+'_2'])
-#
-#    sm2  = compute_eclipse(tsec,parm,fitrvs=False,tref=t0,period=period,ooe1fit=coeff2)
-#    
-#    # Log Likelihood Vector
-#    lfi2 = -1.0*(sm2 - xsec)**2/(2.0*esec**2)
-#    
-#    # Log likelihood
-#    lf2 = np.sum(lfi2)
-#
-    lf = lf1 #+lf2
-
+        
     # need this for the RVs!
     parm[eb.PAR_Q] = massratio
 
