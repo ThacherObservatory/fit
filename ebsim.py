@@ -380,6 +380,11 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     sinds, = np.where((phase >= p0sec-psec/2) & (phase <= p0sec+psec/2))
     inds = np.append(pinds,sinds)
 
+    pdb.set_trace()
+
+    # need to also select out indices that correspond to OOE
+    ooeinds = 1 # Placeholder
+
     tfinal = np.sort(time[inds])
     pfinal = np.sort(phase[inds])
     
@@ -448,7 +453,7 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     r1out = np.array([tRV+bjd,rv1,rv1_err])
     r2out = np.array([tRV+bjd,rv2,rv2_err])
 
-    data = {'light':lout,'rv1':r1out,'rv2':r2out}
+    data = {'light':lout,'ooe':ooe, 'rv1':r1out,'rv2':r2out}
 
 
     if write:
@@ -586,29 +591,34 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
     # Exponential Kernel for Fraction of Spots Covered
     p0_19 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # FSC Amplitude for E kernel 1
     p0_20 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
+    p0_21 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
 
     # Exponential Kernel for Base Spottedness
-    p0_21 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # BS Amplitude for E kernel 1
-    p0_22 = np.log(np.random.uniform(0.1,0.2,nw))                                 # BS Width for E kernel 1
+    p0_22 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # BS Amplitude for E kernel 1
+    p0_23 = np.log(np.random.uniform(0.1,0.2,nw))                                 # BS Width for E kernel 1
 
     ##############################
     # Star 2
     # Quasi-Periodic Kernel for Out of Eclipse Variations
-    p0_23 = np.log(np.random.normal(0.05,0.2,nw))                                 # Amplitude for QP kernel 1
-    p0_24 = np.log(np.random.uniform(0,10,nw))                                    # Sine Amplitude for QP kernel 1
-    p0_25 = np.log(np.random.normal(ebpar['Rot1'],0.1*ebpar['Rot1'],nw))          # Period for QP kernel 1 (star rotation)
-    p0_26 = np.log(np.random.uniform(0.1,2*ebpar['Rot1'],nw))                     # Decay of QP kernel 1
+    p0_24 = np.log(np.random.normal(0.05,0.2,nw))                                 # Amplitude for QP kernel 1
+    p0_25 = np.log(np.random.uniform(0,10,nw))                                    # Sine Amplitude for QP kernel 1
+    p0_26 = np.log(np.random.normal(ebpar['Rot1'],0.1*ebpar['Rot1'],nw))          # Period for QP kernel 1 (star rotation)
+    p0_27 = np.log(np.random.uniform(0.1,2*ebpar['Rot1'],nw))                     # Decay of QP kernel 1
 
-    # Exponential Kernel for Fraction of Spots Covered
-    p0_27 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # FSC Amplitude for E kernel 1
-    p0_28 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
+    # Fraction of Spots Covered
+    # a + b sin(ct): a > b, a+b <= 1, c positive
+    p0_28 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # FSC Amplitude for E kernel 1
+    p0_29 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
+    p0_30 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
 
-    # Exponential Kernel for Base Spottedness
-    p0_29 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # BS Amplitude for E kernel 1
-    p0_30 = np.log(np.random.uniform(0.1,0.2,nw))                                 # BS Width for E kernel 1
+    # Base Spottedness
+    # a sin(bt): a must be restricted, b must be small
+    p0_31 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # BS Amplitude for E kernel 1
+    p0_32 = np.log(np.random.uniform(0.1,0.2,nw))                                 # BS Width for E kernel 1
 
-    p0_31 = np.abs(np.random.uniform(ebpar['ktot']*0.999,ebpar['ktot']*1.001,nw)) # Total radial velocity amp
-    p0_32 = np.random.uniform(ebpar['vsys']*.999,ebpar['vsys']*1.001,nw)          # System velocity   
+    # System velocity
+    p0_33 = np.abs(np.random.uniform(ebpar['ktot']*0.999,ebpar['ktot']*1.001,nw)) # Total radial velocity amp
+    p0_34 = np.random.uniform(ebpar['vsys']*.999,ebpar['vsys']*1.001,nw)          # System velocity   
 
 
 # L3 at 14 ... 14 and beyond + 1
@@ -646,51 +656,44 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
 
     
     if fitinfo['fit_ooe1']:
-
         # Out of eclipse variations = Quasi-periodic kernel
         # Amplitude for the out of eclipse flux
         p0_init = np.append(p0_init,[p0_15],axis=0)
-        variables.append('SAmp1')
+        variables.append('OOE_Amp1')
         # Sine amplitude, makes periodic peaks sharper for higher numbers.
         p0_init = np.append(p0_init,[p0_16],axis=0)
-        variables.append('SSineAmp1')
-        # Period
+        variables.append('OOE_SineAmp1')
+        # Period, separation of peaks.
         p0_init = np.append(p0_init,[p0_17],axis=0)
-        variables.append('SPer1')
-        # Period of the kernel. 
+        variables.append('OOE_Per1')
+        # Decay, how significant is the next peak in the kernel
         p0_init = np.append(p0_init,[p0_18],axis=0)
-        variables.append('SDecay1')
+        variables.append('OOE_Decay1')
 
-        # Fraction of spots covered = exponential squared kernel
-        # Amplitude of fraction of spots covered
-        # This should vary from 0 to 1
+        # Fraction of spots covered
         p0_init = np.append(p0_init,[p0_19],axis=0)
-        variables.append('FSCAmp1')
-        # Width of the fraction of spots covered
-        # How fast is this expected to vary? Maybe quickly for
-        # not tidally locked.
+        variables.append('FSCOff1')
         p0_init = np.append(p0_init,[p0_20],axis=0)
-        variables.append('FSCWid1')
+        variables.append('FSCAmp1')
+        p0_init = np.append(p0_init,[p0_21],axis=0)
+        variables.append('FSCPer1')
 
         # Base spottedness  = exponential squared kernel
         p0_init = np.append(p0_init,[p0_21],axis=0)
         variables.append('BSAmp1')
-        # Width of the fraction of spots covered
-        # How fast is this expected to vary? Maybe quickly for
-        # not tidally locked.
         p0_init = np.append(p0_init,[p0_22],axis=0)
-        variables.append('BSWid1')
+        variables.append('BSPer1')
 
-
+        
     if fitinfo['fit_ooe2']:
         pass
         
     if fitinfo['fit_rvs']:
         p0_init = np.append(p0_init,[p0_13],axis=0)
         variables.append('massratio')
-        p0_init = np.append(p0_init,[p0_31],axis=0)
+        p0_init = np.append(p0_init,[p0_33],axis=0)
         variables.append('ktot')
-        p0_init = np.append(p0_init,[p0_32],axis=0)
+        p0_init = np.append(p0_init,[p0_34],axis=0)
         variables.append("vsys")
 
     variables = np.array(variables)
@@ -1209,24 +1212,25 @@ def lnprob(x,data,ebpar,fitinfo,debug=False):
     if not fitinfo['fit_ellipsoidal']:
         parm[eb.PAR_Q] = 0.0
 
-
-    sm  = compute_eclipse(time,parm,integration=ebpar['integration'],fitrvs=False,tref=t0,period=period)
-
     ##############################
-    # Spot modeling
-    ################################
+    # Spot modeling 
+    ##############################
     # Spots on primary
     if fitinfo['fit_ooe1'] and not fitinfo['fit_ooe2']:
         res = flux-sm
-        theta =np.exp(np.array([x[variables=='SAmp1'],x[variables=='SSineAmp1'],
-                                x[variables=='SPer1'],x['SDecay1']]))
+        theta = np.exp(np.array([x[variables=='OOE_Amp1'],x[variables=='OOE_SineAmp1'],
+                                x[variables=='OOE_Per1'],x['OOE_Decay1']]))
         k =  theta[0] * ExpSquaredKernel(theta[1]) * ExpSine2Kernel(theta[2],theta[3])
         gp = george.GP(k,mean=np.mean(res))
         try:
             gp.compute(time, 4,sort=True)
         except (ValueError, np.linalg.LinAlgError):
             return -np.inf
-        lf = gp.lnlikelihood(res, quiet=True))
+        lf = gp.lnlikelihood(res, quiet=True)
+    
+        
+        sm  = compute_eclipse(time,parm,integration=ebpar['integration'],fitrvs=False,tref=t0,period=period,fitooe1=True)
+
         
     ################################
     # Spots on secondary
@@ -1241,9 +1245,9 @@ def lnprob(x,data,ebpar,fitinfo,debug=False):
     ##############################
     # No spots
     if not fitinfo['fit_ooe2'] and not fitinfo['fit_ooe1']:
+        sm  = compute_eclipse(time,parm,integration=ebpar['integration'],fitrvs=False,tref=t0,period=period)
         # Log Likelihood
         lf = np.sum(-1.0*(sm - flux)**2/(2.0*eflux**2))
-
         
     # need this for the RVs!
     parm[eb.PAR_Q] = massratio
