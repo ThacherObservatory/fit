@@ -31,6 +31,9 @@ def fitgaussian(data):
     params = moments(data)
     errorfunction = lambda p: ravel(gaussian(*p)(*indices(data.shape)) -
                                     data)
-    p, success = optimize.leastsq(errorfunction, params)
-    return p
-    
+    try:
+        p, success = optimize.leastsq(errorfunction, params)
+        return p
+    except:
+        print('fitgaussian ERROR')
+        return nan
