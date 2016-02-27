@@ -6,6 +6,7 @@ import scipy.optimize as op
 import kplr
 import emcee
 import pdb,sys
+import corner
 
 debug = False
 
@@ -146,6 +147,7 @@ pos,prob,state = sampler.run_mcmc(p0_init, burnsteps)
 
 plt.figure(2)
 plt.clf()
+"""
 for i in range(nwalkers):
     plt.subplot(2,2,1)
     plt.plot(sampler.chain[i,:,0])
@@ -163,10 +165,10 @@ for i in range(nwalkers):
     plt.plot(sampler.chain[i,:,3])
     plt.title('Decay')
 plt.suptitle('Burn-in',fontsize=18)
-
+"""
 sampler.reset()
 pos, prob, state = sampler.run_mcmc(pos,mcmcsteps)
-
+"""
 plt.figure(3)
 plt.clf()
 for i in range(nwalkers):
@@ -186,7 +188,7 @@ for i in range(nwalkers):
     plt.plot(sampler.chain[i,:,3])
     plt.title('Decay')
 plt.suptitle('Final',fontsize=18)
-
+"""
 logamp = np.median(sampler.flatchain[:,0])
 logg = np.median(sampler.flatchain[:,1])
 logp = np.median(sampler.flatchain[:,2])
@@ -216,5 +218,11 @@ plt.plot(time,flux_fit-flux,'ko')
 plt.axhline(y=0,linestyle='-',color='red',lw=3)
 plt.xlabel('Time (BKJD)')
 plt.ylabel('Residuals (ADU)')
+
+#corner plot
+samples = sampler.flatchain.reshape([-1, ndim])
+
+figure = corner.corner(samples, labels=["$T1$","$T2$","$T3$","$T4$","$T5$"])
+figure.savefig("gp_test_corner.png")
 
 #plt.savefig('GP_4175707.png',dpi=300)
