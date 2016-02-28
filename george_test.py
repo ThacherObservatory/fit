@@ -1,12 +1,9 @@
-import george
+import kplr, emcee, george, corner
 from george.kernels import ExpSine2Kernel, ExpSquaredKernel
+import pdb,sys, pickle
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.optimize as op
-import kplr
-import emcee
-import pdb,sys
-import corner
 
 debug = False
 
@@ -133,12 +130,12 @@ print(gp.lnlikelihood(flux))
 p0 = gp.kernel.vector
 #p0 = p0[0:3]
 nwalkers = 20
-burnsteps = 1000
-mcmcsteps = 1000
+burnsteps = 100
+mcmcsteps = 100
 ndim = len(p0)
 
 # drop the MCMC hammer, yo.
-sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(time,flux,err))
+sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(time,flux,err))#,threads=3)
 
 p0_vec = [np.abs(p0[i])+1e-3*np.random.randn(nwalkers) for i in range(ndim)]
 p0_init = np.array(p0_vec).T
@@ -219,10 +216,12 @@ plt.axhline(y=0,linestyle='-',color='red',lw=3)
 plt.xlabel('Time (BKJD)')
 plt.ylabel('Residuals (ADU)')
 
+pickle.dump( sampler, open( "george_test.pkl", "wb" ) )
+sys.exit()
+
 #corner plot
-samples = sampler.flatchain.reshape([-1, ndim])
+#samples = sampler.flatchain.reshape([-1, ndim])
+samples = sampler.chain.reshape((-1, ndim))
 
 figure = corner.corner(samples, labels=["$T1$","$T2$","$T3$","$T4$","$T5$"])
-figure.savefig("gp_test_corner.png")
-
-#plt.savefig('GP_4175707.png',dpi=300)
+figure.savefig("gp_test_corner.png",dpi=300)
