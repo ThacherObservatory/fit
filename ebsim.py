@@ -5,7 +5,7 @@
 # Generalize so that this code can be used to test TESS, Kepler, K2, and/or ground based
 # data
 
-import sys,math,pdb,time,glob,re,os,eb,emcee,pickle
+import sys,math,ipdb,time,glob,re,os,eb,emcee,pickle
 import numpy as np
 import matplotlib.pyplot as plt
 import constants as c
@@ -374,19 +374,17 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     tfold = time % period
     phase = tfold/period
     p0sec = (se+ss)/2
-    pprim = (pe-ps+1)*durfac # add one because ps is positive and near 1, not negative
+    pprim = (pe-ps+1)*durfac # add one because start phase (ps) is positive and near 1, not negative
     psec  = (se-ss)*durfac
     pinds, = np.where((phase >= 1-pprim/2) | (phase <= pprim/2))
     sinds, = np.where((phase >= p0sec-psec/2) & (phase <= p0sec+psec/2))
     inds = np.append(pinds,sinds)
 
-    pdb.set_trace()
 
-    # need to also select out indices that correspond to OOE
-    ooeinds = 1 # Placeholder
+    s = np.argsort(time[inds])
+    tfinal = time[inds][s]
+    pfinal = phase[inds][s]
 
-    tfinal = np.sort(time[inds])
-    pfinal = np.sort(phase[inds])
     
     # This is only for no ellipsoidal variations and gravity darkening!
     mr = parm[eb.PAR_Q]
@@ -399,7 +397,14 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     lightmodel = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=11.0,
                                      fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
                                      unsmooth=False,spotflag=spotflag)
-        
+
+    # Out of eclipse light
+    # Phase duration of integration time
+    ptint = ebpar['integration']/(3600.*24 * period)
+    # indices of out of eclipse light
+    ooeinds, = np.where(((pfinal > pe+ptint ) & (pfinal < ss-ptint)) |
+                        ((pfinal > se+ptint) & (pfinal < ps-ptint)))
+                        
     parm[eb.PAR_Q] = mr
     
     if photnoise != None:
@@ -452,12 +457,14 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     lout = np.array([tfinal+bjd,lightmodel,lighterr])
     r1out = np.array([tRV+bjd,rv1,rv1_err])
     r2out = np.array([tRV+bjd,rv2,rv2_err])
-
-    data = {'light':lout,'ooe':ooe, 'rv1':r1out,'rv2':r2out}
+    ooe = np.array([tfinal[ooeinds]+bjd,lightmodel[ooeinds],lighterr[ooeinds]])
+    
+    data = {'light':lout, 'ooe':ooe, 'rv1':r1out, 'rv2':r2out}
 
 
     if write:
         np.savetxt('lightcurve_model.txt',lout.T)
+        np.savetxt('ooe_model.txt',ooe.T)
         np.savetxt('rv1_model.txt',r1out.T)
         np.savetxt('rv2_model.txt',r2out.T)
 
@@ -477,6 +484,10 @@ def check_model(data):
     time = phot[0,:]
     light = phot[1,:]
 
+    ooe = data['ooe']
+    ooet = ooe[0,:]
+    ooel = ooe[1,:]
+
     rvdata1 = data['rv1']
     t1 = rvdata1[0,:]
     rv1 = rvdata1[1,:]
@@ -488,6 +499,7 @@ def check_model(data):
     plt.figure(1)
     plt.clf()
     plt.plot(time,light,'.')
+    plt.plot(ooet,ooel,'.')
     
     plt.figure(2)
     plt.clf()
@@ -1229,7 +1241,8 @@ def lnprob(x,data,ebpar,fitinfo,debug=False):
         lf = gp.lnlikelihood(res, quiet=True)
     
         
-        sm  = compute_eclipse(time,parm,integration=ebpar['integration'],fitrvs=False,tref=t0,period=period,fitooe1=True)
+        sm  = compute_eclipse(time,parm,integration=ebpar['integration'],
+                              fitrvs=False,tref=t0,period=period,fitooe1=True)
 
         
     ################################
