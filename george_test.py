@@ -218,6 +218,7 @@ plt.ylabel('Residuals (ADU)')
 
 pickle.dump( sampler, open( "george_test.pkl", "wb" ) )
 sys.exit()
+sampler = pickle.load( open( "george_test.pkl", "rb" ) )
 
 #corner plot
 #samples = sampler.flatchain.reshape([-1, ndim])

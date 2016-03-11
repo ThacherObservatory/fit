@@ -1,12 +1,16 @@
 # TO DO:
 #-------
-# Update vec_to_params to recognize GP kernel parameters.
+# Compute limb darkening for multiple bands
+# Realistic surface brightness ratio given main sequence radius and band (see MS_COLORS.csv)
+
+# In process
+# Update make_model_data to be able to produce multiple photometry datasets
+# Need independent J, qs, L3, photnoise for each band.
 #
-# Generalize so that this code can be used to test TESS, Kepler, K2, and/or ground based
-# data
 
 import sys,math,ipdb,time,glob,re,os,eb,emcee,pickle
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import constants as c
 import scipy as sp
@@ -17,6 +21,8 @@ from statsmodels.nonparametric.kernel_density import KDEMultivariate as KDE
 from stellar import rt_from_m, flux2mag, mag2flux
 import george
 from george.kernels import ExpSine2Kernel, ExpSquaredKernel, WhiteKernel
+from scipy.interpolate import interp1d
+
 
 ################################################################################
 # Find geometric base
@@ -26,9 +32,7 @@ def find_base(N):
     Routine to interpolate the optimal geometric base for Eq. 5 from empirical data
     Saunders et al. (2006) Figure 16
     """
-
-    from scipy.interpolate import interp1d
-
+    
     if N <10:
         print 'Only valid for N >= 10!'
         return None
@@ -60,6 +64,10 @@ def RV_sampling(N,T):
     return (x**k - 1)/(x**(N-1) - 1) * T
 
 
+################################################################################
+# Conversion functions from Boyajian et al. (2012)
+################################################################################
+
 def r_to_l(r):
     """Converts radius to luminosity (solar units)
     Boyajian et. al 2012 equation 7"""
@@ -85,121 +93,48 @@ def r_to_m(r):
     return (-b + np.sqrt(b**2 - 4*a*c))/(2*a)
 
 
-#def sin_cos_amps(amp):
-    
 ################################################################################
-# Make model data
+# EB Input Dictionary
 ################################################################################
-def make_model_data(m1=None,m2=None,                        # Stellar masses
-                    r1=0.5,r2=0.3,                          # Stellar radii
-                    l1=None,l2=None,                        # Stellar luminosity
-                    ecc=0.0,omega=0.0,impact=0,             # Orbital shape and orientation
-                    period=5.0,t0=2457998.0,                # Ephemeris Sept 1, 2017 (~ TESS launch)
-                    J=None,                                 # Surface brightness ratio
-                    q1a=None,q2a=None,q1b=None,q2b=None,    # LD params
-                    limb='quad',                            # LD type
-                    L3=0.0,vsys=10.0,                       # Third light and system velocity
-                    photnoise=0.0003,                       # Photometric noise
-                    tRV=None,RVnoise=1.0,RVsamples=100,     # RV noise and sampling
-                    gravdark=False,reflection=False,        # Higher order effects
-                    ellipsoidal=False,                      # Ellipsoidal variations (caution!)
-                    lighttravel=True,                       # Roemer delay
-                    short=False,long=False,                 # Short or long cadence TESS data
-                    obsdur=27.4,int=120.0,                  # Duration of obs, and int time
-                    durfac=2.0,                             # Amount of data to keep around eclipses
-                    spotamp1=None,spotP1=0.0,P1double=False,# Spot amplitude and period frac for star 1
-                    spotfrac1=0.0,spotbase1=0.0,            # Fraction of spots eclipsed, and base
-                    spotamp2=None,spotP2=0.0,P2double=False,# Spot amplitude and period frac for star 2
-                    spotfrac2=0.0,spotbase2=0.0,            # Fraction of spots eclipsed, and base
-                    write=False,network=None,path='./'):    # Network info
 
-    """
-    Generator of model EB data
-
-    Light curve data and RV data are sampled independently
+def ebinput(m1=None,m2=None,                        # Stellar masses
+            r1=0.5,r2=0.3,                          # Stellar radii
+            l1=None,l2=None,                        # Stellar luminosity
+            ecc=0.0,omega=0.0,impact=0,             # Orbital shape and orientation
+            period=5.0,t0=2457998.0,                # Ephemeris Sept 1, 2017 (~ TESS launch)
+            vsys=10.0,                              # System velocity
+            Prot1=None,Prot2=None):                 # Rotation periods for the two stars
     
     """
+    This routine creates a dictionary of all the physical parameters of the EB in question. This
+    dictionary can then be passed to other functions to create either simulated photometry or 
+    radial velocity data.
+    """
 
-    # If long or short is set, this trumps obsdur and int keywords
-    if short:
-        int = 120.0
-        obsdur = 27.4
-    if long:
-        int = 1800.0
-        obsdur = 27.4
-            
     # Set mass to be equal to radius in solar units if flag is set
     if not m1:
+        print '... converting primary radius to estiated mass assuming main sequence star'
         m1 = r_to_m(r1)
     if not m2:
+        print '... converting secondary radius to estiated mass assuming main sequence star'
         m2 = r_to_m(r2)
 
     # Mass ratio is not used unless gravity darkening is considered.
-    massratio = m2/m1 #if gravdark else 0.0
+    massratio = m2/m1 
 
     # Surface brightness ratio
     if not l1:
+        print '... converting primary radius to estiated luminosity assuming main sequence star'
         l1 = r_to_l(r1)
     if not l2:
+        print '... converting secondary radius to estiated luminosity assuming main sequence star'
         l2 = r_to_l(r2)
-    if not J:
-        J = l2/l1    
-
-
-    #####################################################################
-    # Input luminosity coversion thing here to get proper amplitudes spot
-    # moduluation
-        
-    # Spot amplitudes with random phase
-    if spotamp1:
-        if spotP1 == 0.0:
-            print "Spot Period 1 = 0: Spots on star 1 will not be implemented!"
-        spa1 = l1*spotamp1
-        spph1 = np.random.uniform(0,np.pi*2,1)[0]
-        sinamp1 = spa1*np.cos(spph1)
-        cosamp1 = np.sqrt(spa1**2-sinamp1**2)
-        if P1double:
-            p2 = np.random.uniform(0,2.*np.pi)
-            sincosamp1  = P1double*sinamp1 * np.sin(p2)
-            squaredamp1 = P1double*sinamp1 * np.cos(p2)
-            sinamp1     = (1.0 - P1double)*sinamp1
-        else:
-            sincosamp1  = 0.0
-            squaredamp1 = 0.0            
-    else:
-        spotP1 = 0.0 ; spa1 = 0.0 ; spph1 = 0.0 ; sinamp1 = 0.0 ; cosamp1 = 0.0 ; sincosamp1  = 0.0
-        squaredamp1 = 0.0 
-
-    if spotamp2:
-        if spotP2 == 0.0:
-            print "Spot Period 2 = 0: Spots on star 2 will not be implemented!"
-        spa2 = l2*spotamp2
-        spph2 = np.random.uniform(0,np.pi*2,1)[0]
-        sinamp2 = spa2*np.cos(spph2)
-        cosamp2 = np.sqrt(spa2**2-sinamp2**2)
-        if P2double:
-            p2 = np.random.uniform(0,2.*np.pi)
-            sincosamp2  = P2double*sinamp2 * np.sin(p2)
-            squaredamp2 = P2double*sinamp2 * np.cos(p2)
-            sinamp2     = (1.0 - P2double)*sinamp2
-        else:
-            sincosamp2  = 0.0
-            squaredamp2 = 0.0            
-    else:
-        spotP2 = 0.0 ; spa2 = 0.0 ; spph2 = 0.0 ; sinamp2 = 0.0 ; cosamp2 = 0.0 ; sincosamp2  = 0.0
-        squaredamp2 = 0.0 
 
     # Effective temperatures
     Teff1 = (l1*c.Lsun/(4*np.pi*(r1*c.Rsun)**2*c.sb ))**(0.25)
     Teff2 = (l2*c.Lsun/(4*np.pi*(r2*c.Rsun)**2*c.sb ))**(0.25)
 
-    # Get limb darkening according to input stellar params
-    if not q1a or not q1b or not q2a or not q2b:
-             q1a,q2a = get_limb_qs(Mstar=m1,Rstar=r1,Tstar=Teff1,limb=limb,network=network)
-             q1b,q2b = get_limb_qs(Mstar=m2,Rstar=r2,Tstar=Teff2,limb=limb,network=network)
-             
-    # Integration time and reference time (approximate date of TESS data)
-    integration = int
+    # Reference Julian Day
     bjd = 2457998.0
 
     # For consistency with EB code (GMsun forced to be equal)
@@ -226,149 +161,305 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     ktot = (NewtonG*(Mstar1+Mstar2) * comega * sini)**(1.0/3.0)*roe / 1e5
 
 
-    # Starting parameters
-    p0_0  = J                               # surface brightness
-    p0_1  = (r1*c.Rsun + r2*c.Rsun)/sma     # (r1 + r2) / a = fractional radius
-    p0_2  = r2/r1                           # radius ratio
-    p0_3  = np.cos(inc)                     # cos i
-    p0_4  = ecc * np.cos(np.radians(omega)) # ecosw
-    p0_5  = ecc * np.sin(np.radians(omega)) # esinw
-    p0_6  = 10.0                            # mag zpt
-    p0_7  = 0.0                             # ephemeris (needs to be zero)
-    p0_8  = period                          # Period
-    p0_9  = q1a                             # Limb darkening
-    p0_10 = q2a                             # Limb darkening
-    p0_11 = q1b                             # Limb darkening
-    p0_12 = q2b                             # Limb darkening
-    p0_13 = m2/m1                           # Mass ratio
-    p0_14 = L3                              # Third Light
-    p0_15 = spotP1                          # Star 1 rotation
-    p0_16 = spotfrac1                       # Fraction of spots eclipsed
-    p0_17 = spotbase1                       # base spottedness
-    p0_18 = sinamp1                         # Sin amplitude
-    p0_19 = cosamp1                         # Cos amplitude
-    p0_20 = sincosamp1                      # SinCos amplitude
-    p0_21 = squaredamp1                     # Cos^2-Sin^2 amplitude
-    p0_22 = spotP2                          # Star 2 rotation
-    p0_23 = spotfrac2                       # Fraction of spots eclipsed
-    p0_24 = spotbase2                       # base spottedness
-    p0_25 = sinamp2                         # Sin amplitude
-    p0_26 = cosamp2                         # Cos amplitude
-    p0_27 = sincosamp2                      # SinCos amplitude
-    p0_28 = squaredamp2                     # Cos^2-Sin^2 amplitude
-    p0_29 = ktot                            # Total radial velocity amp
-    p0_30 = vsys                            # System velocity
+    # Create initial ebpar dictionary
+    ebin = {'Lratio':l2/l1, 'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
+            'Mratio':massratio, 'ecosw':ecosw0, 'esinw':esinw0,
+            'Period':period, 't01':t0, 't02':None, 'dt12':None,
+            'tdur1':None, 'tdur2':None,'bjd':bjd,
+            'Mstar1':m1, 'Mstar2':m2, 'vsys':vsys, 'ktot':ktot,
+            'Rstar1':r1, 'Rstar2':r2,'cosi':np.cos(inc), 'sma': sma,
+            'Rot1':Prot1, 'Rot2':Prot2,
+            'Teff1':Teff1, 'Teff2':Teff2}
 
-    # Third light (L3) at 14 ... 14 and beyond + 1
-
-    p0_init = np.array([p0_0,p0_1,p0_2,p0_3,p0_4,p0_5,p0_7])
-    variables =["J","Rsum","Rratio","cosi","ecosw","esinw","t0"]
-
-    p0_init = np.append(p0_init,[p0_8],axis=0)
-    variables.append("period")
-
-    limb0 = np.array([p0_9,p0_10,p0_11,p0_12])
-    lvars = ["q1a", "q2a", "q1b", "q2b"]
-
-    p0_init = np.append(p0_init,limb0,axis=0)
-    for var in lvars:
-        variables.append(var)
-
-    p0_init = np.append(p0_init,[p0_14],axis=0)
-    variables.append('L3')
+    return ebin
 
 
-    # Create output path if not already there.
-    directory = path
-    if not os.path.exists(directory):
-        print 'Making directory '+directory
-        os.makedirs(directory)
+######################################################################
+# L ratio to surface brightness ratio in a given band
+######################################################################
+#!!! Under construction !!!
+# Needs sanity checks!!!!
 
+def teff_to_j(Teff1,Teff2,band,network=None):
+
+    """
+    Only valid for main sequence effective temperatures!
+    """
+
+    file = 'MS_Colors.csv'
+
+    if network == None or network == 'bellerophon':
+	path = '/home/administrator/python/fit/'
+    elif network == 'doug':
+        path = '/home/douglas/Astronomy/Resources/'
+    elif network == 'astro':
+        path = '/home/jswift/Mdwarfs/'
+    elif network == 'swift':
+        path = '/Users/jonswift/python/fit/'
+
+    data = pd.read_csv(path+file)
+
+    # Effective temperature
+    Teff = np.array([np.float(val) for val in data['Teff']])
+    # Absolute V band magnitude
+    data['Mv'].replace(to_replace='...',value='0.0',inplace=True)
+    Mv = np.array([np.float(val) for val in data['Mv']])
+    
+    # V band bolometric correction
+    data['BCv'].replace(to_replace='...',value='0.0',inplace=True)
+    BCv  = np.array([np.float(val) for val in data['BCv']])
+
+    if band == 'V':
+        color = np.zeros(len(Mv))
+    
+    if band == 'R' or band == 'Rc' or band == 'Kp':
+        # color is V-R
+        color = np.array([np.float(val) for val in data['V-Rc'].replace(to_replace='...',value='0.0')])
+
+    if band == 'B':
+        # color is V-B
+        color = -np.array([np.float(val) for val in data['B-V'].replace(to_replace='...',value='0.0')])
+
+    if band == 'U':
+        # color is V-U
+        color = -np.array([np.float(val) for val in data['U-B'].replace(to_replace='...',value='0.0')]) - \
+                np.array([np.float(val) for val in data['B-V'].replace(to_replace='...',value='0.0')])
+
+    if band == 'J':
+        # color is V-J
+        color = np.array([np.float(val) for val in data['V-Ks'].replace(to_replace='...',value='0.0')]) - \
+                np.array([np.float(val) for val in data['H-K'].replace(to_replace='...',value='0.0')]) - \
+                np.array([np.float(val) for val in data['J-H'].replace(to_replace='...',value='0.0')])
+
+    if band == 'H':
+        # color is V-H
+        color = np.array([np.float(val) for val in data['V-Ks'].replace(to_replace='...',value='0.0')]) - \
+                np.array([np.float(val) for val in data['H-K'].replace(to_replace='...',value='0.0')])
+
+    if band == 'K' or band =='Ks':
+        # color is V-K
+        color = np.array([np.float(val) for val in data['V-Ks'].replace(to_replace='...',value='0.0')])
+
+    
+    func = interp1d(Teff,Mv-color,kind='linear')
+
+    
+    j = 10**(0.4*(func(Teff1)-func(Teff2)))
+
+    return j
+    
+
+
+
+################################################################################
+# Make photometry data
+################################################################################
+def make_phot_data(ebin,
+                   band='Kp',                              # Photometric band
+                   limb='quad',                            # LD type
+                   q1a=None,q2a=None,q1b=None,q2b=None,    # LD params
+                   J=None,                                 # Surface brightness ratio
+                   L3=0.0,                                 # Third light
+                   photnoise=0.0003,                       # Photometric noise
+                   gravdark=False,reflection=False,        # Higher order effects
+                   ellipsoidal=False,                      # Ellipsoidal variations (caution!)
+                   tideang=False,                          # Tidal angle (deg)
+                   lighttravel=True,                       # Roemer delay
+                   TESSshort=False,TESSlong=False,         # Short or long cadence TESS data
+                   Kepshort=False,Keplong=False,           # Short or long cadence Kepler data
+                   obsdur=27.4,int=120.0,                  # Duration of obs, and int time
+                   durfac=2.0,                             # Amount of data to keep around eclipses
+                   modelfac=11.0,                          # Integration oversampling 
+                   spotamp1=None,spotP1=0.0,P1double=False,# Spot amplitude and period frac for star 1
+                   spotfrac1=0.0,spotbase1=0.0,            # Fraction of spots eclipsed, and base
+                   spotamp2=None,spotP2=0.0,P2double=False,# Spot amplitude and period frac for star 2
+                   spotfrac2=0.0,spotbase2=0.0,            # Fraction of spots eclipsed, and base
+                   network=None,outpath='./',write=False): # Network info
+    
+    """ 
+    Function to return light curve data for a given set of inputs and a physical model
+    for an EB
+    """
+    # TESS or Kepler long or short keywords trump obsdur and int keywords
+    if TESSshort:
+        int = 120.0
+        obsdur = 27.4
+    if TESSlong:
+        int = 1800.0
+        obsdur = 27.4
+    if Kepshort:
+        int = 60.0
+        obsdur = 90.0 
+    if Keplong:
+        int = 1800.0
+        obsdur = 1400.0
+
+    # Surface brightness ratio
+    # Need to do something to estimate a realistic surface brightness ratio
+    # ms = pd.read_csv('MS_Colors.csv',header=0) 
+    J = teff_to_j(ebin['Teff1'],ebin['Teff2'],band,network=network)
+    print 'Surface brightness ratio in '+band+' band estimated to be %.3f' % J
+    
+    #####################################################################
+    # Input luminosity coversion thing here to get proper amplitudes spot
+    # moduluation
+        
+    # Spot amplitudes with random phase
+    if spotamp1:
+        if spotP1 == 0.0:
+            print "Spot Period 1 = 0: Spots on star 1 will not be implemented!"
+        spa1 = l1*spotamp1
+        spph1 = np.random.uniform(0,np.pi*2,1)[0]
+        sinamp1 = spa1*np.cos(spph1)
+        cosamp1 = np.sqrt(spa1**2-sinamp1**2)
+        if P1double:
+            p2 = np.random.uniform(0,2.*np.pi)
+            sincosamp1  = P1double*sinamp1 * np.sin(p2)
+            squaredamp1 = P1double*sinamp1 * np.cos(p2)
+            sinamp1     = (1.0 - P1double)*sinamp1
+        else:
+            sincosamp1  = 0.0
+            squaredamp1 = 0.0            
+    else:
+        spotP1 = 0.0 ; spotfrac1 = 0.0 ; spotbase1 = 0.0 ; sinamp1 = 0.0 ; cosamp1 = 0.0 ;
+        sincosamp1 = 0.0 ; squaredamp1 = 0.0 ; spotflag1 = False
+
+    if spotamp2:
+        if spotP2 == 0.0:
+            print "Spot Period 2 = 0: Spots on star 2 will not be implemented!"
+        spa2 = l2*spotamp2
+        spph2 = np.random.uniform(0,np.pi*2,1)[0]
+        sinamp2 = spa2*np.cos(spph2)
+        cosamp2 = np.sqrt(spa2**2-sinamp2**2)
+        if P2double:
+            p2 = np.random.uniform(0,2.*np.pi)
+            sincosamp2  = P2double*sinamp2 * np.sin(p2)
+            squaredamp2 = P2double*sinamp2 * np.cos(p2)
+            sinamp2     = (1.0 - P2double)*sinamp2
+        else:
+            sincosamp2  = 0.0
+            squaredamp2 = 0.0            
+    else:
+        spotP2 = 0.0 ; spotfrac2 = 0.0 ; spotbase2 = 0.0 ; sinamp2 = 0.0 ; cosamp2 = 0.0 ;
+        sincosamp2 = 0.0 ; squaredamp2 = 0.0 ; spotflag2 = False
+        
+    spotflag = spotflag1 or spotflag2
+    
+    # Get limb darkening according to input stellar params
+    # Need to expand to more photometric bands than Kepler, CoRoT and Spitzer.
+    if not q1a or not q2a:
+        q1a,q2a = get_limb_qs(Mstar=ebin['Mstar1'],Rstar=ebin['Rstar1'],Tstar=ebin['Teff1'],
+                              limb=limb,network=network,band=band)
+    if not  q1b or not q2b:
+        q1b,q2b = get_limb_qs(Mstar=ebin['Mstar2'],Rstar=ebin['Rstar2'],Tstar=ebin['Teff2'],
+                              limb=limb,network=network,band=band)
+             
     # Convert q's to u's
     u1a,u2a = qtou(q1a,q2a)
     u1b,u2b = qtou(q1b,q2b)
 
-    # Create initial ebpar dictionary
-    ebpar = {'J':J, 'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
-             'Mratio':massratio, 'LDlin1':u1a, 'LDnon1':u2a, 'LDlin2':u1b, 'LDnon2':u2b,
-             'GD1':0.0, 'Ref1':0.0, 'GD2':0.0, 'Ref2':0.0,
-             'ecosw':ecosw0, 'esinw':esinw0, 'Period':period, 't01':t0, 't02':None, 
-             'et01':0.0, 'et02':0.0, 'dt12':None, 'tdur1':None, 'tdur2':None, 
-             'mag0':10.0,'vsys':vsys, 'Mstar1':m1, 'Mstar2':m2,
-             'ktot':ktot, 'L3':L3,'Period':period, 'ePeriod':0.1,
-             'integration':int,'obsdur':obsdur,'bjd':bjd,
-             'variables':variables,'ninput':0, 'p_init':None,
-             'lighttravel':lighttravel,'gravdark':gravdark,
-             'reflection':reflection,'path':path,'limb':limb,
-             'Rstar1':r1, 'Rstar2':r2,'cosi':np.cos(inc),
-             'Rot1':None, 'Rot2':None}
-              
-    #              'GD1':0.32, 'Ref1':0.4, 'GD2':0.32, 'Ref2':0.4, 'Rot1':0.0,
+    # For consistency with EB code (GMsun forced to be equal)
+    NewtonG = eb.GMSUN*1e6/c.Msun
+    Mstar1 = ebin['Mstar1']*c.Msun
+    Mstar2 = ebin['Mstar2']*c.Msun
+    sma = ((ebin['Period']*24.0*3600.0)**2*NewtonG*(Mstar1+Mstar2)/(4.0*np.pi**2))**(1.0/3.0)
 
-    # Spots
-    spotflag=False
-    if spotP1 != 0.0:
-        p0_init = np.append(p0_init,[p0_15],axis=0)
-        variables.append("Rot1") ; ebpar['Rot1'] = p0_15
-        p0_init = np.append(p0_init,[p0_16],axis=0)
-        variables.append("spFrac1") ; ebpar['spFrac1'] = p0_16
-        p0_init = np.append(p0_init,[p0_17],axis=0)
-        variables.append("spBase1") ; ebpar['spBase1'] = p0_17
-        p0_init = np.append(p0_init,[p0_18],axis=0)
-        variables.append("spSin1") ; ebpar['spSin1'] = p0_18
-        p0_init = np.append(p0_init,[p0_19],axis=0)
-        variables.append("spCos1") ; ebpar['spCos1'] = p0_19
-        p0_init = np.append(p0_init,[p0_20],axis=0)
-        variables.append("spSinCos1") ; ebpar['spSinCos1'] = p0_20
-        p0_init = np.append(p0_init,[p0_21],axis=0)
-        variables.append("spSqSinCos1") ; ebpar['spSqSinCos1'] = p0_21
-#        ebpar['spSinCos1'] = 0.0 ; ebpar['spSqSinCos1'] = 0.0
-        spotflag=True
-    if spotP2 != 0.0:
-        p0_init = np.append(p0_init,[p0_22],axis=0)
-        variables.append("Rot2") ; ebpar['Rot2'] = p0_22
-        p0_init = np.append(p0_init,[p0_23],axis=0)
-        variables.append("spFrac2") ; ebpar['spFrac2'] = p0_23
-        p0_init = np.append(p0_init,[p0_24],axis=0)
-        variables.append("spBase2") ; ebpar['spBase2'] = p0_24
-        p0_init = np.append(p0_init,[p0_25],axis=0)
-        variables.append("spSin2") ; ebpar['spSin2'] = p0_25
-        p0_init = np.append(p0_init,[p0_26],axis=0)
-        variables.append("spCos2") ; ebpar['spCos2'] = p0_26
-        p0_init = np.append(p0_init,[p0_27],axis=0)
-        variables.append("spSinCos2") ; ebpar['spSinCos2'] = p0_27
-        p0_init = np.append(p0_init,[p0_28],axis=0)
-        variables.append("spSqSinCos2") ; ebpar['spSqSinCos2'] = p0_28
-#        ebpar['spSinCos2'] = 0.0 ; ebpar['spSqSinCos2'] = 0.0
-        spotflag=True
+    rratio = ebin['Rstar2']/ebin['Rstar1']
+    rsum = (ebin['Rstar1'] + ebin['Rstar2'])*c.Rsun/sma
 
-    # Make "parm" vector
-    parm,vder = vec_to_params(p0_init,ebpar,verbose=False)
+    # Integration time and reference time (approximate date of TESS data as default)
+    integration = int
+    bjd = ebin['bjd']
 
-    # Time of mid-eclipse will be added later.
-    parm[eb.PAR_T0] = 0.0
+    ktot = ebin['ktot']
+    
+    if lighttravel:
+        # double check that the units work out for this
+        cltt = ktot / eb.LIGHT         
+    else:
+        cltt = 0.0
 
-    debug = True
+    if gravdark:
+        # Lucy 1967, Claret 2000, Lara 2012
+        # GD1 = 0.32, GD2 = 0.32 for low mass stars?
+        pass
+    else:
+        GD1 = 0.0 ; GD2 = 0.0
+
+    if reflection:
+        #  'Ref1':0.4,  'Ref2':0.4
+        pass
+    else:
+        Ref1 = 0.0 ; Ref2 = 0.0
+
+    if not tideang:
+        tideang = 0.0
+
+    # eb.h has 37 parameters. One, integ, not used.
+    # ktot and vsys are added in our dictionary for completeness.
+    ebpar = {'J': J,                                   # surface brightness ratio
+             'Rsum': rsum,                             # sum of radii / semimajor axis
+             'Rratio': rratio,                         # radius ratio
+             'cosi': ebin['cosi'],                     # cosine of inclination
+             'ecosw': ebin['ecosw'],                   # ecosw
+             'esinw': ebin['esinw'],                   # esini
+             'LDlin1':u1a,                             # linear LD, star 1
+             'LDnon1':u2a,                             # non-linear LD, star 1
+             'LDlin2':u1b,                             # linear LD, star 2   
+             'LDnon2':u2b,                             # non-linear LD, star 2
+             'GD1': GD1,                               # gravity darkening parameter, star 1
+             'GD2': GD2,                               # gravity darkening parameter, star 2
+             'Ref1': Ref1,                             # albedo (default) or reflection, star 1
+             'Ref2': Ref2,                             # albedo (default) or reflection, star 2
+             'Mratio': ebin['Mratio'],                 # stellar mass ratio
+             'TideAng': tideang,                       # tidal angle in (degrees)
+             'L3': L3,                                 # third light
+             'phi0': 0.0,                              # phase of inf. conj. (i think!)
+             't0': 0.0, # t0 will be added in later    # epoch of inf. conj. (if phi0=0)
+             'period': ebin['Period'],                 # period of binary
+             'magoff':0.0,                             # magnitude zeropoint (if using mags)
+             'Rot1': spotP1,                           # rotation parameter (frac. of period)
+             'spFrac1': spotfrac1,                     # fraction of spots covered (prim. eclipse)
+             'spBase1': spotbase1,                     # base spottedness, star 1
+             'spSin1': sinamp1,                        # sine amp, star 1
+             'spCos1': cosamp1,                        # cosine amp, star 1
+             'spSinCos1': sincosamp1,                  # sinecosine amp, star 1
+             'spSqSinCos1': squaredamp1,               # cos^2-sin^2 amp, star 1                     
+             'Rot2': spotP2,                           # rotation parameter, star 2
+             'spFrac2': spotfrac2,                     # fraction of spots covered (sec. eclipse) 
+             'spBase2': spotbase2,                     # base spottedness, star 2                   
+             'spSin2': sinamp2,                        # sine amp, star 2                    
+             'spCos2': cosamp2,                        # cosine amp, star 2                          
+             'spSinCos2': sincosamp2,                  # sinecosine amp, star 2                      
+             'spSqSinCos2': squaredamp2,               # cos^2-sin^2 amp, star 2                     
+             'light_tt': cltt,                         # light travel time
+             'ktot': ktot,                             # total RV amplitude
+             'vsys': ebin['vsys']}                     # system velocity
+
+    parm, vder = dict_to_params(ebpar)
+    
+    debug = False
     if debug:
         print "Model parameters:"
         for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
             print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
 
-        vder = eb.getvder(parm, vsys, ktot)
+        vder = eb.getvder(parm, ebin['vsys'], ktot)
         print "Derived parameters:"
         for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
             print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
             
+    period = ebin['Period']
+    
     # Contact points of the eclipses
     (ps, pe, ss, se) = eb.phicont(parm)
-
     # Durations (in hours) and secondary timing
-    ebpar['tdur1'] = (pe+1 - ps)*period*24.0
-    ebpar['tdur2'] = (se - ss)*period*24.0
-    ebpar['t02'] = ebpar['t01'] + (se+ss)/2*period 
-    
+    tdur1 = (pe+1 - ps)*period*24.0
+    tdur2 = (se - ss)*period*24.0
+    t02   = ebpar['t0'] + (se+ss)/2*period 
+
     # Photometry sampling
-    tstart = -pe*durfac*period # ?
+    tstart = -pe*period * durfac
     tstop  = tstart + obsdur
     time  = np.arange(tstart,tstop,integration/86400.0)
     tfold = time % period
@@ -380,66 +471,144 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
     sinds, = np.where((phase >= p0sec-psec/2) & (phase <= p0sec+psec/2))
     inds = np.append(pinds,sinds)
 
-
     s = np.argsort(time[inds])
     tfinal = time[inds][s]
     pfinal = phase[inds][s]
 
-    
-    # This is only for no ellipsoidal variations and gravity darkening!
-    mr = parm[eb.PAR_Q]
-
-    # Do other higher order effects depend on the mass ratio?
     if not ellipsoidal:
-        parm[eb.PAR_Q] = 0.0
+        parm[eb.PAR_Q] = 0
 
     # tref remains zero so that the ephemeris within parm manifests correctly
-    lightmodel = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=11.0,
+    lightmodel = compute_eclipse(tfinal,parm,integration=integration,modelfac=modelfac,
                                      fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
                                      unsmooth=False,spotflag=spotflag)
-
+    parm[eb.PAR_Q] = ebin['Mratio']
+    
     # Out of eclipse light
     # Phase duration of integration time
-    ptint = ebpar['integration']/(3600.*24 * period)
-    # indices of out of eclipse light
+    ptint = integration/(3600.*24 * period)
+
+    # Indices of out-of-eclipse light
     ooeinds, = np.where(((pfinal > pe+ptint ) & (pfinal < ss-ptint)) |
                         ((pfinal > se+ptint) & (pfinal < ps-ptint)))
-                        
-    parm[eb.PAR_Q] = mr
-    
+
+    # Add photometric noise
     if photnoise != None:
         n = len(lightmodel)
         lightmodel += np.random.normal(0,photnoise,n)
         lighterr = np.ones(len(lightmodel))*photnoise
     else:
         lighterr = np.zeros(len(lightmodel))
+
+    lout = np.array([tfinal+bjd,lightmodel,lighterr])
+    ooe = np.array([tfinal[ooeinds]+bjd,lightmodel[ooeinds],lighterr[ooeinds]])
+
+    if write:
+        np.savetxt('lightcurve_model.txt',lout.T)
+        np.savetxt('ooe_model.txt',ooe.T)
     
-    p0_init = np.append(p0_init,[p0_13],axis=0)
-    variables.append('massratio')
-    p0_init = np.append(p0_init,[p0_29],axis=0)
-    variables.append('ktot')
-    p0_init = np.append(p0_init,[p0_30],axis=0)
-    variables.append("vsys")
+    data = {'light':lout, 'ooe':ooe, 'band':band, 'integration':integration}
+        
+    return data
 
-    variables = np.array(variables)
-    ebpar['variables'] = variables
 
-    ninput = len(p0_init)
-    ebpar['ninput'] = ninput
 
-    ebpar['p_init'] = p0_init
+################################################################################
+# Make RV data
+################################################################################
+def make_RV_data(ebin,
+                 tRV=None,RVnoise=1.0,RVsamples=100,     # RV noise and sampling
+                 lighttravel=True,                       # Roemer delay
+                 tideang = None,                         # Don't think this is needed
+                 network=None,outpath='./',write=False): # Network info
+    
+    """ 
+    Function to return RV data for a given set of inputs and a physical model for an EB.
 
-    parm,vder = vec_to_params(p0_init,ebpar,verbose=False)
+    If no "tRV" vector is given, then RVs are sampled geometrically
 
-    # RV sampling
-    #    tRV = np.random.uniform(0,1,RVsamples)*period
+    """
+    period =  ebin['Period']
+    
+    mratio = ebin['Mstar2']/ebin['Mstar1']
+
+    J = ebin['Lratio']
+
+    rratio = ebin['Rstar2']/ebin['Rstar1']
+
+    # For consistency with EB code (GMsun forced to be equal)
+    NewtonG = eb.GMSUN*1e6/c.Msun
+    Mstar1 = ebin['Mstar1']*c.Msun
+    Mstar2 = ebin['Mstar2']*c.Msun
+    sma = ((ebin['Period']*24.0*3600.0)**2*NewtonG*(Mstar1+Mstar2)/(4.0*np.pi**2))**(1.0/3.0)
+    rsum = (ebin['Rstar1'] + ebin['Rstar2'])*c.Rsun/sma
+
+    # Integration time and reference time (approximate date of TESS data as default)
+    integration = int
+    bjd = ebin['bjd']
+
+    ktot = ebin['ktot']
+    vsys = ebin['vsys']
+    
+    if lighttravel:
+        # double check that the units work out for this
+        cltt = ktot / eb.LIGHT         
+    else:
+        cltt = 0.0
+
+    if not tideang:
+        tideang = 0.0
+
+
+    # eb.h has 37 parameters. One, integ, not used.
+    # ktot and vsys are added in our dictionary for completeness.
+    ebpar = {'J': J,                                   # surface brightness ratio
+             'Rsum': rsum,                             # sum of radii / semimajor axis
+             'Rratio': rratio,                         # radius ratio
+             'cosi': ebin['cosi'],                     # cosine of inclination
+             'ecosw': ebin['ecosw'],                   # ecosw
+             'esinw': ebin['esinw'],                   # esini
+             'LDlin1':0.0,                             # linear LD, star 1
+             'LDnon1':0.0,                             # non-linear LD, star 1
+             'LDlin2':0.0,                             # linear LD, star 2   
+             'LDnon2':0.0,                             # non-linear LD, star 2
+             'GD1': 0.0,                               # gravity darkening parameter, star 1
+             'GD2': 0.0,                               # gravity darkening parameter, star 2
+             'Ref1': 0.0,                              # albedo (default) or reflection, star 1
+             'Ref2': 0.0,                              # albedo (default) or reflection, star 2
+             'Mratio': mratio,                         # stellar mass ratio
+             'TideAng': tideang,                       # tidal angle in (degrees)
+             'L3': 0.0,                                # third light
+             'phi0': 0.0,                              # phase of inf. conj. (i think!)
+             't0': 0.0, # t0 will be added in later    # epoch of inf. conj. (if phi0=0)
+             'period':period,                          # period of binary
+             'magoff':0.0,                             # magnitude zeropoint (if using mags)
+             'Rot1': 0.0,                              # rotation parameter (frac. of period)
+             'spFrac1': 0.0,                           # fraction of spots covered (prim. eclipse)
+             'spBase1': 0.0,                           # base spottedness, star 1
+             'spSin1': 0.0,                            # sine amp, star 1
+             'spCos1': 0.0,                            # cosine amp, star 1
+             'spSinCos1': 0.0,                         # sinecosine amp, star 1
+             'spSqSinCos1': 0.0,                       # cos^2-sin^2 amp, star 1                     
+             'Rot2': 0.0,                              # rotation parameter, star 2
+             'spFrac2': 0.0,                           # fraction of spots covered (sec. eclipse) 
+             'spBase2': 0.0,                           # base spottedness, star 2                   
+             'spSin2': 0.0,                            # sine amp, star 2                    
+             'spCos2': 0.0,                            # cosine amp, star 2                          
+             'spSinCos2': 0.0,                         # sinecosine amp, star 2                      
+             'spSqSinCos2': 0.0,                       # cos^2-sin^2 amp, star 2                     
+             'light_tt': cltt,                         # light travel time
+             'ktot': ktot,                             # total RV amplitude
+             'vsys': vsys}                             # system velocity
+
+    parm, vder = dict_to_params(ebpar)
+
     if tRV == None:
         tRV = RV_sampling(RVsamples,period)
 
-    rvs = compute_eclipse(tRV,parm,modelfac=11.0,fitrvs=True,tref=0.0,
-                          period=period,ooe1fit=None,ooe2fit=None,unsmooth=False)
+    rvs = compute_eclipse(tRV,parm,fitrvs=True,tref=0.0,period=period)
     
-    massratio = m2/m1
+    massratio = mratio
     k2 = ktot/(1+massratio)
     k1 = k2*massratio
     rv1 = rvs*k1 + vsys
@@ -454,60 +623,177 @@ def make_model_data(m1=None,m2=None,                        # Stellar masses
         rv2 += np.random.normal(0,RVnoise,n2)
         rv2_err = np.ones(len(rv2))*RVnoise
 
-    lout = np.array([tfinal+bjd,lightmodel,lighterr])
     r1out = np.array([tRV+bjd,rv1,rv1_err])
     r2out = np.array([tRV+bjd,rv2,rv2_err])
-    ooe = np.array([tfinal[ooeinds]+bjd,lightmodel[ooeinds],lighterr[ooeinds]])
     
-    data = {'light':lout, 'ooe':ooe, 'rv1':r1out, 'rv2':r2out}
+    data = {'rv1':r1out, 'rv2':r2out}
 
 
     if write:
-        np.savetxt('lightcurve_model.txt',lout.T)
-        np.savetxt('ooe_model.txt',ooe.T)
         np.savetxt('rv1_model.txt',r1out.T)
         np.savetxt('rv2_model.txt',r2out.T)
+    
+    return data
 
-    return ebpar, data
+
+
+################################################################################
+# Make model data
+################################################################################
+def make_model_data(ebin,
+                    nphot=None,                             # Number of photometry datasets
+                    band=None,                              # Photometric bands of each dataset
+                    photnoise=None,                         # Noise of each photometric dataset
+                    q1a=None,q2a=None,q1b=None,q2b=None,    # LD params for each photometric band
+                    limb='quad',                            # LD type                    
+                    obsdur=None,int=None,                   # Duration of obs, and int time
+                    durfac=None,                            # Amount of data to keep around eclipses
+                    gravdark=False,reflection=False,        # Higher order effects
+                    ellipsoidal=False,                      # Ellipsoidal variations (caution!)
+                    lighttravel=True,                       # Roemer delay
+                    tRV=None,RVnoise=1.0,RVsamples=None,    # RV noise and sampling
+                    spotamp1=None,spotP1=0.0,P1double=False,# Spot amplitude and period frac for star 1
+                    spotfrac1=0.0,spotbase1=0.0,            # Fraction of spots eclipsed, and base
+                    spotamp2=None,spotP2=0.0,P2double=False,# Spot amplitude and period frac for star 2
+                    spotfrac2=0.0,spotbase2=0.0,            # Fraction of spots eclipsed, and base
+                    write=False,network=None,outpath='./'):    # Network info
+
+
+
+    data_dict = {}
+
+    for i in range(nphot):
+        key = 'phot'+str(i)
+        phot = make_phot_data(ebin,band=band[i],limb=limb,
+                              photnoise=photnoise[i],
+                              q1a=q1a[i],q2a=q2a[i],
+                              q1b=q1b[i],q2b=q2b[i],
+                              obsdur=obsdur[i],int=int[i],
+                              durfac=durfac[i],
+                              gravdark=gravdark,reflection=reflection,
+                              ellipsoidal=ellipsoidal,
+                              lighttravel=lighttravel,
+                              spotamp1=spotamp1[i],spotP1=spotP1,P1double=P1double,
+                              spotfrac1=spotfrac1[i],spotbase1=spotbase1[i],
+                              spotamp2=spotamp2[i],spotP2=spotP2,P2double=P2double,
+                              spotfrac2=spotfrac2[i],spotbase2=spotbase2[i],
+                              write=write,network=network,outpath=outpath)
+                       
+        data_dict[key] = phot
+
+    if RVsamples:
+        rvdata = make_RV_data(ebin,tRV=tRV,RVnoise=RVnoise,RVsamples=RVsamples,
+                              lighttravel=lighttravel,network=network,outpath=outpath)
+        
+        data_dict['RVdata'] = rvdata
+
+    return data_dict
+
+
+######################################################################
+# EBPAR dictionary to parm array for eb input
+######################################################################
+def dict_to_params(ebpar):
+    """
+    ----------------------------------------------------------------------
+    dict_to_params:
+    --------------
+    Function to convert a dictionary of input parameters into a parameter vector
+    that is compatible with eb.model
+    """
+
+    parm = np.zeros(eb.NPAR, dtype=np.double)
+    parm[eb.PAR_J]      = ebpar['J']
+    parm[eb.PAR_RASUM]  = ebpar['Rsum']
+    parm[eb.PAR_RR]     = ebpar['Rratio']
+    parm[eb.PAR_COSI]   = ebpar['cosi']
+    parm[eb.PAR_ECOSW]  = ebpar['ecosw']
+    parm[eb.PAR_ESINW]  = ebpar['esinw']
+    parm[eb.PAR_LDLIN1] = ebpar['LDlin1']
+    parm[eb.PAR_LDNON1] = ebpar['LDnon1']
+    parm[eb.PAR_LDLIN2] = ebpar['LDlin2']
+    parm[eb.PAR_LDNON2] = ebpar['LDnon2']
+    parm[eb.PAR_GD1]    = ebpar['GD1']
+    parm[eb.PAR_GD2]    = ebpar['GD2']
+    parm[eb.PAR_REFL1]  = ebpar['Ref1']
+    parm[eb.PAR_REFL2]  = ebpar['Ref2']
+    parm[eb.PAR_Q]      = ebpar['Mratio']
+    parm[eb.PAR_TIDANG] = ebpar['TideAng']
+    parm[eb.PAR_L3]     = ebpar['L3']
+    parm[eb.PAR_PHI0]   = ebpar['phi0']
+    parm[eb.PAR_T0]     = ebpar['t0']
+    parm[eb.PAR_P]      = ebpar['period']
+    parm[eb.PAR_M0]     = ebpar['magoff']
+    parm[eb.PAR_ROT1]   = ebpar['Rot1']
+    parm[eb.PAR_ROT2]   = ebpar['Rot2']
+    parm[eb.PAR_FSPOT1] = ebpar['spFrac1']
+    parm[eb.PAR_FSPOT2] = ebpar['spFrac2']
+    parm[eb.PAR_OOE1O]  = ebpar['spBase1']
+    parm[eb.PAR_OOE2O]  = ebpar['spBase2']
+    parm[eb.PAR_OOE11A] = ebpar['spSin1']
+    parm[eb.PAR_OOE11B] = ebpar['spCos1']
+    parm[eb.PAR_OOE12A] = ebpar['spSinCos1']
+    parm[eb.PAR_OOE12B] = ebpar['spSqSinCos1']
+    parm[eb.PAR_OOE21A] = ebpar['spSin2']
+    parm[eb.PAR_OOE21B] = ebpar['spCos2']
+    parm[eb.PAR_OOE22A] = ebpar['spSinCos2']
+    parm[eb.PAR_OOE22B] = ebpar['spSqSinCos2']
+
+    vder = eb.getvder(parm,ebpar['vsys'],ebpar['ktot'])
+    
+    return parm,vder
+
 
 
 
 ################################################################################
 # Check model data
 ################################################################################
-def check_model(data):
+def check_model(data_dict):
     """
     Produces a quick look plot of the light curve and RV data
     """
-
-    phot = data['light']
-    time = phot[0,:]
-    light = phot[1,:]
-
-    ooe = data['ooe']
-    ooet = ooe[0,:]
-    ooel = ooe[1,:]
-
-    rvdata1 = data['rv1']
-    t1 = rvdata1[0,:]
-    rv1 = rvdata1[1,:]
-
-    rvdata2 = data['rv2']
-    t2 = rvdata2[0,:]
-    rv2 = rvdata2[1,:]
-
-    plt.figure(1)
-    plt.clf()
-    plt.plot(time,light,'.')
-    plt.plot(ooet,ooel,'.')
+    plt.ion()
     
-    plt.figure(2)
-    plt.clf()
-    plt.plot(t1,rv1,'b.')
-    plt.plot(t2,rv2,'g.')
-    plt.show()
-    
+    for i in range(50):
+        key = 'phot'+str(i)
+        if data_dict.has_key(key):
+            data = data_dict[key]
+            phot = data['light']
+            time = phot[0,:]
+            light = phot[1,:]
+            ooe = data['ooe']
+            tooe = ooe[0,:]
+            looe = ooe[1,:]
+
+            plt.figure(i)
+            plt.clf()
+            plt.plot(time,light,'.',label='All data')
+            plt.plot(tooe,looe,'.',label='Out-of-eclipse data')
+            plt.title('Photometric Data for Band '+data['band'])
+            plt.legend(loc='best')
+
+    if data_dict.has_key('RVdata'):
+        data = data_dict['RVdata']
+        rvdata1 = data['rv1']
+        t1 = rvdata1[0,:]
+        rv1 = rvdata1[1,:]
+
+        rvdata2 = data['rv2']
+        t2 = rvdata2[0,:]
+        rv2 = rvdata2[1,:]
+
+        plt.figure(i+1)
+        plt.clf()
+        plt.plot(t1,rv1,'bo',label='Primary Star')
+        plt.plot(t2,rv2,'go',label='Secondary Star')
+        plt.title('Radial Velocity Data')
+        plt.legend(loc='best')
+
+    plt.ioff()
     return
+
+
 
 
 def fit_params(ebpar,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
@@ -1012,8 +1298,11 @@ def vec_to_params(x,ebpar,fitinfo=None,verbose=True):
 #        print "{0:<10} {1:14.6f} {2}".format(name, value, unit)
         
     # Derived parameters.
-    vder = eb.getvder(parm, vsys, ktot)
-
+    try:
+        vder = eb.getvder(parm, vsys, ktot)
+    except:
+        vder = None
+        
 #    print "stop in vec_to_parm"
 #    pdb.set_trace()
 #    print mass1, mass2, ktot, vsys
@@ -1086,6 +1375,10 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
 #            ol2 = np.polyval(ooe2fit,phiarr)
 #        else:
 #            ol2 = None
+
+
+        # Will need to update this to encorporate GP predictions for OOE light
+        ol1  = None ; ol2 = None
 
         typ = np.empty_like(tdarr, dtype=np.uint8)
 
@@ -1494,7 +1787,7 @@ def get_teffs_loggs(parm,vsys,ktot):
 
 
 
-def get_limb_qs(Mstar=0.5,Rstar=0.5,Tstar=3800.0,limb='quad',network=None):
+def get_limb_qs(Mstar=0.5,Rstar=0.5,Tstar=3800.0,limb='quad',band='Kp',network=None):
     import constants as c
 
     Ms = Mstar*c.Msun
@@ -1503,10 +1796,10 @@ def get_limb_qs(Mstar=0.5,Rstar=0.5,Tstar=3800.0,limb='quad',network=None):
  
     
     if limb == 'nlin':
-        a,b,c,d = get_limb_coeff(Tstar,loggstar,network=network,limb=limb,interp='linear')
+        a,b,c,d = get_limb_coeff(Tstar,loggstar,network=network,limb=limb,filter=band,interp='linear')
         return a,b,c,d
     else:
-        a,b = get_limb_coeff(Tstar,loggstar,network=network,limb=limb,interp='linear')
+        a,b = get_limb_coeff(Tstar,loggstar,network=network,limb=limb,filter=band,interp='linear')
         q1,q2 = utoq(a,b,limb=limb)
         return q1, q2
  
@@ -1722,8 +2015,8 @@ def get_limb_coeff(Tstar,loggstar,filter='Kp',plot=False,network=None,limb='quad
         col4 = 12
 
 
-    file1 = 'Claret_cool.dat'
-    file2 = 'Claret_hot.dat'
+    file1 = 'Claret_cool_all_filters.dat'
+    file2 = 'Claret_hot_all_filters.dat'
 
     if network == None or network == 'bellerophon':
 	path = '/home/administrator/python/fit/'
@@ -1890,6 +2183,7 @@ def get_limb_coeff(Tstar,loggstar,filter='Kp',plot=False,network=None,limb='quad
 
     if passfuncs:
         return ldc1func,ldc2func,ldc3func,ldc4func
+
     else:
         if limb == 'quad':
             return aval, bval
@@ -1901,3 +2195,380 @@ def get_limb_coeff(Tstar,loggstar,filter='Kp',plot=False,network=None,limb='quad
             return aval, bval, cval, dval
 
 
+################################################################################
+# Make model data OLD
+################################################################################
+def make_model_data_orig(m1=None,m2=None,                        # Stellar masses
+                         r1=0.5,r2=0.3,                          # Stellar radii
+                         l1=None,l2=None,                        # Stellar luminosity
+                         ecc=0.0,omega=0.0,impact=0,             # Orbital shape and orientation
+                         period=5.0,t0=2457998.0,                # Ephemeris Sept 1, 2017 (~ TESS launch)
+                         J=None,                                 # Surface brightness ratio
+                         q1a=None,q2a=None,q1b=None,q2b=None,    # LD params
+                         limb='quad',                            # LD type
+                         L3=0.0,vsys=10.0,                       # Third light and system velocity
+                         photnoise=0.0003,                       # Photometric noise
+                         short=False,long=False,                 # Short or long cadence TESS data
+                         obsdur=27.4,int=120.0,                  # Duration of obs, and int time
+                         durfac=2.0,                             # Amount of data to keep around eclipses
+                         spotamp1=None,spotP1=0.0,P1double=False,# Spot amplitude and period frac for star 1
+                         spotfrac1=0.0,spotbase1=0.0,            # Fraction of spots eclipsed, and base
+                         spotamp2=None,spotP2=0.0,P2double=False,# Spot amplitude and period frac for star 2
+                         spotfrac2=0.0,spotbase2=0.0,            # Fraction of spots eclipsed, and base
+                         write=False,network=None,path='./'):    # Network info
+    
+    """
+    Generator of model EB data
+
+    Light curve data and RV data are sampled independently
+    
+    """
+
+    # If long or short is set, this trumps obsdur and int keywords
+    if short:
+        int = 120.0
+        obsdur = 27.4
+    if long:
+        int = 1800.0
+        obsdur = 27.4
+            
+    # Set mass to be equal to radius in solar units if flag is set
+    if not m1:
+        m1 = r_to_m(r1)
+    if not m2:
+        m2 = r_to_m(r2)
+
+    # Mass ratio is not used unless gravity darkening is considered.
+    massratio = m2/m1 #if gravdark else 0.0
+
+    # Surface brightness ratio
+    if not l1:
+        l1 = r_to_l(r1)
+    if not l2:
+        l2 = r_to_l(r2)
+    if not J:
+        J = l2/l1    
+
+    #####################################################################
+    # Input luminosity coversion thing here to get proper amplitudes spot
+    # moduluation
+        
+    # Spot amplitudes with random phase
+    if spotamp1:
+        if spotP1 == 0.0:
+            print "Spot Period 1 = 0: Spots on star 1 will not be implemented!"
+        spa1 = l1*spotamp1
+        spph1 = np.random.uniform(0,np.pi*2,1)[0]
+        sinamp1 = spa1*np.cos(spph1)
+        cosamp1 = np.sqrt(spa1**2-sinamp1**2)
+        if P1double:
+            p2 = np.random.uniform(0,2.*np.pi)
+            sincosamp1  = P1double*sinamp1 * np.sin(p2)
+            squaredamp1 = P1double*sinamp1 * np.cos(p2)
+            sinamp1     = (1.0 - P1double)*sinamp1
+        else:
+            sincosamp1  = 0.0
+            squaredamp1 = 0.0            
+    else:
+        spotP1 = 0.0 ; spa1 = 0.0 ; spph1 = 0.0 ; sinamp1 = 0.0 ; cosamp1 = 0.0 ; sincosamp1  = 0.0
+        squaredamp1 = 0.0 
+
+    if spotamp2:
+        if spotP2 == 0.0:
+            print "Spot Period 2 = 0: Spots on star 2 will not be implemented!"
+        spa2 = l2*spotamp2
+        spph2 = np.random.uniform(0,np.pi*2,1)[0]
+        sinamp2 = spa2*np.cos(spph2)
+        cosamp2 = np.sqrt(spa2**2-sinamp2**2)
+        if P2double:
+            p2 = np.random.uniform(0,2.*np.pi)
+            sincosamp2  = P2double*sinamp2 * np.sin(p2)
+            squaredamp2 = P2double*sinamp2 * np.cos(p2)
+            sinamp2     = (1.0 - P2double)*sinamp2
+        else:
+            sincosamp2  = 0.0
+            squaredamp2 = 0.0            
+    else:
+        spotP2 = 0.0 ; spa2 = 0.0 ; spph2 = 0.0 ; sinamp2 = 0.0 ; cosamp2 = 0.0 ; sincosamp2  = 0.0
+        squaredamp2 = 0.0 
+
+    # Effective temperatures
+    Teff1 = (l1*c.Lsun/(4*np.pi*(r1*c.Rsun)**2*c.sb ))**(0.25)
+    Teff2 = (l2*c.Lsun/(4*np.pi*(r2*c.Rsun)**2*c.sb ))**(0.25)
+
+    # Get limb darkening according to input stellar params
+    if not q1a or not q1b or not q2a or not q2b:
+             q1a,q2a = get_limb_qs(Mstar=m1,Rstar=r1,Tstar=Teff1,limb=limb,network=network)
+             q1b,q2b = get_limb_qs(Mstar=m2,Rstar=r2,Tstar=Teff2,limb=limb,network=network)
+             
+    # Integration time and reference time (approximate date of TESS data)
+    integration = int
+    bjd = 2457998.0
+
+    # For consistency with EB code (GMsun forced to be equal)
+    NewtonG = eb.GMSUN*1e6/c.Msun
+
+    # Compute additional orbital parameters from input
+    # These calculations were lifted from eb-master code (for consistency).
+    ecosw0 = ecc * np.cos(np.radians(omega))
+    esinw0 = ecc * np.sin(np.radians(omega))
+    ecc0 = ecc
+    Mstar1 = m1*c.Msun
+    Mstar2 = m2*c.Msun
+    sma = ((period*24.0*3600.0)**2*NewtonG*(Mstar1+Mstar2)/(4.0*np.pi**2))**(1.0/3.0)
+
+    # Use Winn (2010) to get inclination from impact parameter of the primary eclipse
+    inc = np.arccos(impact*r1*c.Rsun*(1+esinw0)/(sma*(1-ecc0**2)))
+    
+    esq = ecosw0**2+esinw0**2
+    roe = np.sqrt(1.0-esq)
+    sini = np.sin(inc)
+    qpo = 1.0+Mstar2/Mstar1
+    gamma = vsys
+    comega = 2.0*np.pi*(1.0 + gamma*1000/eb.LIGHT) / (period*86400.0)
+    ktot = (NewtonG*(Mstar1+Mstar2) * comega * sini)**(1.0/3.0)*roe / 1e5
+
+
+    # Starting parameters
+    p0_0  = J                               # surface brightness
+    p0_1  = (r1*c.Rsun + r2*c.Rsun)/sma     # (r1 + r2) / a = fractional radius
+    p0_2  = r2/r1                           # radius ratio
+    p0_3  = np.cos(inc)                     # cos i
+    p0_4  = ecc * np.cos(np.radians(omega)) # ecosw
+    p0_5  = ecc * np.sin(np.radians(omega)) # esinw
+    p0_6  = 10.0                            # mag zpt
+    p0_7  = 0.0                             # ephemeris (needs to be zero)
+    p0_8  = period                          # Period
+    p0_9  = q1a                             # Limb darkening
+    p0_10 = q2a                             # Limb darkening
+    p0_11 = q1b                             # Limb darkening
+    p0_12 = q2b                             # Limb darkening
+    p0_13 = m2/m1                           # Mass ratio
+    p0_14 = L3                              # Third Light
+    p0_15 = spotP1                          # Star 1 rotation
+    p0_16 = spotfrac1                       # Fraction of spots eclipsed
+    p0_17 = spotbase1                       # base spottedness
+    p0_18 = sinamp1                         # Sin amplitude
+    p0_19 = cosamp1                         # Cos amplitude
+    p0_20 = sincosamp1                      # SinCos amplitude
+    p0_21 = squaredamp1                     # Cos^2-Sin^2 amplitude
+    p0_22 = spotP2                          # Star 2 rotation
+    p0_23 = spotfrac2                       # Fraction of spots eclipsed
+    p0_24 = spotbase2                       # base spottedness
+    p0_25 = sinamp2                         # Sin amplitude
+    p0_26 = cosamp2                         # Cos amplitude
+    p0_27 = sincosamp2                      # SinCos amplitude
+    p0_28 = squaredamp2                     # Cos^2-Sin^2 amplitude
+    p0_29 = ktot                            # Total radial velocity amp
+    p0_30 = vsys                            # System velocity
+
+    # Third light (L3) at 14 ... 14 and beyond + 1
+
+    p0_init = np.array([p0_0,p0_1,p0_2,p0_3,p0_4,p0_5,p0_7])
+    variables =["J","Rsum","Rratio","cosi","ecosw","esinw","t0"]
+
+    p0_init = np.append(p0_init,[p0_8],axis=0)
+    variables.append("period")
+
+    limb0 = np.array([p0_9,p0_10,p0_11,p0_12])
+    lvars = ["q1a", "q2a", "q1b", "q2b"]
+
+    p0_init = np.append(p0_init,limb0,axis=0)
+    for var in lvars:
+        variables.append(var)
+
+    p0_init = np.append(p0_init,[p0_14],axis=0)
+    variables.append('L3')
+
+
+    # Create output path if not already there.
+    directory = path
+    if not os.path.exists(directory):
+        print 'Making directory '+directory
+        os.makedirs(directory)
+
+    # Convert q's to u's
+    u1a,u2a = qtou(q1a,q2a)
+    u1b,u2b = qtou(q1b,q2b)
+
+    # Create initial ebpar dictionary
+    ebpar = {'J':J, 'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
+             'Mratio':massratio, 'LDlin1':u1a, 'LDnon1':u2a, 'LDlin2':u1b, 'LDnon2':u2b,
+             'GD1':0.0, 'Ref1':0.0, 'GD2':0.0, 'Ref2':0.0,
+             'ecosw':ecosw0, 'esinw':esinw0, 'Period':period, 't01':t0, 't02':None, 
+             'et01':0.0, 'et02':0.0, 'dt12':None, 'tdur1':None, 'tdur2':None, 
+             'mag0':10.0,'vsys':vsys, 'Mstar1':m1, 'Mstar2':m2,
+             'ktot':ktot, 'L3':L3,'Period':period, 'ePeriod':0.1,
+             'integration':int,'obsdur':obsdur,'bjd':bjd,
+             'variables':variables,'ninput':0, 'p_init':None,
+             'lighttravel':lighttravel,'gravdark':gravdark,
+             'reflection':reflection,'path':path,'limb':limb,
+             'Rstar1':r1, 'Rstar2':r2,'cosi':np.cos(inc),
+             'Rot1':None, 'Rot2':None}
+              
+    #              'GD1':0.32, 'Ref1':0.4, 'GD2':0.32, 'Ref2':0.4, 'Rot1':0.0,
+
+    # Spots
+    spotflag=False
+    if spotP1 != 0.0:
+        p0_init = np.append(p0_init,[p0_15],axis=0)
+        variables.append("Rot1") ; ebpar['Rot1'] = p0_15
+        p0_init = np.append(p0_init,[p0_16],axis=0)
+        variables.append("spFrac1") ; ebpar['spFrac1'] = p0_16
+        p0_init = np.append(p0_init,[p0_17],axis=0)
+        variables.append("spBase1") ; ebpar['spBase1'] = p0_17
+        p0_init = np.append(p0_init,[p0_18],axis=0)
+        variables.append("spSin1") ; ebpar['spSin1'] = p0_18
+        p0_init = np.append(p0_init,[p0_19],axis=0)
+        variables.append("spCos1") ; ebpar['spCos1'] = p0_19
+        p0_init = np.append(p0_init,[p0_20],axis=0)
+        variables.append("spSinCos1") ; ebpar['spSinCos1'] = p0_20
+        p0_init = np.append(p0_init,[p0_21],axis=0)
+        variables.append("spSqSinCos1") ; ebpar['spSqSinCos1'] = p0_21
+#        ebpar['spSinCos1'] = 0.0 ; ebpar['spSqSinCos1'] = 0.0
+        spotflag=True
+    if spotP2 != 0.0:
+        p0_init = np.append(p0_init,[p0_22],axis=0)
+        variables.append("Rot2") ; ebpar['Rot2'] = p0_22
+        p0_init = np.append(p0_init,[p0_23],axis=0)
+        variables.append("spFrac2") ; ebpar['spFrac2'] = p0_23
+        p0_init = np.append(p0_init,[p0_24],axis=0)
+        variables.append("spBase2") ; ebpar['spBase2'] = p0_24
+        p0_init = np.append(p0_init,[p0_25],axis=0)
+        variables.append("spSin2") ; ebpar['spSin2'] = p0_25
+        p0_init = np.append(p0_init,[p0_26],axis=0)
+        variables.append("spCos2") ; ebpar['spCos2'] = p0_26
+        p0_init = np.append(p0_init,[p0_27],axis=0)
+        variables.append("spSinCos2") ; ebpar['spSinCos2'] = p0_27
+        p0_init = np.append(p0_init,[p0_28],axis=0)
+        variables.append("spSqSinCos2") ; ebpar['spSqSinCos2'] = p0_28
+#        ebpar['spSinCos2'] = 0.0 ; ebpar['spSqSinCos2'] = 0.0
+        spotflag=True
+
+    # Make "parm" vector
+    parm,vder = vec_to_params(p0_init,ebpar,verbose=False)
+
+    # Time of mid-eclipse will be added later.
+    parm[eb.PAR_T0] = 0.0
+
+    debug = True
+    if debug:
+        print "Model parameters:"
+        for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
+            print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+
+        vder = eb.getvder(parm, vsys, ktot)
+        print "Derived parameters:"
+        for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
+            print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+            
+    # Contact points of the eclipses
+    (ps, pe, ss, se) = eb.phicont(parm)
+
+    # Durations (in hours) and secondary timing
+    ebpar['tdur1'] = (pe+1 - ps)*period*24.0
+    ebpar['tdur2'] = (se - ss)*period*24.0
+    ebpar['t02'] = ebpar['t01'] + (se+ss)/2*period 
+    
+    # Photometry sampling
+    tstart = -pe*durfac*period # ?
+    tstop  = tstart + obsdur
+    time  = np.arange(tstart,tstop,integration/86400.0)
+    tfold = time % period
+    phase = tfold/period
+    p0sec = (se+ss)/2
+    pprim = (pe-ps+1)*durfac # add one because start phase (ps) is positive and near 1, not negative
+    psec  = (se-ss)*durfac
+    pinds, = np.where((phase >= 1-pprim/2) | (phase <= pprim/2))
+    sinds, = np.where((phase >= p0sec-psec/2) & (phase <= p0sec+psec/2))
+    inds = np.append(pinds,sinds)
+
+
+    s = np.argsort(time[inds])
+    tfinal = time[inds][s]
+    pfinal = phase[inds][s]
+
+    
+    # This is only for no ellipsoidal variations and gravity darkening!
+    mr = parm[eb.PAR_Q]
+
+    # Do other higher order effects depend on the mass ratio?
+    if not ellipsoidal:
+        parm[eb.PAR_Q] = 0.0
+
+    # tref remains zero so that the ephemeris within parm manifests correctly
+    lightmodel = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=11.0,
+                                     fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
+                                     unsmooth=False,spotflag=spotflag)
+
+    # Out of eclipse light
+    # Phase duration of integration time
+    ptint = ebpar['integration']/(3600.*24 * period)
+    # indices of out of eclipse light
+    ooeinds, = np.where(((pfinal > pe+ptint ) & (pfinal < ss-ptint)) |
+                        ((pfinal > se+ptint) & (pfinal < ps-ptint)))
+                        
+    parm[eb.PAR_Q] = mr
+    
+    if photnoise != None:
+        n = len(lightmodel)
+        lightmodel += np.random.normal(0,photnoise,n)
+        lighterr = np.ones(len(lightmodel))*photnoise
+    else:
+        lighterr = np.zeros(len(lightmodel))
+    
+    p0_init = np.append(p0_init,[p0_13],axis=0)
+    variables.append('massratio')
+    p0_init = np.append(p0_init,[p0_29],axis=0)
+    variables.append('ktot')
+    p0_init = np.append(p0_init,[p0_30],axis=0)
+    variables.append("vsys")
+
+    variables = np.array(variables)
+    ebpar['variables'] = variables
+
+    ninput = len(p0_init)
+    ebpar['ninput'] = ninput
+
+    ebpar['p_init'] = p0_init
+
+    parm,vder = vec_to_params(p0_init,ebpar,verbose=False)
+
+    # RV sampling
+    #    tRV = np.random.uniform(0,1,RVsamples)*period
+    if tRV == None:
+        tRV = RV_sampling(RVsamples,period)
+
+    rvs = compute_eclipse(tRV,parm,modelfac=11.0,fitrvs=True,tref=0.0,
+                          period=period,ooe1fit=None,ooe2fit=None,unsmooth=False)
+    
+    massratio = m2/m1
+    k2 = ktot/(1+massratio)
+    k1 = k2*massratio
+    rv1 = rvs*k1 + vsys
+    rv2 = -1.0*rvs*k2 + vsys
+
+    # make this so that one can determine RV error for each RV point
+    if RVnoise != None:
+        n1 = len(rv1)
+        rv1 += np.random.normal(0,RVnoise,n1)
+        rv1_err = np.ones(len(rv1))*RVnoise
+        n2 = len(rv2)
+        rv2 += np.random.normal(0,RVnoise,n2)
+        rv2_err = np.ones(len(rv2))*RVnoise
+
+    lout = np.array([tfinal+bjd,lightmodel,lighterr])
+    r1out = np.array([tRV+bjd,rv1,rv1_err])
+    r2out = np.array([tRV+bjd,rv2,rv2_err])
+    ooe = np.array([tfinal[ooeinds]+bjd,lightmodel[ooeinds],lighterr[ooeinds]])
+    
+    data = {'light':lout, 'ooe':ooe, 'rv1':r1out, 'rv2':r2out}
+
+
+    if write:
+        np.savetxt('lightcurve_model.txt',lout.T)
+        np.savetxt('ooe_model.txt',ooe.T)
+        np.savetxt('rv1_model.txt',r1out.T)
+        np.savetxt('rv2_model.txt',r2out.T)
+
+    return ebpar, data
