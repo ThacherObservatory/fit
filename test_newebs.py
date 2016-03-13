@@ -11,15 +11,15 @@ q2b = [None,None,None]
 photnoise = [0.0003,0.01,0.01]
 obsdur = [30,8./24.,7./24.]
 int = [1800.0,60.0,60.0]
-durfac = [5.0,3.0,2]
-spotamp1 = [None,None,None]
-spotP1 = [0.0,0.0,0.0]
-P1double = [0.0,0.0,0.0]
-spotfrac1 = [None,None,None]
-spotbase1 = [None,None,None]
+durfac = [7.0,3.0,2]
+spotamp1 = [0.1,None,None]
+spotP1 = 2.0*np.pi # (irrational #)
+P1double = 2
+spotfrac1 = [0.5,None,None]
+spotbase1 = [0.0,None,None]
 spotamp2 = [None,None,None]
-spotP2 = [0.0,0.0,0.0] 
-P2double = [0.0,0.0,0.0]
+spotP2 = 0.0
+P2double = 0.0
 spotfrac2 = [None,None,None]
 spotbase2 = [None,None,None]
 
@@ -32,6 +32,7 @@ data_dict = ebs.make_model_data(ebin,nphot=nphot,band=band,photnoise=photnoise,
                                 spotfrac1=spotfrac1,spotbase1=spotbase1,
                                 spotamp2=spotamp2,spotP2=spotP2,P2double=P2double,
                                 spotfrac2=spotfrac2,spotbase2=spotbase2,
-                                RVsamples=RVsamples,RVnoise=RVnoise,network='swift')
+                                RVsamples=RVsamples,RVnoise=RVnoise,network='swift',
+                                write=True)
 
 ebs.check_model(data_dict)

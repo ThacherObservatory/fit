@@ -162,7 +162,7 @@ def ebinput(m1=None,m2=None,                        # Stellar masses
 
 
     # Create initial ebpar dictionary
-    ebin = {'Lratio':l2/l1, 'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
+    ebin = {'L1':l1, 'L2':l2, 'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
             'Mratio':massratio, 'ecosw':ecosw0, 'esinw':esinw0,
             'Period':period, 't01':t0, 't02':None, 'dt12':None,
             'tdur1':None, 'tdur2':None,'bjd':bjd,
@@ -300,12 +300,16 @@ def make_phot_data(ebin,
     J = teff_to_j(ebin['Teff1'],ebin['Teff2'],band,network=network)
     print 'Surface brightness ratio in '+band+' band estimated to be %.3f' % J
     
+    l1 = ebin['L1']
+    l2 = ebin['L2']
+
     #####################################################################
     # Input luminosity coversion thing here to get proper amplitudes spot
     # moduluation
-        
+
     # Spot amplitudes with random phase
     if spotamp1:
+        spotflag1 = True
         if spotP1 == 0.0:
             print "Spot Period 1 = 0: Spots on star 1 will not be implemented!"
         spa1 = l1*spotamp1
@@ -325,6 +329,7 @@ def make_phot_data(ebin,
         sincosamp1 = 0.0 ; squaredamp1 = 0.0 ; spotflag1 = False
 
     if spotamp2:
+        spotflag2 = True
         if spotP2 == 0.0:
             print "Spot Period 2 = 0: Spots on star 2 will not be implemented!"
         spa2 = l2*spotamp2
@@ -532,8 +537,6 @@ def make_RV_data(ebin,
     
     mratio = ebin['Mstar2']/ebin['Mstar1']
 
-    J = ebin['Lratio']
-
     rratio = ebin['Rstar2']/ebin['Rstar1']
 
     # For consistency with EB code (GMsun forced to be equal)
@@ -562,7 +565,7 @@ def make_RV_data(ebin,
 
     # eb.h has 37 parameters. One, integ, not used.
     # ktot and vsys are added in our dictionary for completeness.
-    ebpar = {'J': J,                                   # surface brightness ratio
+    ebpar = {'J': 1,                                   # surface brightness ratio
              'Rsum': rsum,                             # sum of radii / semimajor axis
              'Rratio': rratio,                         # radius ratio
              'cosi': ebin['cosi'],                     # cosine of inclination
@@ -817,6 +820,7 @@ def fit_params(ebpar,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
                'clobber':clobber,'write':write,'variables':None}
 
     return fitinfo
+
 
 
 
