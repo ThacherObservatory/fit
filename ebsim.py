@@ -109,6 +109,10 @@ def ebinput(m1=None,m2=None,                        # Stellar masses
     This routine creates a dictionary of all the physical parameters of the EB in question. This
     dictionary can then be passed to other functions to create either simulated photometry or 
     radial velocity data.
+
+    Output from this routine can also be used to create starting values for a 
+    fit to real data.
+
     """
 
     # Set mass to be equal to radius in solar units if flag is set
@@ -351,7 +355,6 @@ def make_phot_data(ebin,
     spotflag = spotflag1 or spotflag2
     
     # Get limb darkening according to input stellar params
-    # Need to expand to more photometric bands than Kepler, CoRoT and Spitzer.
     if not q1a or not q2a:
         q1a,q2a = get_limb_qs(Mstar=ebin['Mstar1'],Rstar=ebin['Rstar1'],Tstar=ebin['Teff1'],
                               limb=limb,network=network,band=band)
@@ -799,47 +802,85 @@ def check_model(data_dict):
 
 
 
-def fit_params(ebpar,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
-              fit_period=True,fit_limb=True,claret=False,fit_rvs=True,fit_ooe1=False,fit_ooe2=False,
-              fit_L3=False,fit_sp2=False,full_spot=False,fit_ellipsoidal=False,write=True,order=3,
-              thin=1):
+def fit_params(nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
+               fit_lighttravel=True,tie_LD=False,fit_gravdark=False,
+               fit_reflection=False,fit_period=True,fit_limb=True,
+               fit_rvs=True,fit_ooe1=False,fit_ooe2=False,fit_L3=False,
+               fit_sp2=False,full_spot=False,fit_ellipsoidal=False,
+               write=True,thin=1,outpath='./',network=None):
+
     """ 
+
     Generate a dictionary that contains all the information about the fit
 
-    fit_ooe1 and fit_ooe2 if not False should be the order of the polynomial that you would like
-    to fit the out of eclipse data with.
-
     """
-
-    fitinfo = {'ooe_order':order, 'fit_period':fit_period, 'thin':thin,
-              'fit_rvs':fit_rvs, 'fit_limb':fit_limb,'claret':claret,
-              'fit_ooe1':fit_ooe1,'fit_ooe2':fit_ooe2,'fit_ellipsoidal':fit_ellipsoidal,
-              'fit_lighttravel':ebpar['lighttravel'],'fit_L3':fit_L3,
-              'fit_gravdark':ebpar['gravdark'],'fit_reflection':ebpar['reflection'],
-              'nwalkers':nwalkers,'burnsteps':burnsteps,'mcmcsteps':mcmcsteps,
-               'clobber':clobber,'write':write,'variables':None}
+    
+    fitinfo = {'fit_period':fit_period, 'thin':thin,
+               'fit_rvs':fit_rvs, 'fit_limb':fit_limb, 'tie_LD':tie_LD,
+               'fit_ooe1':fit_ooe1,'fit_ooe2':fit_ooe2,'fit_ellipsoidal':fit_ellipsoidal,
+               'fit_lighttravel':fit_lighttravel,'fit_L3':fit_L3,
+               'fit_gravdark':fit_gravdark,'fit_reflection':fit_reflection,
+               'nwalkers':nwalkers,'burnsteps':burnsteps,'mcmcsteps':mcmcsteps,
+               'clobber':clobber,'write':write,'outpath': outpath,'network':network}
 
     return fitinfo
 
 
 
+def numphot(data_dict):
+    """
+    Count how many photometry datasets are in 
+    """
+    try:
+        return len([key for key in data_dict.keys() if key.startswith('phot')])
+    except:
+        print 'There are no photometry datasets in this dictionary!'
+        return None
+
+def numbands(data_dict):
+    """
+    Count how many unique photometry bands there are in data_dict.
+    """
+    photkeys = [key for key in data_dict.keys() if key.startswith('phot')]
+    bands = [data_dict[key]['band'] for key in photkeys]
+    return length(np.unique(np.array(bands)))
+
+def uniquebands(data_dict):
+    """
+    Unique photometry bands
+    """
+    photkeys = [key for key in data_dict.keys() if key.startswith('phot')]
+    bands = [data_dict[key]['band'] for key in photkeys]
+    return np.unique(np.array(bands))
 
 
 
-def ebsim_fit(data,ebpar,fitinfo,debug=False):
+
+def ebsim_fit(data_dict,fitinfo,ebin,debug=False):
+
     """
     Fit the simulated data using emcee with starting parameters based on the 
     ebpar dictionary and according to the fitting parameters outlined in
     fitinfo
+
     """
 
-    time   = data['light'][0,:]-ebpar['bjd']
-    flux   = data['light'][1,:]
-    eflux  = data['light'][2,:]
-    sigflux = rb.std(flux)
-    deltat = np.max(time)-np.min(time)
+    # Check photometry data
+    nphot = numphot(data_dict)
+    if not nphot:
+        print 'Data dictionary does not contain photometry data!'
+        return
+  
+    nbands = numbands(data_dict)
+    ubands = uniquebands(data_dict)
+    
+    # Check for RVs
+    if not data_dict.has_key('RVdata'):
+        print 'Data dictionary does not contain RV data!'
+        return
 
-    directory = ebpar['path']
+    # Check for output directory
+    directory = fitinfo['outpath']
     if not os.path.exists(directory):
         os.makedirs(directory)
 
@@ -850,30 +891,85 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
     onesec = 1./(24.*60.*60.)
 
     nw = fitinfo['nwalkers']
-    bjd = ebpar['bjd']
     
-# Initial chain values
+    # Initial chain values
+    p0_init = []
+    variables = []
+
     print ""
     print "Deriving starting values for chains"
-    p0_0  = np.random.uniform(ebpar['J']*0.9999,ebpar['J']*1.0001,nw)             # surface brightness
-    p0_1  = np.random.uniform(ebpar['Rsum_a']*0.9999,ebpar['Rsum_a']*1.0001, nw)  # fractional radius
-    p0_2  = np.random.uniform(ebpar['Rratio']*0.9999,ebpar['Rratio']*1.0001, nw)  # radius ratio
-    if ebpar['cosi'] == 0:                                                        # cos i
-        p0_3 = np.random.uniform(-.0001,.0001,nw)
-    else:
-        p0_3  = np.random.uniform(ebpar['cosi']*0.9999,ebpar['cosi']*1.0001, nw)
-    p0_4  = np.random.uniform(-.00001,.00001, nw)                                 # ecosw
-    p0_5  = np.random.uniform(-.00001,.00001, nw)                                 # esinw
-    p0_6  = np.random.normal(ebpar['mag0'],0.1, nw)                               # mag zpt
-    p0_7  = np.random.normal(ebpar['t01']-bjd,onesec,nw)                          # mid-eclipse time
-    p0_8  = np.random.uniform(ebpar['Period']-onesec,ebpar['Period']+onesec,nw)   # period
 
-    q1a,q2a = utoq(ebpar['LDlin1'],ebpar['LDnon1'])
-    q1b,q2b = utoq(ebpar['LDlin2'],ebpar['LDnon2'])
-    p0_9 = np.random.uniform(q1a*.999,q1a*1.001,nw)                               # Limb darkening q1a
-    p0_10 = np.random.uniform(q2a*.999,q2a*1.001,nw)                              # Limb darkening q2a
-    p0_11 = np.random.uniform(q1b*.999,q1b*1.001,nw)                              # Limb darkening q1b
-    p0_12 = np.random.uniform(q2b*.999,q2b*1.001,nw)                              # Limb darkening q2b
+    # Surface brightness ratio for each band
+    for band in ubands:
+        J = teff_to_j(ebin['Teff1'],ebin['Teff2'],band,network=fitinfo['network'])    
+        p0_init = np.append(p0_init,[np.random.uniform(J*0.9999,J*1.0001,nw)],axis=0) # surface brightness
+        variables = np.append(variables,'J_'+band)
+        
+    # Fractional radius        
+    p0_init = np.append(p0_init,[np.random.uniform(ebin['Rsum_a']*0.9999,
+                                                   ebin['Rsum_a']*1.0001, nw)],axis=0)
+    variables = np.append(variables,'Rsum')
+
+    # Radius ratio
+    p0_init = np.append(p0_init,[np.random.uniform(ebin['Rratio']*0.9999,
+                                                   ebin['Rratio']*1.0001, nw)],axis=0)
+    variables = np.append(variables,'Rratio')
+
+    # cos i
+    if ebin['cosi'] == 0:
+        p0_init = np.append(p0_init,[np.random.uniform(-.0001,.0001,nw)],axis=0)
+    else:
+        p0_init = np.append(p0_init,[np.random.uniform(ebin['cosi']*0.9999,
+                                                       ebin['cosi']*1.0001, nw)],axis=0)
+    variables = np.append(variables,'cosi')
+
+    # ecosw
+    if ebin['ecosw'] == 0:
+        p0_init = np.append(p0_init,[np.random.uniform(-.00001,.00001, nw)],axis=0)
+    else:
+        p0_init = np.append(p0_init,[np.random.uniform(ebin['ecosw']*0.9999,
+                                                       ebin['ecosw']*1.0001, nw)],axis=0)
+    variables = np.append(variables,'ecosw')
+
+    # esinw
+    if ebin['esinw'] == 0:
+        p0_init = np.append(p0_init,[np.random.uniform(-.00001,.00001, nw)],axis=0)
+    else:
+        p0_init = np.append(p0_init,[np.random.uniform(ebin['esinw']*0.9999,
+                                                       ebin['esinw']*1.0001, nw)],axis=0)
+    variables = np.append(variables,'esinw')
+
+    # Mid-eclipse time
+    p0_init = np.append(p0_init,[np.random.normal(ebin['t01'],onesec,nw)],axis=0)
+    variables = np.append(variables,'t0')
+
+    
+    # Period
+    p0_init = np.append(p0_init,[np.random.uniform(ebin['Period']-onesec,
+                                                   ebin['Period']+onesec,nw)],axis=0)
+    variables = np.append(variables,'period')
+
+    
+    # Limb darkening, two parameters in each band for each star
+    for band in ubands:
+        # Star 1
+        q1a,q2a = get_limb_qs(Mstar=ebin['Mstar1'],Rstar=ebin['Rstar1'],Tstar=ebin['Teff1'],
+                              limb='quad',network=network,band=band)
+        p0_init = np.append(p0_init,[np.random.uniform(q1a*.999,q1a*1.001,nw)],axis=0)
+        variables = np.append(variables,'q1a_'+band)
+        p0_init = np.append(p0_init,[np.random.uniform(q2a*.999,q2a*1.001,nw)],axis=0)
+        variables = np.append(variables,'q2a_'+band)
+        
+        # Star 2
+        q1b,q2b = get_limb_qs(Mstar=ebin['Mstar2'],Rstar=ebin['Rstar2'],Tstar=ebin['Teff2'],
+                              limb='quad',network=network,band=band)
+        p0_init = np.append(p0_init,[np.random.uniform(q1b*.999,q1b*1.001,nw)],axis=0)
+        variables = np.append(variables,'q1b_'+band)
+        p0_init = np.append(p0_init,[np.random.uniform(q2b*.999,q2b*1.001,nw)],axis=0)
+        variables = np.append(variables,'q2b_'+band)
+
+
+    #!!! Pick up from here
 
     p0_13 = np.abs(np.random.uniform(ebpar['Mratio']*0.9999,                      # Mass ratio
                                      ebpar['Mratio']*1.0001,nw))
@@ -932,7 +1028,7 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
         p0_init = np.append(p0_init,[p0_8],axis=0)
         variables.append("period")
 
-    if fitinfo['fit_limb'] and fitinfo['claret']:
+    if fitinfo['fit_limb'] and fitinfo['tie_LD']:
         sys.exit('Cannot fit for LD parameters and constrain them according to the other fit parameters!')
 
     if fitinfo['fit_limb']:
@@ -1002,6 +1098,11 @@ def ebsim_fit(data,ebpar,fitinfo,debug=False):
 
     fitinfo['variables'] = variables
 
+
+
+
+
+    
     
 # Transpose array of initial guesses
     p0 = np.array(p0_init).T
@@ -1443,7 +1544,7 @@ def lnprob(x,data,ebpar,fitinfo,debug=False):
         ktot = x[-2]
 
         
-    if fitinfo['claret']:
+    if fitinfo['tie_LD']:
         T1,logg1,T2,logg2 = get_teffs_loggs(parm,vsys,ktot)
 
         u1a = ldc1func(T1,logg1)[0][0]
@@ -2576,3 +2677,288 @@ def make_model_data_orig(m1=None,m2=None,                        # Stellar masse
         np.savetxt('rv2_model.txt',r2out.T)
 
     return ebpar, data
+
+
+
+def fit_params_orig(ebpar,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
+              fit_period=True,fit_limb=True,claret=False,fit_rvs=True,fit_ooe1=False,fit_ooe2=False,
+              fit_L3=False,fit_sp2=False,full_spot=False,fit_ellipsoidal=False,write=True,order=3,
+              thin=1):
+    """ 
+    Generate a dictionary that contains all the information about the fit
+
+    fit_ooe1 and fit_ooe2 if not False should be the order of the polynomial that you would like
+    to fit the out of eclipse data with.
+
+    """
+
+    fitinfo = {'ooe_order':order, 'fit_period':fit_period, 'thin':thin,
+              'fit_rvs':fit_rvs, 'fit_limb':fit_limb,'claret':claret,
+              'fit_ooe1':fit_ooe1,'fit_ooe2':fit_ooe2,'fit_ellipsoidal':fit_ellipsoidal,
+              'fit_lighttravel':ebpar['lighttravel'],'fit_L3':fit_L3,
+              'fit_gravdark':ebpar['gravdark'],'fit_reflection':ebpar['reflection'],
+              'nwalkers':nwalkers,'burnsteps':burnsteps,'mcmcsteps':mcmcsteps,
+               'clobber':clobber,'write':write,'variables':None}
+
+    return fitinfo
+
+
+
+
+def ebsim_fit_orig(data,ebpar,fitinfo,debug=False):
+    """
+    Fit the simulated data using emcee with starting parameters based on the 
+    ebpar dictionary and according to the fitting parameters outlined in
+    fitinfo
+    """
+
+    time   = data['light'][0,:]-ebpar['bjd']
+    flux   = data['light'][1,:]
+    eflux  = data['light'][2,:]
+    sigflux = rb.std(flux)
+    deltat = np.max(time)-np.min(time)
+
+    directory = ebpar['path']
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    print ""
+    print "Starting MCMC fitting routine"
+
+    twomin = 2./(24.*60.)
+    onesec = 1./(24.*60.*60.)
+
+    nw = fitinfo['nwalkers']
+    bjd = ebpar['bjd']
+    
+# Initial chain values
+    print ""
+    print "Deriving starting values for chains"
+    p0_0  = np.random.uniform(ebpar['J']*0.9999,ebpar['J']*1.0001,nw)             # surface brightness
+    p0_1  = np.random.uniform(ebpar['Rsum_a']*0.9999,ebpar['Rsum_a']*1.0001, nw)  # fractional radius
+    p0_2  = np.random.uniform(ebpar['Rratio']*0.9999,ebpar['Rratio']*1.0001, nw)  # radius ratio
+    if ebpar['cosi'] == 0:                                                        # cos i
+        p0_3 = np.random.uniform(-.0001,.0001,nw)
+    else:
+        p0_3  = np.random.uniform(ebpar['cosi']*0.9999,ebpar['cosi']*1.0001, nw)
+    p0_4  = np.random.uniform(-.00001,.00001, nw)                                 # ecosw
+    p0_5  = np.random.uniform(-.00001,.00001, nw)                                 # esinw
+    p0_6  = np.random.normal(ebpar['mag0'],0.1, nw)                               # mag zpt
+    p0_7  = np.random.normal(ebpar['t01']-bjd,onesec,nw)                          # mid-eclipse time
+    p0_8  = np.random.uniform(ebpar['Period']-onesec,ebpar['Period']+onesec,nw)   # period
+
+    q1a,q2a = utoq(ebpar['LDlin1'],ebpar['LDnon1'])
+    q1b,q2b = utoq(ebpar['LDlin2'],ebpar['LDnon2'])
+    p0_9 = np.random.uniform(q1a*.999,q1a*1.001,nw)                               # Limb darkening q1a
+    p0_10 = np.random.uniform(q2a*.999,q2a*1.001,nw)                              # Limb darkening q2a
+    p0_11 = np.random.uniform(q1b*.999,q1b*1.001,nw)                              # Limb darkening q1b
+    p0_12 = np.random.uniform(q2b*.999,q2b*1.001,nw)                              # Limb darkening q2b
+
+    p0_13 = np.abs(np.random.uniform(ebpar['Mratio']*0.9999,                      # Mass ratio
+                                     ebpar['Mratio']*1.0001,nw))
+    p0_14 = np.random.uniform(0,0.1,nw)                                           # Third Light
+    
+
+    ##############################
+    # Spot Modeling (use GP)
+    ##############################
+    # Star 1
+    # Quasi-Periodic Kernel for Out of Eclipse Variations
+    p0_15 = np.log(np.random.normal(0.05,0.2,nw))                                 # Amplitude for QP kernel 1
+    p0_16 = np.log(np.random.uniform(0,10,nw))                                    # Sine Amplitude for QP kernel 1
+    p0_17 = np.log(np.random.normal(ebpar['Rot1'],0.1*ebpar['Rot1'],nw))          # Period for QP kernel 1 (star rotation)
+    p0_18 = np.log(np.random.uniform(0.1,2*ebpar['Rot1'],nw))                     # Decay of QP kernel 1
+
+    # Exponential Kernel for Fraction of Spots Covered
+    p0_19 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # FSC Amplitude for E kernel 1
+    p0_20 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
+    p0_21 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
+
+    # Exponential Kernel for Base Spottedness
+    p0_22 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # BS Amplitude for E kernel 1
+    p0_23 = np.log(np.random.uniform(0.1,0.2,nw))                                 # BS Width for E kernel 1
+
+    ##############################
+    # Star 2
+    # Quasi-Periodic Kernel for Out of Eclipse Variations
+    p0_24 = np.log(np.random.normal(0.05,0.2,nw))                                 # Amplitude for QP kernel 1
+    p0_25 = np.log(np.random.uniform(0,10,nw))                                    # Sine Amplitude for QP kernel 1
+    p0_26 = np.log(np.random.normal(ebpar['Rot1'],0.1*ebpar['Rot1'],nw))          # Period for QP kernel 1 (star rotation)
+    p0_27 = np.log(np.random.uniform(0.1,2*ebpar['Rot1'],nw))                     # Decay of QP kernel 1
+
+    # Fraction of Spots Covered
+    # a + b sin(ct): a > b, a+b <= 1, c positive
+    p0_28 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # FSC Amplitude for E kernel 1
+    p0_29 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
+    p0_30 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
+
+    # Base Spottedness
+    # a sin(bt): a must be restricted, b must be small
+    p0_31 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # BS Amplitude for E kernel 1
+    p0_32 = np.log(np.random.uniform(0.1,0.2,nw))                                 # BS Width for E kernel 1
+
+    # System velocity
+    p0_33 = np.abs(np.random.uniform(ebpar['ktot']*0.999,ebpar['ktot']*1.001,nw)) # Total radial velocity amp
+    p0_34 = np.random.uniform(ebpar['vsys']*.999,ebpar['vsys']*1.001,nw)          # System velocity   
+
+
+# L3 at 14 ... 14 and beyond + 1
+
+    p0_init = np.array([p0_0,p0_1,p0_2,p0_3,p0_4,p0_5,p0_7])
+    variables =["J","Rsum","Rratio","cosi","ecosw","esinw","t0"]
+
+    if fitinfo['fit_period']:
+        p0_init = np.append(p0_init,[p0_8],axis=0)
+        variables.append("period")
+
+    if fitinfo['fit_limb'] and fitinfo['tie_LD']:
+        sys.exit('Cannot fit for LD parameters and constrain them according to the other fit parameters!')
+
+    if fitinfo['fit_limb']:
+        limb0 = np.array([p0_9,p0_10,p0_11,p0_12])
+        lvars = ["q1a", "q2a", "q1b", "q2b"]
+        p0_init = np.append(p0_init,limb0,axis=0)
+        for var in lvars:
+            variables.append(var)
+
+    if fitinfo['fit_L3']:
+        p0_init = np.append(p0_init,[p0_14],axis=0)
+        variables.append('L3')
+
+
+    #######################################################################
+    # Spot modeling
+    #######################################################################
+
+    # Fraction of spots covered could vary from eclipse to eclipse.
+    # Need GP kernel for each star
+    # Use exponential squared kernel
+    # Params = a and l
+
+    
+    if fitinfo['fit_ooe1']:
+        # Out of eclipse variations = Quasi-periodic kernel
+        # Amplitude for the out of eclipse flux
+        p0_init = np.append(p0_init,[p0_15],axis=0)
+        variables.append('OOE_Amp1')
+        # Sine amplitude, makes periodic peaks sharper for higher numbers.
+        p0_init = np.append(p0_init,[p0_16],axis=0)
+        variables.append('OOE_SineAmp1')
+        # Period, separation of peaks.
+        p0_init = np.append(p0_init,[p0_17],axis=0)
+        variables.append('OOE_Per1')
+        # Decay, how significant is the next peak in the kernel
+        p0_init = np.append(p0_init,[p0_18],axis=0)
+        variables.append('OOE_Decay1')
+
+        # Fraction of spots covered
+        p0_init = np.append(p0_init,[p0_19],axis=0)
+        variables.append('FSCOff1')
+        p0_init = np.append(p0_init,[p0_20],axis=0)
+        variables.append('FSCAmp1')
+        p0_init = np.append(p0_init,[p0_21],axis=0)
+        variables.append('FSCPer1')
+
+        # Base spottedness  = exponential squared kernel
+        p0_init = np.append(p0_init,[p0_21],axis=0)
+        variables.append('BSAmp1')
+        p0_init = np.append(p0_init,[p0_22],axis=0)
+        variables.append('BSPer1')
+
+        
+    if fitinfo['fit_ooe2']:
+        pass
+        
+    if fitinfo['fit_rvs']:
+        p0_init = np.append(p0_init,[p0_13],axis=0)
+        variables.append('massratio')
+        p0_init = np.append(p0_init,[p0_33],axis=0)
+        variables.append('ktot')
+        p0_init = np.append(p0_init,[p0_34],axis=0)
+        variables.append("vsys")
+
+    variables = np.array(variables)
+
+    fitinfo['variables'] = variables
+
+    
+# Transpose array of initial guesses
+    p0 = np.array(p0_init).T
+
+# Number of dimensions in the fit.
+    ndim = np.shape(p0)[1]
+
+# Do not redo MCMC unless clobber flag is set
+    done = os.path.exists(directory+'Jchain.txt')
+    if done == True and fitinfo['clobber'] == False:
+        print "MCMC run already completed"
+        return False,False
+
+
+# Set up MCMC sampler
+    print "... initializing emcee sampler"
+    tstart = time.time()
+    sampler = emcee.EnsembleSampler(nw, ndim, lnprob, args=(data,ebpar,fitinfo),kwargs={'debug':debug})
+
+# Run burn-in
+    print ""
+    print "Running burn-in with "+str(fitinfo['burnsteps'])+" steps and "+str(fitinfo['nwalkers'])+" walkers"
+    pos, prob, state = sampler.run_mcmc(p0, fitinfo['burnsteps'])
+    print done_in(tstart)
+
+# Calculate G-R scale factor for each variable
+    Rs = GR_test(sampler.chain,variables=variables)
+        
+    for var in np.arange(ndim):
+        acout = "Autocorrelation time for "+variables[var]+" = {0:0.3f}"
+        print acout.format(sampler.acor[var])
+
+    afout = "Mean acceptance fraction: {0:0.3f}"
+    print afout.format(np.mean(sampler.acceptance_fraction))
+
+
+# Save burn in stats
+    burn = np.append(Rs,sampler.acor)
+    burn = np.append(burn,np.mean(sampler.acceptance_fraction))
+    np.savetxt(directory+'burnstats.txt',burn)
+
+    # Reset sampler and run MCMC for reals
+    print "... resetting sampler and running MCMC with "+str(fitinfo['mcmcsteps'])+" steps"
+    sampler.reset()
+    posf, probf, statef = sampler.run_mcmc(pos, fitinfo['mcmcsteps'])
+    print done_in(tstart)
+
+    # Calculate G-R scale factor for each variable
+    Rs = GR_test(sampler.chain,variables=variables)
+
+    # Autocorrelation times
+    for var in np.arange(ndim):
+        acout = "Autocorrelation time for "+variables[var]+" = {0:0.3f}"
+        print acout.format(sampler.acor[var])
+
+    afout = "Final mean acceptance fraction: {0:0.3f}"
+    print afout.format(np.mean(sampler.acceptance_fraction))
+
+    stats = np.append(Rs,sampler.acor)
+    stats = np.append(stats,np.mean(sampler.acceptance_fraction))
+    np.savetxt(directory+'finalstats.txt',stats)
+
+    # Dump the initial parameter dictionary, fit information dictionary, and the
+    # data used in the fit into files for reproduceability.
+    pickle.dump(ebpar,open(directory+"ebpar.p", "wb" ))
+    pickle.dump(fitinfo,open(directory+"fitinfo.p", "wb" ))
+    pickle.dump(data,open(directory+"data.p", "wb" ))
+
+    # Write out chains to disk
+    if fitinfo['write']:
+        thin = fitinfo['thin']
+        thinst = '_thin_'+str(thin) if thin > 1 else ''
+        print "Writing MCMC chains to disk"
+        lp = sampler.lnprobability.flatten()
+        np.savetxt(directory+'lnprob'+thinst+'.txt',lp[0::thin])
+        for i in np.arange(len(variables)):
+            np.savetxt(directory+variables[i]+'chain'+thinst+'.txt',sampler.flatchain[0::thin,i])
+
+    return sampler.lnprobability.flatten(),sampler.flatchain
+
+
