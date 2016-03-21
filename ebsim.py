@@ -969,98 +969,62 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False):
         variables = np.append(variables,'q2b_'+band)
 
 
-    #!!! Pick up from here
+    # !!! Is gravity darkening needed for each photometric band? (methinks yes)
+    if fitinfo['fit_gravdark']:
+        p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
+        variables = np.append(variables,'GD1')
+        p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
+        variables = np.append(variables,'GD2')
 
-    p0_13 = np.abs(np.random.uniform(ebpar['Mratio']*0.9999,                      # Mass ratio
-                                     ebpar['Mratio']*1.0001,nw))
-    p0_14 = np.random.uniform(0,0.1,nw)                                           # Third Light
+    # Reflection/albedo
+    if fitinfo['fit_reflection']:
+        p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
+        variables = np.append(variables,'Ref1')
+        p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
+        variables = np.append(variables,'Ref2')
+
+    # Mass ratio
+    p0_init = np.append(p0_init,[np.abs(np.random.uniform(ebin['Mratio']*0.9999,
+                                                          ebin['Mratio']*1.0001,nw))],axis=0)
     
+    # Tidal angle of primary 
+    if fitinfo['fit_tideang']:
+        p0_init = np.append(p0_init,[np.random.uniform(0,90,nw)],axis=0)
+        variables = np.append(variables,'TideAng')
+
+    # Third light
+    if fitinfo['fit_L3']:
+        p0_init = np.append(p0_init,[np.random.uniform(0,0.25,nw)],axis=0)
+        variables = np.append(variables,'L3')
+
+    # Epoch of inferior conjunction
+    p0_init = np.append(p0_init,[np.random.normal(ebin['t01'],onesec,nw)],axis=0)
+    variables = np.append(variables,'t0')
+
+    # Period
+    if fitinfo['fit_period']:
+        p0_init = np.append(p0_init,[np.random.uniform(ebin['Period']-onesec,ebin['Period']+onesec,nw)],axis=0)
+        variables = np.append(variables,'period')
+
 
     ##############################
     # Spot Modeling (use GP)
     ##############################
-    # Star 1
-    # Quasi-Periodic Kernel for Out of Eclipse Variations
-    p0_15 = np.log(np.random.normal(0.05,0.2,nw))                                 # Amplitude for QP kernel 1
-    p0_16 = np.log(np.random.uniform(0,10,nw))                                    # Sine Amplitude for QP kernel 1
-    p0_17 = np.log(np.random.normal(ebpar['Rot1'],0.1*ebpar['Rot1'],nw))          # Period for QP kernel 1 (star rotation)
-    p0_18 = np.log(np.random.uniform(0.1,2*ebpar['Rot1'],nw))                     # Decay of QP kernel 1
-
-    # Exponential Kernel for Fraction of Spots Covered
-    p0_19 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # FSC Amplitude for E kernel 1
-    p0_20 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
-    p0_21 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
-
-    # Exponential Kernel for Base Spottedness
-    p0_22 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # BS Amplitude for E kernel 1
-    p0_23 = np.log(np.random.uniform(0.1,0.2,nw))                                 # BS Width for E kernel 1
-
-    ##############################
-    # Star 2
-    # Quasi-Periodic Kernel for Out of Eclipse Variations
-    p0_24 = np.log(np.random.normal(0.05,0.2,nw))                                 # Amplitude for QP kernel 1
-    p0_25 = np.log(np.random.uniform(0,10,nw))                                    # Sine Amplitude for QP kernel 1
-    p0_26 = np.log(np.random.normal(ebpar['Rot1'],0.1*ebpar['Rot1'],nw))          # Period for QP kernel 1 (star rotation)
-    p0_27 = np.log(np.random.uniform(0.1,2*ebpar['Rot1'],nw))                     # Decay of QP kernel 1
-
-    # Fraction of Spots Covered
-    # a + b sin(ct): a > b, a+b <= 1, c positive
-    p0_28 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # FSC Amplitude for E kernel 1
-    p0_29 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
-    p0_30 = np.log(np.random.uniform(0.1,0.2,nw))                                 # FSC Width for E kernel 1
-
-    # Base Spottedness
-    # a sin(bt): a must be restricted, b must be small
-    p0_31 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))     # BS Amplitude for E kernel 1
-    p0_32 = np.log(np.random.uniform(0.1,0.2,nw))                                 # BS Width for E kernel 1
-
-    # System velocity
-    p0_33 = np.abs(np.random.uniform(ebpar['ktot']*0.999,ebpar['ktot']*1.001,nw)) # Total radial velocity amp
-    p0_34 = np.random.uniform(ebpar['vsys']*.999,ebpar['vsys']*1.001,nw)          # System velocity   
-
-
-# L3 at 14 ... 14 and beyond + 1
-
-    p0_init = np.array([p0_0,p0_1,p0_2,p0_3,p0_4,p0_5,p0_7])
-    variables =["J","Rsum","Rratio","cosi","ecosw","esinw","t0"]
-
-    if fitinfo['fit_period']:
-        p0_init = np.append(p0_init,[p0_8],axis=0)
-        variables.append("period")
-
-    if fitinfo['fit_limb'] and fitinfo['tie_LD']:
-        sys.exit('Cannot fit for LD parameters and constrain them according to the other fit parameters!')
-
-    if fitinfo['fit_limb']:
-        limb0 = np.array([p0_9,p0_10,p0_11,p0_12])
-        lvars = ["q1a", "q2a", "q1b", "q2b"]
-        p0_init = np.append(p0_init,limb0,axis=0)
-        for var in lvars:
-            variables.append(var)
-
-    if fitinfo['fit_L3']:
-        p0_init = np.append(p0_init,[p0_14],axis=0)
-        variables.append('L3')
-
-
-    #######################################################################
-    # Spot modeling
-    #######################################################################
-
-    # Fraction of spots covered could vary from eclipse to eclipse.
-    # Need GP kernel for each star
-    # Use exponential squared kernel
-    # Params = a and l
-
-    
     if fitinfo['fit_ooe1']:
-        # Out of eclipse variations = Quasi-periodic kernel
-        # Amplitude for the out of eclipse flux
-        p0_init = np.append(p0_init,[p0_15],axis=0)
-        variables.append('OOE_Amp1')
-        # Sine amplitude, makes periodic peaks sharper for higher numbers.
-        p0_init = np.append(p0_init,[p0_16],axis=0)
-        variables.append('OOE_SineAmp1')
+        # Star 1
+        # Quasi-Periodic Kernel for Out of Eclipse Variations
+        # Amplitude for QP kernel 1: overall scale of OOE variations
+        p0_init = np.append(p0_init,[np.log(np.random.normal(0.05,0.2,nw))],axis=0)
+        variables = np.append(variables,'OOE_Amp1')
+        
+        #  Sine Amplitude for QP kernel 1: makes periodic peaks sharper for higher numbers.
+        p0_init = np.append(p0_init,[np.log(np.random.uniform(0,10,nw))],axis=0)
+        variables = np.append(variables,'OOE_SineAmp1')
+
+        # !!! Pick up from here
+
+
+        
         # Period, separation of peaks.
         p0_init = np.append(p0_init,[p0_17],axis=0)
         variables.append('OOE_Per1')
@@ -1081,6 +1045,40 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False):
         variables.append('BSAmp1')
         p0_init = np.append(p0_init,[p0_22],axis=0)
         variables.append('BSPer1')
+
+
+        p0_15 =                              
+        p0_16 =                                  #
+        p0_17 = np.log(np.random.normal(ebpar['Rot1'],0.1*ebpar['Rot1'],nw))       # Period for QP kernel 1 (star rotation)
+        p0_18 = np.log(np.random.uniform(0.1,2*ebpar['Rot1'],nw))                  # Decay of QP kernel 1
+        
+        # Exponential Kernel for Fraction of Spots Covered
+        p0_19 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))  # FSC Amplitude for E kernel 1
+        p0_20 = np.log(np.random.uniform(0.1,0.2,nw))                              # FSC Width for E kernel 1
+        p0_21 = np.log(np.random.uniform(0.1,0.2,nw))                              # FSC Width for E kernel 1
+        
+        # Exponential Kernel for Base Spottedness
+        p0_22 = np.log(np.random.uniform(ebpar['Rot1']*0.1,ebpar['Rot1']*1.1,nw))  # BS Amplitude for E kernel 1
+        p0_23 = np.log(np.random.uniform(0.1,0.2,nw))                              # BS Width for E kernel 1
+
+
+    if fitinfo['fit_ooe2']:
+        # Star 2
+        # Quasi-Periodic Kernel for Out of Eclipse Variations
+
+
+
+    #######################################################################
+    # Spot modeling
+    #######################################################################
+
+    # Fraction of spots covered could vary from eclipse to eclipse.
+    # Need GP kernel for each star
+    # Use exponential squared kernel
+    # Params = a and l
+
+    
+    if fitinfo['fit_ooe1']:
 
         
     if fitinfo['fit_ooe2']:
