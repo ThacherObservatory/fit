@@ -142,8 +142,8 @@ p0_init = np.array(p0_vec).T
 
 pos,prob,state = sampler.run_mcmc(p0_init, burnsteps)
 
-plt.figure(2)
-plt.clf()
+#plt.figure(2)
+#plt.clf()
 """
 for i in range(nwalkers):
     plt.subplot(2,2,1)
