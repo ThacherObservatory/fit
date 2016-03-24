@@ -9,7 +9,7 @@ import pdb,sys, pickle
 import numpy as np
 import matplotlib.pyplot as plt
 
-time,flux,err = np.loadtxt("10935310_ooe_model.txt",unpack=True)
+time,flux,err = np.loadtxt("10935310_ooe_real.txt",unpack=True)
 
 
 plt.ion()
@@ -19,9 +19,9 @@ plt.subplot(2,1,1)
 plt.plot(time,flux,'ko',markersize=2)
 plt.xlabel('Time (BKJD)')
 plt.ylabel('Flux (ADU)')
-
+sys.exit()
 k =  .02**2 * ExpSquaredKernel(1) * ExpSine2Kernel(4,.002)
-gp = george.GP(k,mean=np.mean(flux))
+gp = george.GP(k,mean=np.mean(flux),solver=george.HODLRSolver)
 
 def lnprob(theta,time,flux,err):
     #theta[0] = amplitude
