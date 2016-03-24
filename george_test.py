@@ -142,8 +142,8 @@ p0_init = np.array(p0_vec).T
 
 pos,prob,state = sampler.run_mcmc(p0_init, burnsteps)
 
-plt.figure(2)
-plt.clf()
+#plt.figure(2)
+#plt.clf()
 """
 for i in range(nwalkers):
     plt.subplot(2,2,1)
@@ -218,6 +218,7 @@ plt.ylabel('Residuals (ADU)')
 
 pickle.dump( sampler, open( "george_test.pkl", "wb" ) )
 sys.exit()
+sampler = pickle.load( open( "george_test.pkl", "rb" ) )
 
 #corner plot
 #samples = sampler.flatchain.reshape([-1, ndim])
