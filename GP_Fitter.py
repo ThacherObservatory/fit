@@ -9,10 +9,10 @@ import pdb,sys, pickle
 import numpy as np
 import matplotlib.pyplot as plt
 
-time,flux,err = np.loadtxt("10935310_ooe_model.txt",unpack=True)
+time,flux,err = np.loadtxt("10935310_ooe_real.txt",unpack=True)
 
+print("starting...")
 
-plt.ion()
 plt.figure(1)
 plt.clf()
 plt.subplot(2,1,1)
@@ -21,7 +21,7 @@ plt.xlabel('Time (BKJD)')
 plt.ylabel('Flux (ADU)')
 
 k =  .02**2 * ExpSquaredKernel(1) * ExpSine2Kernel(4,.002)
-gp = george.GP(k,mean=np.mean(flux))
+gp = george.GP(k,mean=np.mean(flux),solver=george.HODLRSolver)
 
 def lnprob(theta,time,flux,err):
     #theta[0] = amplitude
@@ -73,7 +73,7 @@ mcmcsteps = 100
 ndim = len(p0)
 
 # drop the MCMC hammer, yo.
-sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(time,flux,err))#,threads=3)
+sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(time,flux,err),threads=32)
 
 p0_vec = [np.abs(p0[i])+1e-3*np.random.randn(nwalkers) for i in range(ndim)]
 p0_init = np.array(p0_vec).T
@@ -115,9 +115,10 @@ plt.plot(time,flux_fit-flux,'ko')
 plt.axhline(y=0,linestyle='-',color='red',lw=3)
 plt.xlabel('Time (BKJD)')
 plt.ylabel('Residuals (ADU)')
+plt.savefig("10935310_ooe_fit.png",dpi=300)
 
 pickle.dump( sampler, open( "george_test.pkl", "wb" ) )
-sys.exit()
+#sys.exit()
 sampler = pickle.load( open( "george_test.pkl", "rb" ) )
 
 #corner plot

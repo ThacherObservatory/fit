@@ -130,12 +130,12 @@ print(gp.lnlikelihood(flux))
 p0 = gp.kernel.vector
 #p0 = p0[0:3]
 nwalkers = 20
-burnsteps = 100
-mcmcsteps = 100
+burnsteps = 1000
+mcmcsteps = 1000
 ndim = len(p0)
 
 # drop the MCMC hammer, yo.
-sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(time,flux,err))#,threads=3)
+sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(time,flux,err),threads=32)
 
 p0_vec = [np.abs(p0[i])+1e-3*np.random.randn(nwalkers) for i in range(ndim)]
 p0_init = np.array(p0_vec).T
