@@ -11,8 +11,13 @@ import matplotlib.pyplot as plt
 
 time,flux,err = np.loadtxt("10935310_ooe_real.txt",unpack=True)
 
+time = time[8000:10000]
+flux = flux[8000:10000]
+err = err[8000:10000]
+
 print("starting...")
 
+plt.ion()
 plt.figure(1)
 plt.clf()
 plt.subplot(2,1,1)
@@ -67,20 +72,22 @@ print(gp.lnlikelihood(flux))
 
 p0 = gp.kernel.vector
 
-nwalkers = 20
-burnsteps = 100
-mcmcsteps = 100
+nwalkers = 100
+burnsteps = 2000
+mcmcsteps = 2000
 ndim = len(p0)
 
 # drop the MCMC hammer, yo.
-sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(time,flux,err),threads=32)
+sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(time,flux,err))
 
 p0_vec = [np.abs(p0[i])+1e-3*np.random.randn(nwalkers) for i in range(ndim)]
 p0_init = np.array(p0_vec).T
 
+print("Starting Burn-in")
 pos,prob,state = sampler.run_mcmc(p0_init, burnsteps)
 
 sampler.reset()
+print("Starting MCMC")
 pos, prob, state = sampler.run_mcmc(pos,mcmcsteps)
 
 #plt.figure(2)
@@ -94,16 +101,22 @@ logw = np.median(sampler.flatchain[:,3])
 fit =  np.array([logamp,logg,logp,logw])
 #fit =  np.array([logamp,logg])
 gp.kernel[:] = fit
+
 print(gp.lnlikelihood(flux))
+
 
 x = np.linspace(np.min(time), np.max(time), 5000)
 gp.compute(time,4,sort=True)
 #gp.compute(time,2,sort=True)
-mu, cov = gp.predict(flux, x)
-plt.figure(1)
-plt.plot(x,mu,'r-')
+mu, cov = gp.predict(flux, time)
+#mu = gp.sample_conditional(flux, time)
 
-flux_fit, cov_fit = gp.predict(flux,time)
+
+plt.figure(1)
+plt.plot(time,mu,'r.')
+
+flux_fit, cov_fit = gp.predict(flux, time)
+
 #plt.plot(time,flux_fit,'r.-')
 
 #plt.xlim(355.7,355.8)
@@ -117,9 +130,11 @@ plt.xlabel('Time (BKJD)')
 plt.ylabel('Residuals (ADU)')
 plt.savefig("10935310_ooe_fit.png",dpi=300)
 
-pickle.dump( sampler, open( "george_test.pkl", "wb" ) )
+
+
+#pickle.dump( sampler, open( "george_test.pkl", "wb" ) )
 #sys.exit()
-sampler = pickle.load( open( "george_test.pkl", "rb" ) )
+#sampler = pickle.load( open( "george_test.pkl", "rb" ) )
 
 #corner plot
 #samples = sampler.flatchain.reshape([-1, ndim])
