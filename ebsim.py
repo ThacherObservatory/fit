@@ -1047,8 +1047,8 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False):
         variables.append('BSPer1')
 
 
-        p0_15 =                              
-        p0_16 =                                  #
+        p0_15 = 1                             
+        p0_16 = 1                                 #
         p0_17 = np.log(np.random.normal(ebpar['Rot1'],0.1*ebpar['Rot1'],nw))       # Period for QP kernel 1 (star rotation)
         p0_18 = np.log(np.random.uniform(0.1,2*ebpar['Rot1'],nw))                  # Decay of QP kernel 1
         
@@ -1065,7 +1065,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False):
     if fitinfo['fit_ooe2']:
         # Star 2
         # Quasi-Periodic Kernel for Out of Eclipse Variations
-
+        pass
 
 
     #######################################################################
@@ -1079,7 +1079,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False):
 
     
     if fitinfo['fit_ooe1']:
-
+        pass
         
     if fitinfo['fit_ooe2']:
         pass
@@ -2314,6 +2314,11 @@ def make_model_data_orig(m1=None,m2=None,                        # Stellar masse
                          short=False,long=False,                 # Short or long cadence TESS data
                          obsdur=27.4,int=120.0,                  # Duration of obs, and int time
                          durfac=2.0,                             # Amount of data to keep around eclipses
+                         tRV=None,RVnoise=1.0,RVsamples=100,     # RV noise and sampling
+                         lighttravel=True,                       # Roemer delay
+                         gravdark=False,reflection=False,        # Higher order effects
+                         ellipsoidal=False,                      # Ellipsoidal variations (caution!)
+                         tideang=False,                          # Tidal angle (deg)
                          spotamp1=None,spotP1=0.0,P1double=False,# Spot amplitude and period frac for star 1
                          spotfrac1=0.0,spotbase1=0.0,            # Fraction of spots eclipsed, and base
                          spotamp2=None,spotP2=0.0,P2double=False,# Spot amplitude and period frac for star 2

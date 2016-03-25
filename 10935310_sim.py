@@ -21,13 +21,13 @@ l2 = 4*np.pi*r2**2*c.sb*T2**4
 J  = l2/l1
 network = 'swift'
 
-obsdur = 130.0
+obsdur = 90.0
 int = 1800.0
 
 # Adjust this so that the out of eclipse light variations are 2% peak to peak
 spotamp1 = 0.13
 # From Swift AC analysis
-spotP1 = 3.9*86400/period
+spotP1 = np.pi*86400/period
 # Just a guess, could be anything
 spotfrac1 = 0.75
 spotbase1 = 0.0
@@ -38,10 +38,10 @@ P1double = 0.8
 P2double = False
 
 
-ebpar,data = ebs.make_model_data(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2/c.Rsun,
+ebpar,data = ebs.make_model_data_orig(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2/c.Rsun,
                                  impact=impact, period=period/86400.0, t0=t0, L3=0.0,
                                  vsys=vsys, photnoise=photnoise, RVnoise=RVnoise,
-                                 RVsamples=RVsamples, obsdur=obsdur, int=int, durfac=5.0,
+                                 RVsamples=RVsamples, obsdur=obsdur, int=int, durfac=10.0,
                                  spotamp1=spotamp1, spotP1=spotP1, spotfrac1=spotfrac1,
                                  spotbase1=spotbase1, network=network, J=J,
                                  l1=l1/c.Lsun, l2=l2/c.Lsun,

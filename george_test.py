@@ -13,6 +13,9 @@ star = client.star(10935310)
 #star = client.star(4175707)
 #star = client.star(11913210)
 
+t0 = 2454957.32211 - 2454833.0
+period =4.1287977964 
+
 print('Get LCs...')
 lcs = star.get_light_curves(fetch=True)
 
@@ -33,12 +36,9 @@ for lc in lcs:
     errs =  np.append(errs,e)
 
 
-t0 = 2454957.32211 - 2454833.0
-period =4.1287977964 
-#phase = (times - t0) % period
 # Use quasi-periodic kernel -- follow example
 f = (np.isfinite(times)) & (np.isfinite(fluxes)) & (np.isfinite(errs))
-i = np.where((times[f] > 540) & (times[f] < 570))
+i = np.where((times[f] > 540) & (times[f] < 620))
 #i = np.where((times[f] > 353) & (times[f] < 360))
 #i = np.where((times[f] > 292) & (times[f] < 300))
 time = times[f][i] ; flux = fluxes[f][i] ; err = errs[f][i]
