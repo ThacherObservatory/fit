@@ -11,9 +11,9 @@ import matplotlib.pyplot as plt
 
 time,flux,err = np.loadtxt("10935310_ooe_real.txt",unpack=True)
 
-time = time[8000:10000]
-flux = flux[8000:10000]
-err = err[8000:10000]
+time = time[9000:10000]
+flux = flux[9000:10000]
+err = err[9000:10000]
 
 print("starting...")
 
@@ -25,8 +25,10 @@ plt.plot(time,flux,'ko',markersize=2)
 plt.xlabel('Time (BKJD)')
 plt.ylabel('Flux (ADU)')
 
-k =  .02**2 * ExpSquaredKernel(1) * ExpSine2Kernel(4,.002)
-gp = george.GP(k,mean=np.mean(flux),solver=george.HODLRSolver)
+k1 =  .02**2 * ExpSquaredKernel(1) * ExpSine2Kernel(4,.002)
+k2 =  .02**2 * ExpSquaredKernel(1) * ExpSine2Kernel(4,.002)
+k = k1 + k2
+gp = george.GP(k1,mean=np.mean(flux),solver=george.HODLRSolver)
 
 def lnprob(theta,time,flux,err):
     #theta[0] = amplitude
