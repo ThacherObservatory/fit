@@ -61,8 +61,8 @@ def lnprob(theta,time,flux,err):
     # I was experimenting with holding some parameters constant.
     gp.kernel[:] = np.array([theta[0],theta[1],theta[2],theta[3]])
 
-#    if np.exp(theta[0]) < 5.0  or np.exp(theta[0]) > 50.0:
-#        return -np.inf
+    if np.exp(theta[0]) < 0.0  or np.exp(theta[0]) > 1000.0:
+        return -np.inf
 #    if np.exp(theta[1]) < 0.01  or np.exp(theta[1]) > 5:
 #        return -np.inf
 #    if np.exp(theta[2]) < 2 or np.exp(theta[2]) > 7:
@@ -87,7 +87,7 @@ print(gp.lnlikelihood(flux))
 
 #Initialize the MCMC Hammer
 p0 = gp.kernel.vector
-nwalkers = 50
+nwalkers = 20
 burnsteps = 100
 mcmcsteps = 100
 ndim = len(p0)
@@ -98,6 +98,14 @@ p0_init = np.array(p0_vec).T
 #Drop the MCMC Hammer
 sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(time,flux,err))
 print("Starting Burn-in")
+
+# Put in progress bar for emcee!
+
+#for i, (pos, prob, state) in enumerate(sampler.run_mcmc(p0_init, burnsteps)):
+#    if (i+1) % 1 == 0:
+#        print("{0:.1f}%".format(100 * float(i) / burnsteps))
+#sys.exit()
+
 pos,prob,state = sampler.run_mcmc(p0_init, burnsteps)
 
 #Pick up the MCMC Hammer
