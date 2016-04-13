@@ -27,6 +27,7 @@ def look(theta=[0.1,1,0.01,4],plot=False,verbose=False):
         plt.xlabel('Time (BKJD)')
         plt.ylabel('Flux (ADU)')
 
+
     # Choose starting values for kernel
     k = theta[0]**2 * ExpSquaredKernel(theta[1]) * ExpSine2Kernel(theta[2],theta[3])
     #gp = george.GP(k,mean=np.mean(flux),solver=george.HODLRSolver)
@@ -35,7 +36,12 @@ def look(theta=[0.1,1,0.01,4],plot=False,verbose=False):
     # Predict data
     gp.compute(time,yerr=err,sort=True)
     flux_fit, cov_fit = gp.predict(flux, time)
-    plt.plot(time,flux_fit,'c.')
+
+    if plot:
+        tsamp = np.linspace(np.min(time),np.max(time),10000)
+        fsamp,cov_samp = gp.predict(flux,tsamp)
+        plt.plot(time,flux_fit,'c.')
+        plt.plot(tsamp,fsamp,'.',color='purple')
 
     # Plot the predicted values
     if plot:

@@ -23,8 +23,6 @@ plt.figure(1)
 
 def test_params(amp=False,exp=False,gamma=False,period=False):
 
- 
-
     if amp:
         ampvec   = np.array([0.01,0.1,1,10,100,1000])
         vec = ampvec
@@ -62,10 +60,13 @@ def test_params(amp=False,exp=False,gamma=False,period=False):
         plt.ylabel('Flux (Normalized)')
 
         #plot gp prediction
-        gp.compute(time,yerr=err,sort=True)
+        gp.compute(time,yerr=err,sort=True)        
         flux_fit, cov_fit = gp.predict(flux, time)
         plt.plot(time,flux_fit,'c.')
-
+        t = np.linspace(np.min(time),np.max(time),10000)
+        f_f, c_f = gp.predict(flux,t)
+        plt.plot(t,f_f,'r.')
+        
         plt.subplot(2,1,2)
         plt.plot(time,flux-flux_fit,'ko')
         plt.axhline(y=0,linestyle='-',color='red',lw=3)
@@ -87,8 +88,8 @@ def test_params(amp=False,exp=False,gamma=False,period=False):
             plt.savefig('Period='+str(pvec[i])+'.png',dpi=150)
     return
 
-test_params(gamma=True)
-sys.exit()
+#test_params(gamma=True)
+#sys.exit()
 
 # Notes:
 ##############################
@@ -101,7 +102,7 @@ sys.exit()
 # 1-100
 
 # Gamma:
-# Width of each semi-periodic peak
+# Width of each semi-periodic peak. Can't be too big, else will over fit noise.
 # 
 
 # Period:
@@ -123,7 +124,7 @@ plt.ylabel('Flux (ADU)')
 # make the amplitude of the semi-periodic kernel semi-periodic.
 #note: gp.kernel.vector has length 8
 # I haven't tested it yet. Note, I'm only using k1 for now.
-k1 = 1**2 * ExpSquaredKernel(0.1) * ExpSine2Kernel(0.01,4)
+k1 = 0.1**2 * ExpSquaredKernel(5) * ExpSine2Kernel(1,4)
 k2 = 0.01**2 * ExpSquaredKernel(0.5) * ExpSine2Kernel(2,.001)
 k = k1 + k2
 #gp = george.GP(k1,mean=np.mean(flux))
@@ -158,6 +159,9 @@ def lnprob(theta,time,flux,err):
 #    gp.kernel[:] = np.array([theta[0],theta[1],theta[2],theta[3]])
     gp.kernel[:] = theta #np.arrinstallay([theta[0],theta[1],theta[2],theta[3]])
 
+    pprior =  (np.exp(theta[3]) - 3.99)**2/(2*0.2**2)
+
+
 #    if np.exp(theta[0]/2) < 10.0  or np.exp(theta[0]/2) > 1000.0:
 #        return -np.inf
 #    if np.exp(theta[1]) < 1  or np.exp(theta[1]) > 100:
@@ -177,7 +181,7 @@ def lnprob(theta,time,flux,err):
     
 #    flux_fit, cov_fit = gp.predict(flux, time)
 #    print  -np.sum((flux_fit-flux)**2/(2.0*err**2)) # - (np.exp(theta[3]) - 3.99)**2/(2*0.2**2))
-    loglike = -gp.lnlikelihood(flux, quiet=True) # - (np.exp(theta[3]) - 3.99)**2/(2*0.2**2)
+    loglike = -gp.lnlikelihood(flux, quiet=True) - pprior
 
     return loglike
   
@@ -221,7 +225,7 @@ gamma = np.exp(sampler.flatchain[maxind,2])
 period = np.exp(sampler.flatchain[maxind,3])
 
 
-#apply median values to GP
+#apply maximum likelihood values to GP
 fit =  np.array( [sampler.flatchain[maxind,i] for i in range(len(p0))] )
 gp.kernel[:] = fit
 gp.compute(time,yerr=err,sort=True)
@@ -245,9 +249,11 @@ plt.plot(time,flux_fit-flux,'ko')
 plt.axhline(y=0,linestyle='-',color='red',lw=3)
 plt.xlabel('Time (BKJD)')
 plt.ylabel('Residuals (ADU)')
-#plt.savefig("10935310_ooe_fit.png",dpi=300)
+plt.savefig("10935310_ooe_fit.png",dpi=300)
 
 #generate corner plot of gp parameters
+plt.figure(3)
+plt.clf()
 samples = sampler.chain.reshape((-1, ndim))
 figure = corner.corner(samples, labels=["$T_1$","$T_2$","$T_3$","$T_4$"])
 figure.savefig("gp_test_corner.png",dpi=300)
