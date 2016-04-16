@@ -38,10 +38,10 @@ def look(theta=[0.1,1,0.01,4],plot=False,verbose=False):
     flux_fit, cov_fit = gp.predict(flux, time)
 
     if plot:
-        tsamp = np.linspace(np.min(time),np.max(time),10000)
-        fsamp,cov_samp = gp.predict(flux,tsamp)
+ #       tsamp = np.linspace(np.min(time),np.max(time),10000)
+ #       fsamp,cov_samp = gp.predict(flux,tsamp)
         plt.plot(time,flux_fit,'c.')
-        plt.plot(tsamp,fsamp,'.',color='purple')
+#        plt.plot(tsamp,fsamp,'.',color='purple')
 
     # Plot the predicted values
     if plot:
@@ -52,14 +52,14 @@ def look(theta=[0.1,1,0.01,4],plot=False,verbose=False):
         plt.ylabel('Residuals (ADU)')
 
     # Compute log likelihood and compare to interal computation
-    loglike1 = np.sum((flux_fit-flux)**2/(2*err**2))# + 0.5*np.log(2*np.pi*err**2))
+    loglike1 = 1 #np.sum((flux_fit-flux)**2/(2*err**2))# + 0.5*np.log(2*np.pi*err**2))
     loglike2 = gp.lnlikelihood(flux, quiet=True) 
 
     if verbose:
         print 'Why does this lnlikelihood: %.3f, ...' % loglike1
         print '... not equal this lnlikelihood: %.3f' % loglike2
 
-    return loglike1,loglike2
+    return loglike2
 
 
 def compare():
