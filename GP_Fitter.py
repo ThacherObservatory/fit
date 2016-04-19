@@ -102,7 +102,9 @@ def test_params(amp=False,exp=False,gamma=False,period=False):
 # 1-100
 
 # Gamma:
-# Width of each semi-periodic peak. Can't be too big, else will over fit noise.
+# Width of each semi-periodic peak (c3 = 1/(2 sig^2))
+# Can't be too big, else will over fit noise.
+# Limit width to be biggger than  ~2 data points (approx 50)
 # 
 
 # Period:
@@ -124,11 +126,11 @@ plt.ylabel('Flux (ADU)')
 # make the amplitude of the semi-periodic kernel semi-periodic.
 #note: gp.kernel.vector has length 8
 # I haven't tested it yet. Note, I'm only using k1 for now.
-k1 = 0.1**2 * ExpSquaredKernel(5) * ExpSine2Kernel(1,4)
-k2 = 0.01**2 * ExpSquaredKernel(0.5) * ExpSine2Kernel(2,.001)
-k = k1 + k2
+k = 0.1**2 * ExpSquaredKernel(5) * ExpSine2Kernel(1,3.99)
+#k2 = 0.01**2 * ExpSquaredKernel(0.5) * ExpSine2Kernel(2,.001)
+#k = k1 + k2
 #gp = george.GP(k1,mean=np.mean(flux))
-gp = george.GP(k1,mean=np.mean(flux),solver=george.HODLRSolver)
+gp = george.GP(k,mean=np.mean(flux),solver=george.HODLRSolver)
 print(gp.kernel.vector)
 
 gp.compute(time,yerr=err,sort=True)
