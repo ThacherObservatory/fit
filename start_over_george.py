@@ -50,6 +50,7 @@ def look(theta=[0.1,1,0.01,4],plot=False,verbose=False):
         plt.axhline(y=0,linestyle='-',color='red',lw=3)
         plt.xlabel('Time (BKJD)')
         plt.ylabel('Residuals (ADU)')
+        plt.savefig(str(theta) + "_plot.png")
 
     # Compute log likelihood and compare to interal computation
     loglike1 = 1 #np.sum((flux_fit-flux)**2/(2*err**2))# + 0.5*np.log(2*np.pi*err**2))
@@ -88,3 +89,43 @@ def compare():
 
     return
 
+def grid_search_lnlike():
+    """performs a grid search of lnlike space and plot"""
+    
+    #values to gridsearch
+    t1s = np.logspace(np.log10(.001),np.log10(1),8)
+    t2s = np.logspace(np.log10(30),np.log10(100),8)
+    t3s = np.logspace(np.log10(.01),np.log10(1),8)
+    
+    #estimates for 'good' values to use for testing
+    t1 = .01
+    t2 = 47
+    t3 = .02
+    t4 = 3.99
+    
+    t1likes = []
+    t2likes = []
+    t3likes = []
+
+    for n in t1s:
+        theta = [n,t2,t3,t4]
+        t1likes.append(look(theta,plot=True))
+        
+    for n in t2s:
+        theta = [t1,n,t3,t4]
+        t2likes.append(look(theta,plot=True))
+        
+    for n in t3s:
+        theta = [t1,t2,n,t4]
+        t3likes.append(look(theta,plot=True))
+        
+    plt.clf()
+    plt.figure(1)
+    plt.plot(t1s, t1likes,'-o')
+    plt.xscale('log')
+    plt.figure(2)
+    plt.plot(t2s, t2likes,'-o')
+    plt.xscale('log')
+    plt.figure(3)
+    plt.plot(t3s, t3likes,'-o')
+    plt.xscale('log')
