@@ -35,7 +35,7 @@ err = err[8000:8800]
 
 
 # Define kernel 
-k = 0.01**2 * ExpSquaredKernel(40.0) * ExpSine2Kernel(0.02,3.99)
+k = 0.01**2 * ExpSquaredKernel(10.0) * ExpSine2Kernel(20.0,3.99)
 gp = george.GP(k,mean=np.mean(flux),solver=george.HODLRSolver)
 
 gp.compute(time,yerr=err,sort=True)
@@ -61,6 +61,7 @@ plt.axhline(y=0,linestyle='-',color='red',lw=3)
 plt.xlabel('Time (BKJD)')
 plt.ylabel('Residuals (ADU)')
 ##############################
+plt.savefig('Initial_fit.png',dpi=300)
 
 tmodel = np.linspace(time[0],time[30],300)
 flux_model, cov_model = gp.predict(flux, tmodel)
@@ -72,6 +73,8 @@ plt.xlabel('Time (BKJD)')
 plt.ylabel('Flux (ADU)')
 plt.plot(tmodel,flux_model,'r-')
 ##############################
+
+plt.savefig('Initial_zoom.png',dpi=300)
 
 
 
@@ -91,24 +94,27 @@ def lnprob(theta,time,flux,err):
     gp.kernel[:] = theta 
 
     # We know the period is 3.99 from autocorrelation function
-    pprior =  -1.0*(theta[3]-3.99)**2/(2.0*0.2**2)
-
+    pprior =  -1.0*(np.exp(theta[3])-3.99)**4/(2.0*0.2**4)
+    
     # To prevent overfitting of data, Gamma should be smaller than about 
     # 50 (or 5 data points)
-    if np.exp(theta[2]) > 50:
-        gprior = -1.0*(theta[2]-50)**2/(2.0*1.0**2)
+    if np.exp(theta[2]) > 45:
+        gprior = -1.0*(np.exp(theta[2])-45.0)**4/(2.0*1.0**4)
     else:
-        gprior = 0
+        gprior = 0.0
 
-#    if np.exp(theta[0]/2.0) < 0.001  or np.exp(theta[0]/2.0) > 100.0:
+    # Do not allow the "envelope" to be smaller than the variance of each peak
+    if np.exp(theta[1]) < 1.0/(2*np.exp(theta[2])**2):
+        return -np.inf
+
+    # Don't let taper get smaller than about 4 (period)
+    if np.exp(theta[1]) < 4:
+        tprior = -1.0*(np.exp(theta[1])-4)**2/(2.0*0.1**2)
+    else:
+        tprior = 0.0
+
+#    if np.exp(theta[0]/2.0) < 0.0001  or np.exp(theta[0]/2.0) > 100.0:
 #        return -np.inf
-
-#    if np.exp(theta[1]) < 1  or np.exp(theta[1]) > 100:
-#        return -np.inf
-
-#    if np.exp(theta[2]) < 1 or np.exp(theta[2]) > 50:
-#        return -np.inf
-
 
     try:
         gp.compute(time,yerr=err,sort=True)
@@ -116,7 +122,7 @@ def lnprob(theta,time,flux,err):
         print 'Oh, no!'
         return -np.inf
     
-    loglike = gp.lnlikelihood(flux, quiet=True) + pprior + gprior
+    loglike = gp.lnlikelihood(flux, quiet=True) + pprior + gprior + tprior
 
     return loglike
   
@@ -126,16 +132,16 @@ print 'Max ln prob before fitting = %f.5' % gp.lnlikelihood(flux)
 
 # Initialize the MCMC Hammer
 p0 = gp.kernel.vector
-nwalkers = 50
-burnsteps = 500
-mcmcsteps = 500
+nwalkers = 20
+burnsteps = 2000
+mcmcsteps = 2000
 ndim = len(p0)
 p0_vec = [p0[i]+1e-2*np.random.randn(nwalkers) for i in range(ndim)]
 p0_init = np.array(p0_vec).T
 
 
 # Drop the MCMC Hammer
-sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(time,flux,err))
+sampler = emcee.EnsembleSampler(nwalkers, ndim, lnprob, args=(time,flux,err), threads=3)
 print("Starting Burn-in")
 
 pos,prob,state = sampler.run_mcmc(p0_init, burnsteps)
@@ -160,32 +166,34 @@ gamma = np.exp(sampler.flatchain[maxind,2])
 period = np.exp(sampler.flatchain[maxind,3])
 
 # Apply maximum likelihood values to GP
-fit =  np.array( [sampler.flatchain[maxind,i] for i in range(len(p0))] )
-gp.kernel[:] = fit
+k = amp**2 * ExpSquaredKernel(expsq) * ExpSine2Kernel(gamma,period)
+gp = george.GP(k,mean=np.mean(flux),solver=george.HODLRSolver)
+
 gp.compute(time,yerr=err,sort=True)
-flux_fit, cov_fit = gp.predict(flux, time)
+flux_final, cov_final = gp.predict(flux, time)
+
 
 # Plot GP prediction
 plt.figure(3)
 plt.clf()
 plt.subplot(2,1,1)
 plt.plot(time,flux,'k.')
-plt.plot(time,flux_fit,'c.')
+plt.plot(time,flux_final,'c.')
 
 #plot residuals
 plt.subplot(2,1,2)
-plt.plot(time,flux_fit-flux,'ko')
+plt.plot(time,flux_final-flux,'ko')
 plt.axhline(y=0,linestyle='-',color='red',lw=3)
 plt.xlabel('Time (BKJD)')
 plt.ylabel('Residuals (ADU)')
-#plt.savefig("10935310_ooe_fit.png",dpi=300)
+plt.savefig("Final_fit.png",dpi=300)
 
 # Generate corner plot of gp parameters
-plt.figure(4)
-plt.clf()
 samples = sampler.chain.reshape((-1, ndim))
-figure = corner.corner(samples, labels=["$T_1$","$T_2$","$T_3$","$T_4$"])
-#figure.savefig("gp_test_corner.png",dpi=300)
+samples[:,0] = np.exp(samples[:,0]/2)
+samples[:,1:] = np.exp(samples[:,1:])
+figure = corner.corner(samples, labels=["Amplitude","Envelope Variance","Inverse Peak Variance","Period (days)"])
+figure.savefig("Final_corner.png",dpi=300)
 
 tmodel = np.linspace(time[0],time[30],300)
 flux_model, cov_model = gp.predict(flux, tmodel)
@@ -195,4 +203,5 @@ plt.plot(time[0:30],flux[0:30],'ko',markersize=5)
 plt.xlabel('Time (BKJD)')
 plt.ylabel('Flux (ADU)')
 plt.plot(tmodel,flux_model,'r-')
+plt.savefig('Final_zoom.png',dpi=300)
 #
