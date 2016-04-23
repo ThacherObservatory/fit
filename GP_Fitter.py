@@ -134,7 +134,8 @@ for i in range(len(a)):
     plt.ylabel('Residuals (ADU)')
     ##############################
     plt.savefig(dir[i]+'/Initial_fit.png',dpi=300)
-    
+
+    pdb.set_trace()
     tmodel = np.linspace(time[a1[i]],time[b1[i]],300)
     flux_model, cov_model = gp.predict(flux, tmodel)
 
@@ -223,7 +224,7 @@ for i in range(len(a)):
     samples[:,1:] = np.exp(samples[:,1:])
     figure = corner.corner(samples, labels=["Amplitude","Envelope Variance","Inverse Peak Variance","Period (days)"])
     figure.savefig(dir[i]+"/Final_corner.png",dpi=300)
-    
+
     tmodel = np.linspace(time[a1[i]],time[b1[i]],300)
     flux_model, cov_model = gp.predict(flux, tmodel)
     plt.figure(5)
