@@ -7,9 +7,18 @@ import time as tm
 
 time,flux,err = np.loadtxt("10935310_ooe_real.txt",unpack=True)
 
-time = time[8000:8800]
-flux = flux[8000:8800]
-err = err[8000:8800]
+s = np.argsort(time)
+time = time[s] ; flux=flux[s] ; err=err[s]
+
+a = 4697
+b = 18207
+
+a1 = 20
+b1 = 51
+
+time = time[a:b]
+flux = flux[a:b]
+err = err[a:b]
 
 # Notes:
 ##############################
@@ -35,8 +44,10 @@ err = err[8000:8800]
 
 
 # Define kernel 
-k = 0.01**2 * ExpSquaredKernel(10.0) * ExpSine2Kernel(20.0,3.99)
-gp = george.GP(k,mean=np.mean(flux),solver=george.HODLRSolver)
+# Quasi periodic variations
+k1 = 0.01**2 * ExpSquaredKernel(10.0) * ExpSine2Kernel(20.0,3.99)
+# "base spottedness": long period trend of unknown shape
+gp = george.GP(k1,mean=np.mean(flux),solver=george.HODLRSolver)
 
 gp.compute(time,yerr=err,sort=True)
 flux_fit, cov_fit = gp.predict(flux, time)
@@ -52,7 +63,6 @@ plt.plot(time,flux,'ko',markersize=5)
 plt.xlabel('Time (BKJD)')
 plt.ylabel('Flux (ADU)')
 plt.figure(1)
-plt.subplot(2,1,1)
 plt.plot(time,flux_fit,'c.')
 
 plt.subplot(2,1,2)
@@ -68,7 +78,7 @@ flux_model, cov_model = gp.predict(flux, tmodel)
 
 plt.figure(2)
 plt.clf()
-plt.plot(time[0:30],flux[0:30],'ko',markersize=5)
+plt.plot(time[a1:b1],flux[a1:b1],'ko',markersize=5)
 plt.xlabel('Time (BKJD)')
 plt.ylabel('Flux (ADU)')
 plt.plot(tmodel,flux_model,'r-')
@@ -133,8 +143,8 @@ print 'Max ln prob before fitting = %f.5' % gp.lnlikelihood(flux)
 # Initialize the MCMC Hammer
 p0 = gp.kernel.vector
 nwalkers = 20
-burnsteps = 2000
-mcmcsteps = 2000
+burnsteps = 200
+mcmcsteps = 200
 ndim = len(p0)
 p0_vec = [p0[i]+1e-2*np.random.randn(nwalkers) for i in range(ndim)]
 p0_init = np.array(p0_vec).T
@@ -199,7 +209,7 @@ tmodel = np.linspace(time[0],time[30],300)
 flux_model, cov_model = gp.predict(flux, tmodel)
 plt.figure(5)
 plt.clf()
-plt.plot(time[0:30],flux[0:30],'ko',markersize=5)
+plt.plot(time[a1:b1],flux[a1:b1],'ko',markersize=5)
 plt.xlabel('Time (BKJD)')
 plt.ylabel('Flux (ADU)')
 plt.plot(tmodel,flux_model,'r-')
