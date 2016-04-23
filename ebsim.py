@@ -1033,6 +1033,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 
         # Fraction of spots covered
         # Model as a sine wave of unknown (and unconstrainable?) period
+        # !!! Model with GP Kernel? !!!
         # Offset in sine wave
         p0_init = np.append(p0_init,[np.random.normal(0.5,0.01,nw)],axis=0)
         variables.append('FSCOff1')
