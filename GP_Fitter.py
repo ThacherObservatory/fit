@@ -160,7 +160,7 @@ for i in range(len(a)):
     burnsteps = 200
     mcmcsteps = 200
     ndim = len(p0)
-    p0_vec = [p0[i]+1e-2*np.random.randn(nwalkers) for i in range(ndim)]
+    p0_vec = [p0[j]+1e-2*np.random.randn(nwalkers) for j in range(ndim)]
     p0_init = np.array(p0_vec).T
     
     print done_in(tmaster)
