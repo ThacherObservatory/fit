@@ -224,11 +224,11 @@ for i in range(len(a)):
     figure = corner.corner(samples, labels=["Amplitude","Envelope Variance","Inverse Peak Variance","Period (days)"])
     figure.savefig(dir[i]+"/Final_corner.png",dpi=300)
     
-    tmodel = np.linspace(time[a1],time[b1],300)
+    tmodel = np.linspace(time[a1[i]],time[b1[i]],300)
     flux_model, cov_model = gp.predict(flux, tmodel)
     plt.figure(5)
     plt.clf()
-    plt.plot(time[a1:b1],flux[a1:b1],'ko',markersize=5)
+    plt.plot(time[a1[i]:b1[i]],flux[a1[i]:b1[i]],'ko',markersize=5)
     plt.xlabel('Time (BKJD)')
     plt.ylabel('Flux (ADU)')
     plt.plot(tmodel,flux_model,'r-')
