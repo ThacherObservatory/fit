@@ -158,8 +158,8 @@ for i in range(len(a)):
     # Initialize the MCMC Hammer
     p0 = gp.kernel.vector
     nwalkers = 20
-    burnsteps = 200
-    mcmcsteps = 200
+    burnsteps = 1000
+    mcmcsteps = 1000
     ndim = len(p0)
     p0_vec = [p0[j]+1e-2*np.random.randn(nwalkers) for j in range(ndim)]
     p0_init = np.array(p0_vec).T
