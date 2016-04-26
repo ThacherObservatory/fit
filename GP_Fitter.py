@@ -11,7 +11,7 @@ tmaster = tm.time()
 time,flux,err = np.loadtxt("10935310_ooe_real.txt",unpack=True)
 
 s = np.argsort(time)
-time = time[s] ; flux=flux[s] ; err=err[s]
+time0 = time[s] ; flux0=flux[s] ; err0=err[s]
 
 
 a = np.array([4697,8785,13443])
@@ -79,9 +79,9 @@ def lnprob(theta,time,flux,err):
 
 for i in range(len(a)):
 
-    time = time[a[i]:b[i]]
-    flux = flux[a[i]:b[i]]
-    err = err[a[i]:b[i]]
+    time = time0[a[i]:b[i]]
+    flux = flux0[a[i]:b[i]]
+    err = err0[a[i]:b[i]]
     
     # Notes:
     ##############################
@@ -135,7 +135,6 @@ for i in range(len(a)):
     ##############################
     plt.savefig(dir[i]+'/Initial_fit.png',dpi=300)
 
-    pdb.set_trace()
     tmodel = np.linspace(time[a1[i]],time[b1[i]],300)
     flux_model, cov_model = gp.predict(flux, tmodel)
 
