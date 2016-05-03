@@ -78,6 +78,7 @@ def lnprob(theta,time,flux,err):
 
 
 for i in range(len(a)):
+    print("starting interval " +str(i+1))
 
     time = time0[a[i]:b[i]]
     flux = flux0[a[i]:b[i]]
@@ -156,9 +157,9 @@ for i in range(len(a)):
 
     # Initialize the MCMC Hammer
     p0 = gp.kernel.vector
-    nwalkers = 20
-    burnsteps = 1000
-    mcmcsteps = 1000
+    nwalkers = 10
+    burnsteps = 50
+    mcmcsteps = 50
     ndim = len(p0)
     p0_vec = [p0[j]+1e-2*np.random.randn(nwalkers) for j in range(ndim)]
     p0_init = np.array(p0_vec).T

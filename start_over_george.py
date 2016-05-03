@@ -93,9 +93,9 @@ def grid_search_lnlike():
     """performs a grid search of lnlike space and plot"""
     
     #values to gridsearch
-    t1s = np.logspace(np.log10(.001),np.log10(1),8)
-    t2s = np.logspace(np.log10(30),np.log10(100),8)
-    t3s = np.logspace(np.log10(.01),np.log10(1),8)
+    t1s = np.logspace(np.log10(.0001),np.log10(1000),10)
+    t2s = np.logspace(np.log10(1),np.log10(150),10)
+    t3s = np.logspace(np.log10(.01),np.log10(100),10)
     
     #estimates for 'good' values to use for testing
     t1 = .01
