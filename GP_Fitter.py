@@ -14,8 +14,8 @@ s = np.argsort(time)
 time0 = time[s] ; flux0=flux[s] ; err0=err[s]
 
 
-a = np.array([4697,8785,13443])
-b = np.array([8784,13442,18026])
+a = np.array([4697,6918,9139,11360,13581,15802])
+b = np.array([6918,9139,11360,13581,15802,18026])
 
 a1 = np.array([0,21,0])
 b1 = np.array([31,50,35])
@@ -78,6 +78,7 @@ def lnprob(theta,time,flux,err):
 
 
 for i in range(len(a)):
+    print("starting interval " +str(i+1))
 
     time = time0[a[i]:b[i]]
     flux = flux0[a[i]:b[i]]
@@ -134,7 +135,7 @@ for i in range(len(a)):
     plt.ylabel('Residuals (ADU)')
     ##############################
     plt.savefig(dir[i]+'/Initial_fit.png',dpi=300)
-
+    """
     tmodel = np.linspace(time[a1[i]],time[b1[i]],300)
     flux_model, cov_model = gp.predict(flux, tmodel)
 
@@ -148,7 +149,7 @@ for i in range(len(a)):
     
     plt.savefig(dir[i]+'/Initial_zoom.png',dpi=300)
     
-
+    """
   
     # Display initial log probability before MCMC  
     gp.compute(time,yerr=err,sort=True)
@@ -156,9 +157,9 @@ for i in range(len(a)):
 
     # Initialize the MCMC Hammer
     p0 = gp.kernel.vector
-    nwalkers = 20
-    burnsteps = 1000
-    mcmcsteps = 1000
+    nwalkers = 10
+    burnsteps = 50
+    mcmcsteps = 50
     ndim = len(p0)
     p0_vec = [p0[j]+1e-2*np.random.randn(nwalkers) for j in range(ndim)]
     p0_init = np.array(p0_vec).T
@@ -223,7 +224,7 @@ for i in range(len(a)):
     samples[:,1:] = np.exp(samples[:,1:])
     figure = corner.corner(samples, labels=["Amplitude","Envelope Variance","Inverse Peak Variance","Period (days)"])
     figure.savefig(dir[i]+"/Final_corner.png",dpi=300)
-
+    """
     tmodel = np.linspace(time[a1[i]],time[b1[i]],300)
     flux_model, cov_model = gp.predict(flux, tmodel)
     plt.figure(5)
@@ -233,7 +234,7 @@ for i in range(len(a)):
     plt.ylabel('Flux (ADU)')
     plt.plot(tmodel,flux_model,'r-')
     plt.savefig(dir[i]+'/Final_zoom.png',dpi=300)
-    #
+    """
     print done_in(tmaster)
     print ''
     print ''
