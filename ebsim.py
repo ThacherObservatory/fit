@@ -1,7 +1,8 @@
 # TO DO:
 #-------
 # Compute limb darkening for multiple bands
-# Realistic surface brightness ratio given main sequence radius and band (see MS_COLORS.csv)
+# Realistic surface brightness ratio given main sequence radius and band
+# (see MS_COLORS.csv)
 
 # In process
 # Update make_model_data to be able to produce multiple photometry datasets
@@ -170,7 +171,7 @@ def ebinput(m1=None,m2=None,                        # Stellar masses
             'Mratio':massratio, 'ecosw':ecosw0, 'esinw':esinw0,
             'Period':period, 't01':t0, 't02':None, 'dt12':None,
             'tdur1':None, 'tdur2':None,'bjd':bjd,
-            'Mstar1':m1, 'Mstar2':m2, 'vsys':vsys, 'ktot':ktot,
+            'Mstar1':m1, 'Mstar2':m2, 'Vsys':vsys, 'Ktot':ktot,
             'Rstar1':r1, 'Rstar2':r2,'cosi':np.cos(inc), 'sma': sma,
             'Rot1':Prot1, 'Rot2':Prot2,
             'Teff1':Teff1, 'Teff2':Teff2}
@@ -379,7 +380,7 @@ def make_phot_data(ebin,
     integration = int
     bjd = ebin['bjd']
 
-    ktot = ebin['ktot']
+    ktot = ebin['Ktot']
     
     if lighttravel:
         # double check that the units work out for this
@@ -424,8 +425,8 @@ def make_phot_data(ebin,
              'L3': L3,                                 # third light
              'phi0': 0.0,                              # phase of inf. conj. (i think!)
              't0': 0.0, # t0 will be added in later    # epoch of inf. conj. (if phi0=0)
-             'period': ebin['Period'],                 # period of binary
-             'magoff':0.0,                             # magnitude zeropoint (if using mags)
+             'Period': ebin['Period'],                 # period of binary
+             'Magoff':0.0,                             # magnitude zeropoint (if using mags)
              'Rot1': spotP1,                           # rotation parameter (frac. of period)
              'spFrac1': spotfrac1,                     # fraction of spots covered (prim. eclipse)
              'spBase1': spotbase1,                     # base spottedness, star 1
@@ -440,9 +441,9 @@ def make_phot_data(ebin,
              'spCos2': cosamp2,                        # cosine amp, star 2                          
              'spSinCos2': sincosamp2,                  # sinecosine amp, star 2                      
              'spSqSinCos2': squaredamp2,               # cos^2-sin^2 amp, star 2                     
-             'light_tt': cltt,                         # light travel time
-             'ktot': ktot,                             # total RV amplitude
-             'vsys': ebin['vsys']}                     # system velocity
+             'Light_tt': cltt,                         # light travel time
+             'Ktot': ktot,                             # total RV amplitude
+             'Vsys': ebin['Vsys']}                     # system velocity
 
     parm, vder = dict_to_params(ebpar)
     
@@ -452,7 +453,7 @@ def make_phot_data(ebin,
         for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
             print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
 
-        vder = eb.getvder(parm, ebin['vsys'], ktot)
+        vder = eb.getvder(parm, ebin['Vsys'], ktot)
         print "Derived parameters:"
         for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
             print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
@@ -553,8 +554,8 @@ def make_RV_data(ebin,
     integration = int
     bjd = ebin['bjd']
 
-    ktot = ebin['ktot']
-    vsys = ebin['vsys']
+    ktot = ebin['Ktot']
+    vsys = ebin['Vsys']
     
     if lighttravel:
         # double check that the units work out for this
@@ -587,8 +588,8 @@ def make_RV_data(ebin,
              'L3': 0.0,                                # third light
              'phi0': 0.0,                              # phase of inf. conj. (i think!)
              't0': 0.0, # t0 will be added in later    # epoch of inf. conj. (if phi0=0)
-             'period':period,                          # period of binary
-             'magoff':0.0,                             # magnitude zeropoint (if using mags)
+             'Period':period,                          # period of binary
+             'Magoff':0.0,                             # magnitude zeropoint (if using mags)
              'Rot1': 0.0,                              # rotation parameter (frac. of period)
              'spFrac1': 0.0,                           # fraction of spots covered (prim. eclipse)
              'spBase1': 0.0,                           # base spottedness, star 1
@@ -604,8 +605,8 @@ def make_RV_data(ebin,
              'spSinCos2': 0.0,                         # sinecosine amp, star 2                      
              'spSqSinCos2': 0.0,                       # cos^2-sin^2 amp, star 2                     
              'light_tt': cltt,                         # light travel time
-             'ktot': ktot,                             # total RV amplitude
-             'vsys': vsys}                             # system velocity
+             'Ktot': ktot,                             # total RV amplitude
+             'Vsys': vsys}                             # system velocity
 
     parm, vder = dict_to_params(ebpar)
 
@@ -728,8 +729,8 @@ def dict_to_params(ebpar):
     parm[eb.PAR_L3]     = ebpar['L3']
     parm[eb.PAR_PHI0]   = ebpar['phi0']
     parm[eb.PAR_T0]     = ebpar['t0']
-    parm[eb.PAR_P]      = ebpar['period']
-    parm[eb.PAR_M0]     = ebpar['magoff']
+    parm[eb.PAR_P]      = ebpar['Period']
+    parm[eb.PAR_M0]     = ebpar['Magoff']
     parm[eb.PAR_ROT1]   = ebpar['Rot1']
     parm[eb.PAR_ROT2]   = ebpar['Rot2']
     parm[eb.PAR_FSPOT1] = ebpar['spFrac1']
@@ -745,7 +746,7 @@ def dict_to_params(ebpar):
     parm[eb.PAR_OOE22A] = ebpar['spSinCos2']
     parm[eb.PAR_OOE22B] = ebpar['spSqSinCos2']
 
-    vder = eb.getvder(parm,ebpar['vsys'],ebpar['ktot'])
+    vder = eb.getvder(parm,ebpar['Vsys'],ebpar['Ktot'])
     
     return parm,vder
 
@@ -845,6 +846,7 @@ def numbands(data_dict):
     bands = [data_dict[key]['band'] for key in photkeys]
     return length(np.unique(np.array(bands)))
 
+
 def uniquebands(data_dict):
     """
     Determine the number of unique photometry bands
@@ -852,6 +854,8 @@ def uniquebands(data_dict):
     photkeys = [key for key in data_dict.keys() if key.startswith('phot')]
     bands = [data_dict[key]['band'] for key in photkeys]
     return np.unique(np.array(bands))
+
+
 
 
 def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
@@ -945,8 +949,12 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
     # Period
     p0_init = np.append(p0_init,[np.random.uniform(ebin['Period']-onesec,
                                                    ebin['Period']+onesec,nw)],axis=0)
-    variables = np.append(variables,'period')
+    variables = np.append(variables,'Period')
 
+    # Mass ratio
+    p0_init = np.append(p0_init,[np.random.normal(ebin['Mratio'],ebin['Mratio']*0.05,nw)],axis=0)
+    variables = np.append(variables,'Mratio')
+    
     
     # Limb darkening, two parameters in each band for each star
     for band in ubands:
@@ -1002,7 +1010,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
     # Period
     if fitinfo['fit_period']:
         p0_init = np.append(p0_init,[np.random.uniform(ebin['Period']-onesec,ebin['Period']+onesec,nw)],axis=0)
-        variables = np.append(variables,'period')
+        variables = np.append(variables,'Period')
 
 
     ##############################
@@ -1209,107 +1217,133 @@ def vec_to_params(x,ebin,variables,fitinfo=None,verbose=True):
     except:
         esinw = ebin['esinw']
 
-
-    #!!!!! Pick up from here!!!!!
+    ##############################
     # Period
     try:
-        parm[eb.PAR_P] = x[variables == 'period'][0]
+        period = x[variables == 'Period'][0]
     except:
-        parm[eb.PAR_P] = ebin["Period"]
+        period = ebin['Period']
         
-    # T0
+    ##############################
+    # t0
     try:
-        parm[eb.PAR_T0] =  x[variables == 't0'][0]   # T0 (epoch of primary eclipse)
+        t0 =  x[variables == 't0'][0]   # T0 (epoch of primary eclipse)
     except:
-        parm[eb.PAR_T0] = ebin['t01']-ebin['bjd']
+        t0 = ebin['t01']-ebin['bjd']
 
-    # offset magnitude
-    try:
-        parm[eb.PAR_M0] =  x[variables == 'magoff'][0]  
-    except:
-        parm[eb.PAR_M0] = ebin['mag0']
-
-
-    # Limb darkening paramters for star 1
+    ##############################
+    # LD params for star 1
     try:
         q1a = x[variables == 'q1a'][0]  
         q2a = x[variables == 'q2a'][0]  
-        a1, b1 = qtou(q1a,q2a,limb=limb)
-        parm[eb.PAR_LDLIN1] = a1
-        parm[eb.PAR_LDNON1] = b1
+        u1a, u2a = qtou(q1a,q2a,limb=limb)
     except:
-        parm[eb.PAR_LDLIN1] = ebin["LDlin1"]   # u1 star 1
-        parm[eb.PAR_LDNON1] = ebin["LDnon1"]   # u2 star 1
+        u1a = ebin["LDlin1"]   # u1 star 1
+        u2a = ebin["LDnon1"]   # u2 star 1
 
 
-    # Limb darkening paramters for star 2
+    ##############################
+    # LD params for star 2
     try:
         q1b = x[variables == 'q1b'][0]  
         q2b = x[variables == 'q2b'][0] 
-        a2, b2 = qtou(q1b,q2b)
-        parm[eb.PAR_LDLIN2] = a2
-        parm[eb.PAR_LDNON2] = b2
+        u1b, u2b = qtou(q1b,q2b)
     except:
-        parm[eb.PAR_LDLIN2] = ebin["LDlin2"]   # u1 star 2
-        parm[eb.PAR_LDNON2] = ebin["LDnon2"]   # u2 star 2
+        u1b = ebin["LDlin2"]   # u1 star 2
+        u2b = ebin["LDnon2"]   # u2 star 2
 
 
-    # Mass ratio is used only for computing ellipsoidal variation and
-    # light travel time.  Set to zero to disable ellipsoidal.
+    ##############################
+    # Mass ratio
+    # Used for computing ellipsoidal variation and light travel
+    # time.  Set to zero to disable ellipsoidal.
 
     try:
-        parm[eb.PAR_Q]  = x[variables == 'MRatio'][0]
+        massratio  = x[variables == 'Mratio'][0]
         ktot  = x[variables == 'Ktot'][0]
         vsys  = x[variables == 'Vsys'][0]
     except:
-        parm[eb.PAR_Q]  = ebin['Mratio']
-        ktot = ebin['ktot']
-        vsys = ebin['vsys']
+        massratio  = ebin['Mratio']
+        ktot = ebin['Ktot']
+        vsys = ebin['Vsys']
+
+    ##############################
+    # Third light
+    try:
+        L3 = x[variables == 'L3'][0]
+    except:
+        L3 = ebin["L3"]
+    
+    ##############################
+    # Light travel time
+    try:
+        cltt = ktot / eb.LIGHT     # ktot / c
+    except:
+        print "Cannot perform light travel time correction (no masses)"
+        ktot = 0.0
+        cllt = 0
+
+    ##############################
+    # Gravity darkening
+    try:
+        GD1 = x[variables == 'GD1'][0]
+    except:
+        GD1 = ebin['GD1']   # gravity darkening, std. value
 
     try:
-        parm[eb.PAR_L3] = x[variables == 'L3'][0]
+        GD2 = x[variables == 'GD2'][0]
     except:
-        parm[eb.PAR_L3] = ebin["L3"]
-    
-    # Light travel time coefficient.
-    if ebin['lighttravel']:        
-        try:
-            cltt = ktot / eb.LIGHT
-            parm[eb.PAR_CLTT]   =  cltt      # ktot / c
-        except:
-            print "Cannot perform light travel time correction (no masses)"
-            ktot = 0.0
+        GD2 = ebin['GD2']   # gravity darkening, std. value
+
+    ##############################
+    # Reflection
+    try:
+        Ref1 = x[variables == 'Ref1'][0]
+    except:
+        Ref1 =  ebin['Ref1']  # albedo, std. value
+
+    try:
+        Ref2 = x[variables == 'Ref2'][0]
+    except:
+        Ref2 =  ebin['Ref2']  # albedo, std. value
+        
 
 
-    if ebin['gravdark']:
-        parm[eb.PAR_GD1]    = ebin['GD1']   # gravity darkening, std. value
-        parm[eb.PAR_GD2]    = ebin['GD2']   # gravity darkening, std. value
+    ##############################
+    # Internal spot parameters
+    try:
+        spotP1      = x[variables == 'Rot1'][0]        # rotation parameter (1 = sync.) 
+        spotfrac1   = x[variables == 'spFrac1'][0]     # fraction of spots eclipsed     
+        spotbase1   = x[variables == 'spBase1'][0]     # base spottedness out of eclipse
+        sinamp1     = x[variables == 'spSin1'][0]      # amplitude of sine component    
+        cosamp1     = x[variables == 'spCos1'][0]      # amplitude of cosine component  
+        sincosamp1  = x[variables == 'spSinCos1'][0]   # amplitude of sincos cross term 
+        squaredamp1 = x[variables == 'spSqSinCos1'][0] # amplitude of sin^2 + cos^2 term
+    except:
+        spotP1      = 0.0 # rotation parameter (1 = sync.)
+        spotfrac1   = 0.0 # fraction of spots eclipsed
+        spotbase1   = 0.0 # base spottedness out of eclipse
+        sinamp1     = 0.0 # amplitude of sine component
+        cosamp1     = 0.0 # amplitude of cosine component
+        sincosamp1  = 0.0 # amplitude of sincos cross term
+        squaredamp1 = 0.0 # amplitude of sin^2 + cos^2 term
 
-    if ebin['reflection']:
-        parm[eb.PAR_REFL1]  = ebin['Ref1']  # albedo, std. value
-        parm[eb.PAR_REFL2]  = ebin['Ref2']  # albedo, std. value
-
-
-
-    if ebin['Rot1'] and fitinfo == None:
-        parm[eb.PAR_ROT1]   = ebin['Rot1']        # rotation parameter (1 = sync.)
-        parm[eb.PAR_FSPOT1] = ebin['spFrac1']     # fraction of spots eclipsed
-        parm[eb.PAR_OOE1O]  = ebin['spBase1']     # base spottedness out of eclipse
-        parm[eb.PAR_OOE11A] = ebin['spSin1']      # amplitude of sine component
-        parm[eb.PAR_OOE11B] = ebin['spCos1']      # amplitude of cosine component
-        parm[eb.PAR_OOE12A] = ebin['spSinCos1']   # amplitude of sincos cross term
-        parm[eb.PAR_OOE12B] = ebin['spSqSinCos1'] # amplitude of sin^2 + cos^2 term
-            
-    if ebin['Rot2'] and fitinfo == None:
-        parm[eb.PAR_ROT2]   = ebin['Rot2']        # rotation parameter (1 = sync.)
-        parm[eb.PAR_FSPOT2] = ebin['spFrac2']     # fraction of spots eclipsed
-        parm[eb.PAR_OOE2O]  = ebin['spBase2']     # base spottedness out of eclipse
-        parm[eb.PAR_OOE21A] = ebin['spSin2']      # amplitude of sine component
-        parm[eb.PAR_OOE21B] = ebin['spCos2']      # amplitude of cosine component
-        parm[eb.PAR_OOE22A] = ebin['spSinCos2']   # amplitude of sincos cross term
-        parm[eb.PAR_OOE22B] = ebin['spSqSinCos2'] # amplitude of sin^2+cos^2 term
-
-
+    try:
+        spotP2      = x[variables == 'Rot2'][0]        # rotation parameter (1 = sync.) 
+        spotfrac2   = x[variables == 'spFrac2'][0]     # fraction of spots eclipsed     
+        spotbase2   = x[variables == 'spBase2'][0]     # base spottedness out of eclipse
+        sinamp2     = x[variables == 'spSin2'][0]      # amplitude of sine component    
+        cosamp2     = x[variables == 'spCos2'][0]      # amplitude of cosine component  
+        sincosamp2  = x[variables == 'spSinCos2'][0]   # amplitude of sincos cross term 
+        squaredamp2 = x[variables == 'spSqSinCos2'][0] # amplitude of sin^2 + cos^2 term
+    except:
+        spotP2      = 0.0 # rotation parameter (1 = sync.)
+        spotfrac2   = 0.0 # fraction of spots eclipsed
+        spotbase2   = 0.0 # base spottedness out of eclipse
+        sinamp2     = 0.0 # amplitude of sine component
+        cosamp2     = 0.0 # amplitude of cosine component
+        sincosamp2  = 0.0 # amplitude of sincos cross term
+        squaredamp2 = 0.0 # amplitude of sin^2 + cos^2 term
     
     
     # eb.h has 37 parameters. One, integ, not used.
@@ -1328,13 +1362,13 @@ def vec_to_params(x,ebin,variables,fitinfo=None,verbose=True):
              'GD2': GD2,                               # gravity darkening parameter, star 2
              'Ref1': Ref1,                             # albedo (default) or reflection, star 1
              'Ref2': Ref2,                             # albedo (default) or reflection, star 2
-             'Mratio': ebin['Mratio'],                 # stellar mass ratio
+             'Mratio': massratio,                      # stellar mass ratio
              'TideAng': tideang,                       # tidal angle in (degrees)
              'L3': L3,                                 # third light
              'phi0': 0.0,                              # phase of inf. conj. (i think!)
              't0': 0.0, # t0 will be added in later    # epoch of inf. conj. (if phi0=0)
-             'period': ebin['Period'],                 # period of binary
-             'magoff':0.0,                             # magnitude zeropoint (if using mags)
+             'Period': period,                         # period of binary
+             'Magoff':0.0,                             # magnitude zeropoint (if using mags)
              'Rot1': spotP1,                           # rotation parameter (frac. of period)
              'spFrac1': spotfrac1,                     # fraction of spots covered (prim. eclipse)
              'spBase1': spotbase1,                     # base spottedness, star 1
@@ -1351,7 +1385,7 @@ def vec_to_params(x,ebin,variables,fitinfo=None,verbose=True):
              'spSqSinCos2': squaredamp2,               # cos^2-sin^2 amp, star 2                     
              'light_tt': cltt,                         # light travel time
              'ktot': ktot,                             # total RV amplitude
-             'vsys': ebin['vsys']}                     # system velocity
+             'Vsys': vsys]}                            # system velocity
 
     parm, vder = dict_to_params(ebpar)
 
@@ -1395,6 +1429,9 @@ def vec_to_params(x,ebin,variables,fitinfo=None,verbose=True):
 #        print "{0:<10} {1:14.6f} {2}".format(name, value, unit)
 
     return parm, vder
+
+
+
 
 ################################################################################
 # Input vector to EB parameters
@@ -1494,7 +1531,7 @@ def vec_to_params_orig(x,ebpar,fitinfo=None,verbose=True):
         
     # Period
     try:
-        parm[eb.PAR_P] = x[variables == 'period'][0]
+        parm[eb.PAR_P] = x[variables == 'Period'][0]
     except:
         parm[eb.PAR_P] = ebpar["Period"]
         
@@ -1506,7 +1543,7 @@ def vec_to_params_orig(x,ebpar,fitinfo=None,verbose=True):
 
     # offset magnitude
     try:
-        parm[eb.PAR_M0] =  x[variables == 'magoff'][0]  
+        parm[eb.PAR_M0] =  x[variables == 'Magoff'][0]  
     except:
         parm[eb.PAR_M0] = ebpar['mag0']
 
@@ -1544,8 +1581,8 @@ def vec_to_params_orig(x,ebpar,fitinfo=None,verbose=True):
         vsys  = x[variables == 'Vsys'][0]
     except:
         parm[eb.PAR_Q]  = ebpar['Mratio']
-        ktot = ebpar['ktot']
-        vsys = ebpar['vsys']
+        ktot = ebpar['Ktot']
+        vsys = ebpar['Vsys']
 
     try:
         parm[eb.PAR_L3] = x[variables == 'L3'][0]
@@ -1744,18 +1781,14 @@ def lnprob(x,data,ebin,variables,fitinfo,debug=False):
     value in ebin.
     """
 
-    # Need rewrite vec_to_params!!!
-    
-    parm,vder = vec_to_params(x,ebin,variables,fitinfo=fitinfo)
-
-    variables = fitinfo['variables']
+    parm,vder = vec_to_params(x,ebin,variables)
 
     try:
-        vsys = x[variables == 'vsys'][0]
-        ktot = x[variables == 'ktot'][0]
+        vsys = x[variables == 'Vsys'][0]
+        ktot = x[variables == 'Ktot'][0]
     except:
-        vsys = x[-1]
-        ktot = x[-2]
+        vsys = 0.0
+        ktot = 0.0
 
         
     if fitinfo['tie_LD']:
@@ -2722,7 +2755,7 @@ def make_model_data_orig(m1=None,m2=None,                        # Stellar masse
              'GD1':0.0, 'Ref1':0.0, 'GD2':0.0, 'Ref2':0.0,
              'ecosw':ecosw0, 'esinw':esinw0, 'Period':period, 't01':t0, 't02':None, 
              'et01':0.0, 'et02':0.0, 'dt12':None, 'tdur1':None, 'tdur2':None, 
-             'mag0':10.0,'vsys':vsys, 'Mstar1':m1, 'Mstar2':m2,
+             'mag0':10.0,'Vsys':vsys, 'Mstar1':m1, 'Mstar2':m2,
              'ktot':ktot, 'L3':L3,'Period':period, 'ePeriod':0.1,
              'integration':int,'obsdur':obsdur,'bjd':bjd,
              'variables':variables,'ninput':0, 'p_init':None,
@@ -3019,7 +3052,7 @@ def ebsim_fit_orig(data,ebpar,fitinfo,debug=False):
 
     # System velocity
     p0_33 = np.abs(np.random.uniform(ebpar['ktot']*0.999,ebpar['ktot']*1.001,nw)) # Total radial velocity amp
-    p0_34 = np.random.uniform(ebpar['vsys']*.999,ebpar['vsys']*1.001,nw)          # System velocity   
+    p0_34 = np.random.uniform(ebpar['Vsys']*.999,ebpar['Vsys']*1.001,nw)          # System velocity   
 
 
 # L3 at 14 ... 14 and beyond + 1
