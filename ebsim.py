@@ -4,10 +4,13 @@
 # Realistic surface brightness ratio given main sequence radius and band
 # (see MS_COLORS.csv)
 
+# Be able to tie LDs to Teff and logg through Claret (return functions for
+# each band and pass with the fitinfo dictionary)
+
 # In process
 # Update make_model_data to be able to produce multiple photometry datasets
 # Need independent J, qs, L3, photnoise for each band.
-#
+
 
 import sys,math,ipdb,time,glob,re,os,eb,emcee,pickle
 import numpy as np
@@ -29,6 +32,7 @@ from scipy.interpolate import interp1d
 # Find geometric base
 ################################################################################
 def find_base(N):
+
     """
     Routine to interpolate the optimal geometric base for Eq. 5 from empirical data
     Saunders et al. (2006) Figure 16
@@ -79,7 +83,8 @@ def r_to_l(r):
     log_l = -3.5822 + 6.8639*r - 7.185*r**2 + 4.5169*r**3
     
     return 10**log_l
-    
+
+
 def r_to_m(r):
     """Converts radius to mass (solar units)
     Inverts Boyajian et. al 2012 equation 11"""
@@ -1039,37 +1044,23 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
         p0_init = np.append(p0_init,[np.random.lognormal(3.99,0.01,nw)],axis=0)
         variables.append('OOE_Per1')
 
+        ### Possible to improve treatment of these nuisance parameters.
         # Fraction of spots covered
-        # Model as a sine wave of unknown (and unconstrainable?) period
-        # !!! Model with GP Kernel? !!!
-        # Offset in sine wave
-        p0_init = np.append(p0_init,[np.random.normal(0.5,0.01,nw)],axis=0)
-        variables.append('FSCOff1')
-        # Amplitude of sinewave
-        p0_init = np.append(p0_init,[np.random.uniform(0.1,0.2,nw)],axis=0)
-        variables.append('FSCAmp1')
-        # Period of sine wave.
-        p0_init = np.append(p0_init,[np.random.normal(50,10,nw)],axis=0)
-        variables.append('FSCPer1')
+        p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
+        variables.append('FSCAve')
 
-        # Base spottedness  = exponential squared kernel
-        p0_init = np.append(p0_init,[p0_21],axis=0)
-        variables.append('BSAmp1')
-        p0_init = np.append(p0_init,[p0_22],axis=0)
-        variables.append('BSWid1')
+        # Base spottedness  = zero (accounted for by GP)
         
     if fitinfo['fit_ooe2']:
         # Wait until fit_ooe1 works, then duplicate here
         pass
-
+    
     # RV fitting
     if fitinfo['fit_rvs']:
-        p0_init = np.append(p0_init,[p0_13],axis=0)
-        variables.append('MRatio')
-        p0_init = np.append(p0_init,[p0_33],axis=0)
+        p0_init = np.append(p0_init,[np.random.random(ebin['Ktot'],1,nw)],axis=0)
         variables.append('Ktot')
-        p0_init = np.append(p0_init,[p0_34],axis=0)
-        variables.append("Vsys")
+        p0_init = np.append(p0_init,[np.random.random(ebin['Vsys'],5,nw)],axis=0)
+        variables.append('Vsys')
 
     variables = np.array(variables)
 
@@ -1091,7 +1082,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 # Set up MCMC sampler
     print "... initializing emcee sampler"
     tstart = time.time()
-    sampler = emcee.EnsembleSampler(nw, ndim, lnprob, args=(data,ebin,variables),kwargs={'debug':debug},
+    sampler = emcee.EnsembleSampler(nw, ndim, lnprob, args=(data,fitinfo),kwargs={'debug':debug,'ebin': ebin},
                                     threads=threads)
 
 # Run burn-in
@@ -1159,7 +1150,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 ################################################################################
 # Input vector to EB parameters
 ################################################################################
-def vec_to_params(x,ebin,variables,fitinfo=None,verbose=True):
+def vec_to_params(x,variables,ebin=None,fitinfo=None,verbose=True):
 
     """
     ----------------------------------------------------------------------
@@ -1433,242 +1424,6 @@ def vec_to_params(x,ebin,variables,fitinfo=None,verbose=True):
 
 
 
-################################################################################
-# Input vector to EB parameters
-################################################################################
-def vec_to_params_orig(x,ebpar,fitinfo=None,verbose=True):
-    """
-    ----------------------------------------------------------------------
-    vec_to_params:
-    --------------
-    Function to convert a vector of input parameters into a parameter vector
-    that is compatible with eb.model
-
-    x[0]  = surface brightness ratio
-    x[1]  = fractional sum of stellar radii (R1 + R2)/a
-    x[2]  = ratio of the radii (R2/R1)
-    x[3]  = cosine of the inclination 
-    x[4]  = ecosw
-    x[5]  = esinw
-    x[6]  = magoff
-    x[7]  = ephemeris t0
-    x[8]  = period
-    x[9]  = LD lin star 1 
-    x[10]  = LD non-lin star 1 
-    x[11] = LD lin star 2 
-    x[12] = LD non-lin star 2
-    x[13] = mass ratio
-    x[14] = third light
-    *** Spot models ***
-    !!! To Be Updated !!!
-    * Star 1
-    x[15] = rotation parameter (Prot/Porbit)    
-    x[16] = fraction of spots eclipsed
-    x[17] = base spottedness out of eclipse
-    x[18] = amplitude of sin component 
-    x[19] = amplitude of cos component   
-    x[20] = amplitude of sincos component
-    x[21] = amplitude of (cos^2 - sin^2) component
-    * Star 2
-    x[22] = rotation parameter (Prot/Porbit)    
-    x[23] = fraction of spots eclipsed
-    x[24] = base spottedness out of eclipse
-    x[25] = amplitude of sin component 
-    x[26] = amplitude of cos component   
-    x[27] = amplitude of sincos component
-    x[28] = amplitude of (cos^2 - sin^2) component
-
-    *** system velocity and mag offset is last since it is not in any of the eb attributes
-    x[30] = total radial velocity amplitude
-    x[31] = system velocity
-
-
-
-    """
-    
-    if fitinfo != None:
-        variables = fitinfo['variables']
-        fitooe1 = fitinfo['fit_ooe1']
-        fitooe2 = fitinfo['fit_ooe2']
-        if len(variables) != len(x):
-            print 'Length of variables not equal to length of input vector'
-    else:
-        if verbose:
-            print 'vec_to_params: Using default values from ebpar'
-        variables = None
-        fitooe1 = None
-        fitooe2 = None
-
-        parm = np.zeros(eb.NPAR, dtype=np.double)
-    # These are the basic parameters of the model.
-    try:
-        parm[eb.PAR_J]      =  x[variables == 'J'][0]  # J surface brightness ratio
-    except:
-        parm[eb.PAR_J]      =  ebpar['J']
-    try:
-        parm[eb.PAR_RASUM]  =  x[variables == 'Rsum'][0] # (R_1+R_2)/a
-    except:
-        parm[eb.PAR_RASUM]  = ebpar['Rsum_a']
-        
-    try:
-        parm[eb.PAR_RR]     = x[variables == 'Rratio'][0]   # R_2/R_1
-    except:
-        parm[eb.PAR_RR]     = ebpar['Rratio']
-    try:
-        parm[eb.PAR_COSI]   =  x[variables == 'cosi'][0]  # cos i
-    except:
-        parm[eb.PAR_COSI]   = ebpar['cosi']
-        
-    # Orbital parameters.
-    try:
-        parm[eb.PAR_ECOSW]  = x[variables == 'ecosw'][0]    # ecosw
-    except:
-        parm[eb.PAR_ECOSW]  = ebpar['ecosw']
-    try:
-        parm[eb.PAR_ESINW]  = x[variables == 'esinw'][0]    # esinw
-    except:
-        parm[eb.PAR_ESINW]  = ebpar['esinw']
-        
-    # Period
-    try:
-        parm[eb.PAR_P] = x[variables == 'Period'][0]
-    except:
-        parm[eb.PAR_P] = ebpar["Period"]
-        
-    # T0
-    try:
-        parm[eb.PAR_T0] =  x[variables == 't0'][0]   # T0 (epoch of primary eclipse)
-    except:
-        parm[eb.PAR_T0] = ebpar['t01']-ebpar['bjd']
-
-    # offset magnitude
-    try:
-        parm[eb.PAR_M0] =  x[variables == 'Magoff'][0]  
-    except:
-        parm[eb.PAR_M0] = ebpar['mag0']
-
-
-    # Limb darkening paramters for star 1
-    try:
-        q1a = x[variables == 'q1a'][0]  
-        q2a = x[variables == 'q2a'][0]  
-        a1, b1 = qtou(q1a,q2a,limb=limb)
-        parm[eb.PAR_LDLIN1] = a1
-        parm[eb.PAR_LDNON1] = b1
-    except:
-        parm[eb.PAR_LDLIN1] = ebpar["LDlin1"]   # u1 star 1
-        parm[eb.PAR_LDNON1] = ebpar["LDnon1"]   # u2 star 1
-
-
-    # Limb darkening paramters for star 2
-    try:
-        q1b = x[variables == 'q1b'][0]  
-        q2b = x[variables == 'q2b'][0] 
-        a2, b2 = qtou(q1b,q2b)
-        parm[eb.PAR_LDLIN2] = a2
-        parm[eb.PAR_LDNON2] = b2
-    except:
-        parm[eb.PAR_LDLIN2] = ebpar["LDlin2"]   # u1 star 2
-        parm[eb.PAR_LDNON2] = ebpar["LDnon2"]   # u2 star 2
-
-
-    # Mass ratio is used only for computing ellipsoidal variation and
-    # light travel time.  Set to zero to disable ellipsoidal.
-
-    try:
-        parm[eb.PAR_Q]  = x[variables == 'MRatio'][0]
-        ktot  = x[variables == 'Ktot'][0]
-        vsys  = x[variables == 'Vsys'][0]
-    except:
-        parm[eb.PAR_Q]  = ebpar['Mratio']
-        ktot = ebpar['Ktot']
-        vsys = ebpar['Vsys']
-
-    try:
-        parm[eb.PAR_L3] = x[variables == 'L3'][0]
-    except:
-        parm[eb.PAR_L3] = ebpar["L3"]
-    
-    # Light travel time coefficient.
-    if ebpar['lighttravel']:        
-        try:
-            cltt = ktot / eb.LIGHT
-            parm[eb.PAR_CLTT]   =  cltt      # ktot / c
-        except:
-            print "Cannot perform light travel time correction (no masses)"
-            ktot = 0.0
-
-
-    if ebpar['gravdark']:
-        parm[eb.PAR_GD1]    = ebpar['GD1']   # gravity darkening, std. value
-        parm[eb.PAR_GD2]    = ebpar['GD2']   # gravity darkening, std. value
-
-    if ebpar['reflection']:
-        parm[eb.PAR_REFL1]  = ebpar['Ref1']  # albedo, std. value
-        parm[eb.PAR_REFL2]  = ebpar['Ref2']  # albedo, std. value
-
-
-
-    if ebpar['Rot1'] and fitinfo == None:
-        parm[eb.PAR_ROT1]   = ebpar['Rot1']        # rotation parameter (1 = sync.)
-        parm[eb.PAR_FSPOT1] = ebpar['spFrac1']     # fraction of spots eclipsed
-        parm[eb.PAR_OOE1O]  = ebpar['spBase1']     # base spottedness out of eclipse
-        parm[eb.PAR_OOE11A] = ebpar['spSin1']      # amplitude of sine component
-        parm[eb.PAR_OOE11B] = ebpar['spCos1']      # amplitude of cosine component
-        parm[eb.PAR_OOE12A] = ebpar['spSinCos1']   # amplitude of sincos cross term
-        parm[eb.PAR_OOE12B] = ebpar['spSqSinCos1'] # amplitude of sin^2 + cos^2 term
-            
-    if ebpar['Rot2'] and fitinfo == None:
-        parm[eb.PAR_ROT2]   = ebpar['Rot2']        # rotation parameter (1 = sync.)
-        parm[eb.PAR_FSPOT2] = ebpar['spFrac2']     # fraction of spots eclipsed
-        parm[eb.PAR_OOE2O]  = ebpar['spBase2']     # base spottedness out of eclipse
-        parm[eb.PAR_OOE21A] = ebpar['spSin2']      # amplitude of sine component
-        parm[eb.PAR_OOE21B] = ebpar['spCos2']      # amplitude of cosine component
-        parm[eb.PAR_OOE22A] = ebpar['spSinCos2']   # amplitude of sincos cross term
-        parm[eb.PAR_OOE22B] = ebpar['spSqSinCos2'] # amplitude of sin^2+cos^2 term
-
-
-    # OTHER NOTES:
-    #
-    # To do standard transit models (a'la Mandel & Agol),
-    # set J=0, q=0, cltt=0, albedo=0.
-    # This makes the secondary dark, and disables ellipsoidal and reflection.
-    #
-    # The strange parameterization of radial velocity is to retain the
-    # flexibility to be able to model just light curves, SB1s, or SB2s.
-    #
-    # For improved precision, it's best to subtract most of the "DC offset"
-    # from T0 and the time array (e.g. take off the nominal value of T0 or
-    # the midtime of the data array) and add it back on at the end when
-    # printing parm[eb.PAR_T0] and vder[eb.PAR_TSEC].  Likewise the period
-    # can cause scaling problems in minimization routines (because it has
-    # to be so much more precise than the other parameters), and may need
-    # similar treatment.
-    
-    # Simple (but not astronomer friendly) dump of model parameters.
-
-#    print "Model parameters:"
-#    for name, value, unit in zip(eb.parnames, parm, eb.parunits):
-#        print "{0:<10} {1:14.6f} {2}".format(name, value, unit)
-        
-    # Derived parameters.
-    try:
-        vder = eb.getvder(parm, vsys, ktot)
-    except:
-        vder = None
-        
-#    print "stop in vec_to_parm"
-#    pdb.set_trace()
-#    print mass1, mass2, ktot, vsys
-
-#    print "Derived parameters:"
-#    for name, value, unit in zip(eb.dernames, vder, eb.derunits):
-#        print "{0:<10} {1:14.6f} {2}".format(name, value, unit)
-
-    return parm, vder
-
-
-
 def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None,
                     period=None,ooe1fit=None,ooe2fit=None,unsmooth=False,spotflag=False):
 
@@ -1765,7 +1520,7 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
 
 
 
-def lnprob(x,data,ebin,variables,fitinfo,debug=False):
+def lnprob(x,data,fitinfo,ebin=None,debug=False):
 
     """
     ----------------------------------------------------------------------
@@ -1773,15 +1528,14 @@ def lnprob(x,data,ebin,variables,fitinfo,debug=False):
     -------
     Function to compute logarithmic probability of data given model. This
     function sets prior constaints explicitly and calls compute_trans to
-    compare the data with the model. Only data within the smoothed transit
-    curve is compared to model. 
+    compare the data with the model. 
 
-    WARNING: If you are not fitting for a particular variable, know what
-    the default value is in vec_to_params. Many values default to the 
-    value in ebin.
+    Loops through photometric data unique bands and integration times. 
     """
 
-    parm,vder = vec_to_params(x,ebin,variables)
+    variables = fitinfo['variables']
+    
+    parm,vder = vec_to_params(x,variables,ebin=ebin)
 
     try:
         vsys = x[variables == 'Vsys'][0]
@@ -1790,7 +1544,13 @@ def lnprob(x,data,ebin,variables,fitinfo,debug=False):
         vsys = 0.0
         ktot = 0.0
 
-        
+
+    #!!! Loop though all unique photometric bands and assign limb darkening
+    # - Search variables for 'q*a*' and loop through each set of 4
+    # - put 0 - 1 prior directly in loops
+    # - Option Tie LDs to Claret using stellar parameters if desired
+    # - else use input LDs
+    
     if fitinfo['tie_LD']:
         T1,logg1,T2,logg2 = get_teffs_loggs(parm,vsys,ktot)
 
@@ -1823,13 +1583,18 @@ def lnprob(x,data,ebin,variables,fitinfo,debug=False):
         q1a,q2a = utoq(ebin['LDlin1'],epbar['LDnon1'],limb=ebin['limb'])
         q1b,q2b = utoq(ebin['LDlin2'],epbar['LDnon2'],limb=ebin['limb'])
         
+
+    ##############################
+    # LD Priors
     # Exclude conditions that give unphysical limb darkening parameters
     if q1b > 1 or q1b < 0 or q2b > 1 or q2b < 0 or np.isnan(q1b) or np.isnan(q2b):
         return -np.inf        
     if q1a > 1 or q1a < 0 or q2a > 1 or q2a < 0 or np.isnan(q1a) or np.isnan(q2a):
         return -np.inf        
+
+
+
     
-    # Priors
     if fitinfo['fit_L3']:
         if parm[eb.PAR_L3] > 1 or parm[eb.PAR_L3] < 0:
             return -np.inf
@@ -1848,10 +1613,7 @@ def lnprob(x,data,ebin,variables,fitinfo,debug=False):
     flux   = data['light'][1,:]
     eflux  = data['light'][2,:]
 
-    # If spots are being fit, there needs to be a fundamentally different way that
-    # the eclipses are approached. Each primary and secondary eclipse will need
-    # different spot parameters.
-
+    # 
     if fitinfo['fit_ooe1'] or fitinfo['fit_ooe2']:
         # Loop through each primary and secondary eclipse and fit each event using
         # individual spot parameters.
@@ -2058,6 +1820,7 @@ def GR_test(chains,variables=False):
        Rs[var] = R
 
    return Rs
+
 
 
 
@@ -2548,6 +2311,47 @@ def get_limb_coeff(Tstar,loggstar,filter='Kp',plot=False,network=None,limb='quad
             return aval, bval, cval, dval
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ################################################################################
 # Make model data OLD
 ################################################################################
@@ -2932,7 +2736,6 @@ def make_model_data_orig(m1=None,m2=None,                        # Stellar masse
     return ebpar, data
 
 
-
 def fit_params_orig(ebpar,nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
               fit_period=True,fit_limb=True,claret=False,fit_rvs=True,fit_ooe1=False,fit_ooe2=False,
               fit_L3=False,fit_sp2=False,full_spot=False,fit_ellipsoidal=False,write=True,order=3,
@@ -3214,4 +3017,239 @@ def ebsim_fit_orig(data,ebpar,fitinfo,debug=False):
 
     return sampler.lnprobability.flatten(),sampler.flatchain
 
+
+
+################################################################################
+# Input vector to EB parameters
+################################################################################
+def vec_to_params_orig(x,ebpar,fitinfo=None,verbose=True):
+    """
+    ----------------------------------------------------------------------
+    vec_to_params:
+    --------------
+    Function to convert a vector of input parameters into a parameter vector
+    that is compatible with eb.model
+
+    x[0]  = surface brightness ratio
+    x[1]  = fractional sum of stellar radii (R1 + R2)/a
+    x[2]  = ratio of the radii (R2/R1)
+    x[3]  = cosine of the inclination 
+    x[4]  = ecosw
+    x[5]  = esinw
+    x[6]  = magoff
+    x[7]  = ephemeris t0
+    x[8]  = period
+    x[9]  = LD lin star 1 
+    x[10]  = LD non-lin star 1 
+    x[11] = LD lin star 2 
+    x[12] = LD non-lin star 2
+    x[13] = mass ratio
+    x[14] = third light
+    *** Spot models ***
+    !!! To Be Updated !!!
+    * Star 1
+    x[15] = rotation parameter (Prot/Porbit)    
+    x[16] = fraction of spots eclipsed
+    x[17] = base spottedness out of eclipse
+    x[18] = amplitude of sin component 
+    x[19] = amplitude of cos component   
+    x[20] = amplitude of sincos component
+    x[21] = amplitude of (cos^2 - sin^2) component
+    * Star 2
+    x[22] = rotation parameter (Prot/Porbit)    
+    x[23] = fraction of spots eclipsed
+    x[24] = base spottedness out of eclipse
+    x[25] = amplitude of sin component 
+    x[26] = amplitude of cos component   
+    x[27] = amplitude of sincos component
+    x[28] = amplitude of (cos^2 - sin^2) component
+
+    *** system velocity and mag offset is last since it is not in any of the eb attributes
+    x[30] = total radial velocity amplitude
+    x[31] = system velocity
+
+
+
+    """
+    
+    if fitinfo != None:
+        variables = fitinfo['variables']
+        fitooe1 = fitinfo['fit_ooe1']
+        fitooe2 = fitinfo['fit_ooe2']
+        if len(variables) != len(x):
+            print 'Length of variables not equal to length of input vector'
+    else:
+        if verbose:
+            print 'vec_to_params: Using default values from ebpar'
+        variables = None
+        fitooe1 = None
+        fitooe2 = None
+
+        parm = np.zeros(eb.NPAR, dtype=np.double)
+    # These are the basic parameters of the model.
+    try:
+        parm[eb.PAR_J]      =  x[variables == 'J'][0]  # J surface brightness ratio
+    except:
+        parm[eb.PAR_J]      =  ebpar['J']
+    try:
+        parm[eb.PAR_RASUM]  =  x[variables == 'Rsum'][0] # (R_1+R_2)/a
+    except:
+        parm[eb.PAR_RASUM]  = ebpar['Rsum_a']
+        
+    try:
+        parm[eb.PAR_RR]     = x[variables == 'Rratio'][0]   # R_2/R_1
+    except:
+        parm[eb.PAR_RR]     = ebpar['Rratio']
+    try:
+        parm[eb.PAR_COSI]   =  x[variables == 'cosi'][0]  # cos i
+    except:
+        parm[eb.PAR_COSI]   = ebpar['cosi']
+        
+    # Orbital parameters.
+    try:
+        parm[eb.PAR_ECOSW]  = x[variables == 'ecosw'][0]    # ecosw
+    except:
+        parm[eb.PAR_ECOSW]  = ebpar['ecosw']
+    try:
+        parm[eb.PAR_ESINW]  = x[variables == 'esinw'][0]    # esinw
+    except:
+        parm[eb.PAR_ESINW]  = ebpar['esinw']
+        
+    # Period
+    try:
+        parm[eb.PAR_P] = x[variables == 'Period'][0]
+    except:
+        parm[eb.PAR_P] = ebpar["Period"]
+        
+    # T0
+    try:
+        parm[eb.PAR_T0] =  x[variables == 't0'][0]   # T0 (epoch of primary eclipse)
+    except:
+        parm[eb.PAR_T0] = ebpar['t01']-ebpar['bjd']
+
+    # offset magnitude
+    try:
+        parm[eb.PAR_M0] =  x[variables == 'Magoff'][0]  
+    except:
+        parm[eb.PAR_M0] = ebpar['mag0']
+
+
+    # Limb darkening paramters for star 1
+    try:
+        q1a = x[variables == 'q1a'][0]  
+        q2a = x[variables == 'q2a'][0]  
+        a1, b1 = qtou(q1a,q2a,limb=limb)
+        parm[eb.PAR_LDLIN1] = a1
+        parm[eb.PAR_LDNON1] = b1
+    except:
+        parm[eb.PAR_LDLIN1] = ebpar["LDlin1"]   # u1 star 1
+        parm[eb.PAR_LDNON1] = ebpar["LDnon1"]   # u2 star 1
+
+
+    # Limb darkening paramters for star 2
+    try:
+        q1b = x[variables == 'q1b'][0]  
+        q2b = x[variables == 'q2b'][0] 
+        a2, b2 = qtou(q1b,q2b)
+        parm[eb.PAR_LDLIN2] = a2
+        parm[eb.PAR_LDNON2] = b2
+    except:
+        parm[eb.PAR_LDLIN2] = ebpar["LDlin2"]   # u1 star 2
+        parm[eb.PAR_LDNON2] = ebpar["LDnon2"]   # u2 star 2
+
+
+    # Mass ratio is used only for computing ellipsoidal variation and
+    # light travel time.  Set to zero to disable ellipsoidal.
+
+    try:
+        parm[eb.PAR_Q]  = x[variables == 'MRatio'][0]
+        ktot  = x[variables == 'Ktot'][0]
+        vsys  = x[variables == 'Vsys'][0]
+    except:
+        parm[eb.PAR_Q]  = ebpar['Mratio']
+        ktot = ebpar['Ktot']
+        vsys = ebpar['Vsys']
+
+    try:
+        parm[eb.PAR_L3] = x[variables == 'L3'][0]
+    except:
+        parm[eb.PAR_L3] = ebpar["L3"]
+    
+    # Light travel time coefficient.
+    if ebpar['lighttravel']:        
+        try:
+            cltt = ktot / eb.LIGHT
+            parm[eb.PAR_CLTT]   =  cltt      # ktot / c
+        except:
+            print "Cannot perform light travel time correction (no masses)"
+            ktot = 0.0
+
+
+    if ebpar['gravdark']:
+        parm[eb.PAR_GD1]    = ebpar['GD1']   # gravity darkening, std. value
+        parm[eb.PAR_GD2]    = ebpar['GD2']   # gravity darkening, std. value
+
+    if ebpar['reflection']:
+        parm[eb.PAR_REFL1]  = ebpar['Ref1']  # albedo, std. value
+        parm[eb.PAR_REFL2]  = ebpar['Ref2']  # albedo, std. value
+
+
+
+    if ebpar['Rot1'] and fitinfo == None:
+        parm[eb.PAR_ROT1]   = ebpar['Rot1']        # rotation parameter (1 = sync.)
+        parm[eb.PAR_FSPOT1] = ebpar['spFrac1']     # fraction of spots eclipsed
+        parm[eb.PAR_OOE1O]  = ebpar['spBase1']     # base spottedness out of eclipse
+        parm[eb.PAR_OOE11A] = ebpar['spSin1']      # amplitude of sine component
+        parm[eb.PAR_OOE11B] = ebpar['spCos1']      # amplitude of cosine component
+        parm[eb.PAR_OOE12A] = ebpar['spSinCos1']   # amplitude of sincos cross term
+        parm[eb.PAR_OOE12B] = ebpar['spSqSinCos1'] # amplitude of sin^2 + cos^2 term
+            
+    if ebpar['Rot2'] and fitinfo == None:
+        parm[eb.PAR_ROT2]   = ebpar['Rot2']        # rotation parameter (1 = sync.)
+        parm[eb.PAR_FSPOT2] = ebpar['spFrac2']     # fraction of spots eclipsed
+        parm[eb.PAR_OOE2O]  = ebpar['spBase2']     # base spottedness out of eclipse
+        parm[eb.PAR_OOE21A] = ebpar['spSin2']      # amplitude of sine component
+        parm[eb.PAR_OOE21B] = ebpar['spCos2']      # amplitude of cosine component
+        parm[eb.PAR_OOE22A] = ebpar['spSinCos2']   # amplitude of sincos cross term
+        parm[eb.PAR_OOE22B] = ebpar['spSqSinCos2'] # amplitude of sin^2+cos^2 term
+
+
+    # OTHER NOTES:
+    #
+    # To do standard transit models (a'la Mandel & Agol),
+    # set J=0, q=0, cltt=0, albedo=0.
+    # This makes the secondary dark, and disables ellipsoidal and reflection.
+    #
+    # The strange parameterization of radial velocity is to retain the
+    # flexibility to be able to model just light curves, SB1s, or SB2s.
+    #
+    # For improved precision, it's best to subtract most of the "DC offset"
+    # from T0 and the time array (e.g. take off the nominal value of T0 or
+    # the midtime of the data array) and add it back on at the end when
+    # printing parm[eb.PAR_T0] and vder[eb.PAR_TSEC].  Likewise the period
+    # can cause scaling problems in minimization routines (because it has
+    # to be so much more precise than the other parameters), and may need
+    # similar treatment.
+    
+    # Simple (but not astronomer friendly) dump of model parameters.
+
+#    print "Model parameters:"
+#    for name, value, unit in zip(eb.parnames, parm, eb.parunits):
+#        print "{0:<10} {1:14.6f} {2}".format(name, value, unit)
+        
+    # Derived parameters.
+    try:
+        vder = eb.getvder(parm, vsys, ktot)
+    except:
+        vder = None
+        
+#    print "stop in vec_to_parm"
+#    pdb.set_trace()
+#    print mass1, mass2, ktot, vsys
+
+#    print "Derived parameters:"
+#    for name, value, unit in zip(eb.dernames, vder, eb.derunits):
+#        print "{0:<10} {1:14.6f} {2}".format(name, value, unit)
+
+    return parm, vder
 
