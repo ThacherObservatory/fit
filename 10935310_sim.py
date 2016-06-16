@@ -21,35 +21,59 @@ l2 = 4*np.pi*r2**2*c.sb*T2**4
 J  = l2/l1
 network = 'swift'
 
-obsdur = 90.0
-int = 1800.0
-
-# Adjust this so that the out of eclipse light variations are 2% peak to peak
-spotamp1 = 0.13
-# From Swift AC analysis
+nphot = 4
+band = ['Kp','J','H','K']
+photnoise = [0.0003,0.002,0.005,0.01]
+q1a = [0.5,0.4,0.3,0.2]
+q2a = [0.1,0.2,0.3,0.4]
+q1b = [0.7,0.6,0.5,0.4]
+q2b = [0.1,0.2,0.3,0.4]
+obsdur = [90.0,10.0,10.0,10.0]
+inttime = [1800.0,300.,300.,300.]
+durfac = [3.0,1.5,1.5,1.5]
+RVsamples = 20
+spotamp1 = [0.2, 0., 0., 0.]
 spotP1 = np.pi*86400/period
-# Just a guess, could be anything
-spotfrac1 = 0.75
-spotbase1 = 0.0
-# Estimated from preliminary fit residuals to Kepler data
-photnoise=300.0/1e6
-
+spotfrac1 = [0.5,0.0,0.0,0.0]
+spotbase1 = np.zeros(4)
+spotamp2 = np.zeros(4)
+spotfrac2 = np.zeros(4)
+spotbase2 = np.zeros(4)
 P1double = 0.8
-P2double = False
 
 
-ebpar,data = ebs.make_model_data_orig(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2/c.Rsun,
-                                 impact=impact, period=period/86400.0, t0=t0, L3=0.0,
-                                 vsys=vsys, photnoise=photnoise, RVnoise=RVnoise,
-                                 RVsamples=RVsamples, obsdur=obsdur, int=int, durfac=10.0,
+ebin = ebs.ebinput(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2/c.Rsun,
+                   vsys=vsys, period=period/86400.0, t0=t0, ecc=ecc,
+                   omega=omega, impact=impact)
+                   
+                   
+
+datadict = ebs.make_model_data(ebin,nphot=nphot,band=band,photnoise=photnoise,
+                                 q1a=q1a,q2a=q2a,q1b=q1b,q2b=q2b,
+                                 obsdur=obsdur,int=inttime,durfac=durfac,
+                                 RVsamples=RVsamples,
                                  spotamp1=spotamp1, spotP1=spotP1, spotfrac1=spotfrac1,
-                                 spotbase1=spotbase1, network=network, J=J,
-                                 l1=l1/c.Lsun, l2=l2/c.Lsun,
-                                 P1double=P1double, P2double=P2double,
-                                 write=True)
+                                 P1double=P1double, spotbase1=spotbase1,
+                                 spotamp2=spotamp2, spotfrac2=spotfrac2,
+                                 spotbase2=spotbase2,
+                                 network=network,write=False)
                                  
-#import sys
-#sys.exit()
+
+
+ebs.check_model(datadict)
+
+fitinfo = ebs.fit_params(nwalkers=100,burnsteps=100,mcmcsteps=100,clobber=True,
+                         fit_ooe1=[True,False,False,False],network=network)
+
+ebs.ebsim_fit(datadict,fitinfo,ebin,debug=True)
+
+
+
+import sys
+sys.exit()
+
+
+
 
 plt.ion()
 ebs.check_model(data)

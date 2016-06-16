@@ -38,7 +38,7 @@ def find_base(N):
     Saunders et al. (2006) Figure 16
     """
     
-    if N <10:
+    if N < 10:
         print 'Only valid for N >= 10!'
         return None
     
@@ -188,7 +188,7 @@ def ebinput(m1=None,m2=None,                        # Stellar masses
 # L ratio to surface brightness ratio in a given band
 ######################################################################
 #!!! Under construction !!!
-# Needs sanity checks!!!!
+#!!! Needs some sanity checks!!!!
 
 def teff_to_j(Teff1,Teff2,band,network=None):
 
@@ -409,7 +409,7 @@ def make_phot_data(ebin,
     if not tideang:
         tideang = 0.0
 
-    # eb.h has 37 parameters. One, integ, not used.
+    # eb.h has 37 parameters. One, "integ", is not used.
     # ktot and vsys are added in our dictionary for completeness.
     ebpar = {'J': J,                                   # surface brightness ratio
              'Rsum': rsum,                             # sum of radii / semimajor axis
@@ -518,9 +518,9 @@ def make_phot_data(ebin,
     ooe = np.array([tfinal[ooeinds]+bjd,lightmodel[ooeinds],lighterr[ooeinds]])
 
     if write:
-        np.savetxt('lightcurve_model.txt',lout.T)
-        np.savetxt('ooe_model.txt',ooe.T)
-    
+        np.savetxt('lightcurve_model_'+band+'.txt',lout.T)
+        np.savetxt('ooe_model_'+band+'.txt',ooe.T)
+
     data = {'light':lout, 'ooe':ooe, 'band':band, 'integration':integration}
         
     return data
@@ -649,9 +649,11 @@ def make_RV_data(ebin,
 
 
 
+
 ################################################################################
 # Make model data
 ################################################################################
+#!!! Need to make L3 an option that can have different values in each band !!!
 def make_model_data(ebin,
                     nphot=None,                             # Number of photometry datasets
                     band=None,                              # Photometric bands of each dataset
@@ -695,7 +697,8 @@ def make_model_data(ebin,
 
     if RVsamples:
         rvdata = make_RV_data(ebin,tRV=tRV,RVnoise=RVnoise,RVsamples=RVsamples,
-                              lighttravel=lighttravel,network=network,outpath=outpath)
+                              lighttravel=lighttravel,network=network,outpath=outpath,
+                              write=write)
         
         data_dict['RVdata'] = rvdata
 
@@ -807,18 +810,18 @@ def check_model(data_dict):
 
 
 
+######################################################################
+# Create dictionary of fit parameters
+######################################################################
 
 def fit_params(nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
                fit_lighttravel=True,tie_LD=False,fit_gravdark=False,
                fit_reflection=False,fit_period=True,fit_limb=True,
                fit_rvs=True,fit_ooe1=False,fit_ooe2=False,fit_L3=False,
-               fit_sp2=False,full_spot=False,fit_ellipsoidal=False,
-               write=True,thin=1,outpath='./',network=None):
-
+               fit_tideang=False,
+               fit_ellipsoidal=False,write=True,thin=1,outpath='./',network=None):
     """ 
-
     Generate a dictionary that contains all the information about the fit
-
     """
     
     fitinfo = {'fit_period':fit_period, 'thin':thin,
@@ -826,12 +829,16 @@ def fit_params(nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
                'fit_ooe1':fit_ooe1,'fit_ooe2':fit_ooe2,'fit_ellipsoidal':fit_ellipsoidal,
                'fit_lighttravel':fit_lighttravel,'fit_L3':fit_L3,
                'fit_gravdark':fit_gravdark,'fit_reflection':fit_reflection,
+               'fit_tideang':fit_tideang,
                'nwalkers':nwalkers,'burnsteps':burnsteps,'mcmcsteps':mcmcsteps,
                'clobber':clobber,'write':write,'outpath': outpath,'network':network}
 
     return fitinfo
 
 
+######################################################################
+# Utilities to diagnose a given dataset
+######################################################################
 
 def numphot(data_dict):
     """
@@ -863,6 +870,10 @@ def uniquebands(data_dict):
 
 
 
+######################################################################
+# Fit photometry/RV data using emcee
+######################################################################
+
 def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 
     """
@@ -892,30 +903,27 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
         os.makedirs(directory)
 
     print ""
-    print "Starting MCMC fitting routine"
+    print "---Starting MCMC fitting routine---"
 
     twomin = 2./(24.*60.)
     onesec = 1./(24.*60.*60.)
 
     nw = fitinfo['nwalkers']
     
+    ######################################################################
     # Initial chain values
-    p0_init = []
-    variables = []
+    print "... deriving starting values for chains"
 
-    print ""
-    print "Deriving starting values for chains"
+    # Fractional radius        
+    variables = []
+    p0_init = [np.random.uniform(ebin['Rsum_a']*0.9999,ebin['Rsum_a']*1.0001, nw)]
+    variables = np.append(variables,'Rsum')
 
     # Surface brightness ratio for each band
     for band in ubands:
         J = teff_to_j(ebin['Teff1'],ebin['Teff2'],band,network=fitinfo['network'])    
         p0_init = np.append(p0_init,[np.random.uniform(J*0.9999,J*1.0001,nw)],axis=0) # surface brightness
         variables = np.append(variables,'J_'+band)
-        
-    # Fractional radius        
-    p0_init = np.append(p0_init,[np.random.uniform(ebin['Rsum_a']*0.9999,
-                                                   ebin['Rsum_a']*1.0001, nw)],axis=0)
-    variables = np.append(variables,'Rsum')
 
     # Radius ratio
     p0_init = np.append(p0_init,[np.random.uniform(ebin['Rratio']*0.9999,
@@ -965,7 +973,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
     for band in ubands:
         # Star 1
         q1a,q2a = get_limb_qs(Mstar=ebin['Mstar1'],Rstar=ebin['Rstar1'],Tstar=ebin['Teff1'],
-                              limb='quad',network=network,band=band)
+                              limb='quad',network=fitinfo['network'],band=band)
         p0_init = np.append(p0_init,[np.random.uniform(q1a*.999,q1a*1.001,nw)],axis=0)
         variables = np.append(variables,'q1a_'+band)
         p0_init = np.append(p0_init,[np.random.uniform(q2a*.999,q2a*1.001,nw)],axis=0)
@@ -973,7 +981,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
         
         # Star 2
         q1b,q2b = get_limb_qs(Mstar=ebin['Mstar2'],Rstar=ebin['Rstar2'],Tstar=ebin['Teff2'],
-                              limb='quad',network=network,band=band)
+                              limb='quad',network=fitinfo['network'],band=band)
         p0_init = np.append(p0_init,[np.random.uniform(q1b*.999,q1b*1.001,nw)],axis=0)
         variables = np.append(variables,'q1b_'+band)
         p0_init = np.append(p0_init,[np.random.uniform(q2b*.999,q2b*1.001,nw)],axis=0)
@@ -994,10 +1002,6 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
         p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
         variables = np.append(variables,'Ref2')
 
-    # Mass ratio
-    p0_init = np.append(p0_init,[np.abs(np.random.uniform(ebin['Mratio']*0.9999,
-                                                          ebin['Mratio']*1.0001,nw))],axis=0)
-    
     # Tidal angle of primary 
     if fitinfo['fit_tideang']:
         p0_init = np.append(p0_init,[np.random.uniform(0,90,nw)],axis=0)
@@ -1019,7 +1023,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 
 
     ##############################
-    # Spot Modeling (use GP)
+    # Spot Modeling (using GP)
     ##############################
     if fitinfo['fit_ooe1']:
         # Star 1
@@ -1038,16 +1042,16 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
         # Width of each periodic peak (gamma = 1/(2s^2))
         # Initial distribution informed from GP_Fitter example
         p0_init = np.append(p0_init,[np.random.lognormal(45,5,nw)],axis=0)
-        variables.append('OOE_Decay1')
+        variables = np.append(variables,'OOE_Decay1')
                 
         # Period: Separation of peaks.
         p0_init = np.append(p0_init,[np.random.lognormal(3.99,0.01,nw)],axis=0)
-        variables.append('OOE_Per1')
+        variables = np.append(variables,'OOE_Per1')
 
         ### Possible to improve treatment of these nuisance parameters.
         # Fraction of spots covered
         p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
-        variables.append('FSCAve')
+        variables = np.append(variables,'FSCAve')
 
         # Base spottedness  = zero (accounted for by GP)
         
@@ -1057,12 +1061,10 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
     
     # RV fitting
     if fitinfo['fit_rvs']:
-        p0_init = np.append(p0_init,[np.random.random(ebin['Ktot'],1,nw)],axis=0)
-        variables.append('Ktot')
-        p0_init = np.append(p0_init,[np.random.random(ebin['Vsys'],5,nw)],axis=0)
-        variables.append('Vsys')
-
-    variables = np.array(variables)
+        p0_init = np.append(p0_init,[np.random.normal(ebin['Ktot'],1,nw)],axis=0)
+        variables = np.append(variables,'Ktot')
+        p0_init = np.append(p0_init,[np.random.normal(ebin['Vsys'],5,nw)],axis=0)
+        variables = np.append(variables,'Vsys')
 
     fitinfo['variables'] = variables
     
@@ -1072,9 +1074,10 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 
 # Number of dimensions in the fit.
     ndim = np.shape(p0)[1]
-
+    print "... fitting data using "+str(ndim)+" free parameters"
+    
 # Do not redo MCMC unless clobber flag is set
-    done = os.path.exists(directory+'Jchain.txt')
+    done = os.path.exists(directory+'Rsum_chain.txt')
     if done == True and fitinfo['clobber'] == False:
         print "MCMC run already completed"
         return False,False
@@ -1082,12 +1085,11 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 # Set up MCMC sampler
     print "... initializing emcee sampler"
     tstart = time.time()
-    sampler = emcee.EnsembleSampler(nw, ndim, lnprob, args=(data,fitinfo),kwargs={'debug':debug,'ebin': ebin},
+    sampler = emcee.EnsembleSampler(nw, ndim, lnprob, args=(data_dict,fitinfo,ebin),
+                                    kwargs={'debug':debug,'ebin': ebin},
                                     threads=threads)
-
 # Run burn-in
-    print ""
-    print "Running burn-in with "+str(fitinfo['burnsteps'])+" steps and "+str(fitinfo['nwalkers'])+" walkers"
+    print "... running burn-in with "+str(fitinfo['burnsteps'])+" steps and "+str(fitinfo['nwalkers'])+" walkers"
     pos, prob, state = sampler.run_mcmc(p0, fitinfo['burnsteps'])
     print done_in(tstart)
 
@@ -1142,7 +1144,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
         lp = sampler.lnprobability.flatten()
         np.savetxt(directory+'lnprob'+thinst+'.txt',lp[0::thin])
         for i in np.arange(len(variables)):
-            np.savetxt(directory+variables[i]+'chain'+thinst+'.txt',sampler.flatchain[0::thin,i])
+            np.savetxt(directory+variables[i]+'_chain'+thinst+'.txt',sampler.flatchain[0::thin,i])
 
     return sampler.lnprobability.flatten(),sampler.flatchain
 
@@ -1376,7 +1378,7 @@ def vec_to_params(x,variables,ebin=None,fitinfo=None,verbose=True):
              'spSqSinCos2': squaredamp2,               # cos^2-sin^2 amp, star 2                     
              'light_tt': cltt,                         # light travel time
              'ktot': ktot,                             # total RV amplitude
-             'Vsys': vsys]}                            # system velocity
+             'Vsys': vsys}                             # system velocity
 
     parm, vder = dict_to_params(ebpar)
 
@@ -1520,7 +1522,7 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
 
 
 
-def lnprob(x,data,fitinfo,ebin=None,debug=False):
+def lnprob(x,data,fitinfo,ebin,debug=False,ebin=None):
 
     """
     ----------------------------------------------------------------------
@@ -1534,8 +1536,22 @@ def lnprob(x,data,fitinfo,ebin=None,debug=False):
     """
 
     variables = fitinfo['variables']
+
+    ipdb.set_trace()
+    # Find number of photometric bands and loop through each with the following:
     
+    # Get band name from the data dictionary   
+    # Issue vec_to_params for each photometry data set
     parm,vder = vec_to_params(x,variables,ebin=ebin)
+    # Impose priors on parameters
+    # Spot model on OOE light
+    # eb model
+    # Create log likelihood
+
+    # Model RV points
+    
+
+
 
     try:
         vsys = x[variables == 'Vsys'][0]
@@ -1543,7 +1559,6 @@ def lnprob(x,data,fitinfo,ebin=None,debug=False):
     except:
         vsys = 0.0
         ktot = 0.0
-
 
     #!!! Loop though all unique photometric bands and assign limb darkening
     # - Search variables for 'q*a*' and loop through each set of 4
@@ -1591,8 +1606,6 @@ def lnprob(x,data,fitinfo,ebin=None,debug=False):
         return -np.inf        
     if q1a > 1 or q1a < 0 or q2a > 1 or q2a < 0 or np.isnan(q1a) or np.isnan(q2a):
         return -np.inf        
-
-
 
     
     if fitinfo['fit_L3']:
@@ -2296,7 +2309,7 @@ def get_limb_coeff(Tstar,loggstar,filter='Kp',plot=False,network=None,limb='quad
                    extent=[np.min(ulogg),np.max(ulogg),np.min(uTeff),np.max(uTeff)],
                    aspect=1./3000,vmin=np.nanmin(dgrid),vmax=np.nanmax(dgrid))
         plt.colorbar()
-
+        plt.show()
     if passfuncs:
         return ldc1func,ldc2func,ldc3func,ldc4func
 
@@ -3013,7 +3026,7 @@ def ebsim_fit_orig(data,ebpar,fitinfo,debug=False):
         lp = sampler.lnprobability.flatten()
         np.savetxt(directory+'lnprob'+thinst+'.txt',lp[0::thin])
         for i in np.arange(len(variables)):
-            np.savetxt(directory+variables[i]+'chain'+thinst+'.txt',sampler.flatchain[0::thin,i])
+            np.savetxt(directory+variables[i]+'_chain'+thinst+'.txt',sampler.flatchain[0::thin,i])
 
     return sampler.lnprobability.flatten(),sampler.flatchain
 
