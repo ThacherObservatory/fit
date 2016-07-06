@@ -2,6 +2,7 @@ import ebsim as ebs
 import numpy as np
 import constants as c
 import matplotlib.pyplot as plt
+import collections as col
 
 # From Cakirli 2013
 m1 = 0.680 * c.Msun ; r1 = 0.613 * c.Rsun
@@ -59,11 +60,15 @@ datadict = ebs.make_model_data(ebin,nphot=nphot,band=band,photnoise=photnoise,
                                  network=network,write=False)
                                  
 
+datadict = col.OrderedDict(sorted(datadict.items()))
 
 ebs.check_model(datadict)
 
+ubands = ebs.uniquebands(datadict)
+
 fitinfo = ebs.fit_params(nwalkers=100,burnsteps=100,mcmcsteps=100,clobber=True,
                          fit_ooe1=[True,False,False,False],network=network)
+
 
 ebs.ebsim_fit(datadict,fitinfo,ebin,debug=True)
 

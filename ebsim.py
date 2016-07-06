@@ -1,5 +1,11 @@
+# Updates
+# -------
+# Made all band specific quantities iterable (grav dark, reflection, ooe)
+# Need to specify band even for a single photometric dataset
+
 # TO DO:
-#-------
+# ------
+#
 # Compute limb darkening for multiple bands
 # Realistic surface brightness ratio given main sequence radius and band
 # (see MS_COLORS.csv)
@@ -521,7 +527,7 @@ def make_phot_data(ebin,
         np.savetxt('lightcurve_model_'+band+'.txt',lout.T)
         np.savetxt('ooe_model_'+band+'.txt',ooe.T)
 
-    data = {'light':lout, 'ooe':ooe, 'band':band, 'integration':integration}
+    data = {'light':lout, 'ooe':ooe, 'band':band, 'integration':integration, 'L3': L3}
         
     return data
 
@@ -865,9 +871,10 @@ def uniquebands(data_dict):
     """
     photkeys = [key for key in data_dict.keys() if key.startswith('phot')]
     bands = [data_dict[key]['band'] for key in photkeys]
-    return np.unique(np.array(bands))
-
-
+    _, idx = np.unique(bands, return_index=True)
+    final = np.array(bands)[np.sort(idx)].tolist()
+    print 'Unique bands are ',final
+    return final
 
 
 ######################################################################
@@ -891,7 +898,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
   
     nbands = numbands(data_dict)
     ubands = uniquebands(data_dict)
-    
+
     # Check for RVs
     if not data_dict.has_key('RVdata'):
         print 'Data dictionary does not contain RV data!'
@@ -970,37 +977,61 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
     
     
     # Limb darkening, two parameters in each band for each star
-    for band in ubands:
-        # Star 1
-        q1a,q2a = get_limb_qs(Mstar=ebin['Mstar1'],Rstar=ebin['Rstar1'],Tstar=ebin['Teff1'],
-                              limb='quad',network=fitinfo['network'],band=band)
-        p0_init = np.append(p0_init,[np.random.uniform(q1a*.999,q1a*1.001,nw)],axis=0)
-        variables = np.append(variables,'q1a_'+band)
-        p0_init = np.append(p0_init,[np.random.uniform(q2a*.999,q2a*1.001,nw)],axis=0)
-        variables = np.append(variables,'q2a_'+band)
-        
-        # Star 2
-        q1b,q2b = get_limb_qs(Mstar=ebin['Mstar2'],Rstar=ebin['Rstar2'],Tstar=ebin['Teff2'],
-                              limb='quad',network=fitinfo['network'],band=band)
-        p0_init = np.append(p0_init,[np.random.uniform(q1b*.999,q1b*1.001,nw)],axis=0)
-        variables = np.append(variables,'q1b_'+band)
-        p0_init = np.append(p0_init,[np.random.uniform(q2b*.999,q2b*1.001,nw)],axis=0)
-        variables = np.append(variables,'q2b_'+band)
+    for i in range(nbands):
+        band = ubands[i]
+        try:
+            do = fitinfo['fit_limb'][i]
+        except:
+            do = fitinfo['fit_limb']
 
+        if do:
+            # Star 1
+            q1a,q2a = get_limb_qs(Mstar=ebin['Mstar1'],Rstar=ebin['Rstar1'],Tstar=ebin['Teff1'],
+                                  limb='quad',network=fitinfo['network'],band=band)
+            p0_init = np.append(p0_init,[np.random.uniform(q1a*.999,q1a*1.001,nw)],axis=0)
+            variables = np.append(variables,'q1a_'+band)
+            p0_init = np.append(p0_init,[np.random.uniform(q2a*.999,q2a*1.001,nw)],axis=0)
+            variables = np.append(variables,'q2a_'+band)
+            
+            # Star 2
+            q1b,q2b = get_limb_qs(Mstar=ebin['Mstar2'],Rstar=ebin['Rstar2'],Tstar=ebin['Teff2'],
+                                  limb='quad',network=fitinfo['network'],band=band)
+            p0_init = np.append(p0_init,[np.random.uniform(q1b*.999,q1b*1.001,nw)],axis=0)
+            variables = np.append(variables,'q1b_'+band)
+            p0_init = np.append(p0_init,[np.random.uniform(q2b*.999,q2b*1.001,nw)],axis=0)
+            variables = np.append(variables,'q2b_'+band)
+        else:
+            q1,q2 = get_limb_qs(Mstar=ebin['Mstar1'],Rstar=ebin['Rstar1'],Tstar=ebin['Teff1'],
+                                limb='quad',network=fitinfo['network'],band=band)
+            fitinfo['limb_defaults'+band] = np.array([q1,q2])
 
-    # !!! Is gravity darkening needed for each photometric band? (methinks yes)
-    if fitinfo['fit_gravdark']:
-        p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
-        variables = np.append(variables,'GD1')
-        p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
-        variables = np.append(variables,'GD2')
+            
+    # Gravity darkening
+    for i in range(nbands):
+        band = ubands[i]
+        try:
+            do = fitinfo['fit_gravdark'][i]
+        except:
+            do = fitinfo['fit_gravdark']
+        if do:
+            p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
+            variables = np.append(variables,'GD1_'+band)
+            p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
+            variables = np.append(variables,'GD2_'+band)
 
-    #  !!! Is reflection/albedo needed for each photometric band? (methinks yes)
-    if fitinfo['fit_reflection']:
-        p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
-        variables = np.append(variables,'Ref1')
-        p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
-        variables = np.append(variables,'Ref2')
+    #  Reflection/albedo
+    for i in range(nbands):
+        band = ubands[i]
+        try:
+            do = fitinfo['fit_reflection'][i]
+        except:
+            do = fitinfo['fit_reflection']
+        if do:
+  
+            p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
+            variables = np.append(variables,'Ref1_'+band)
+            p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
+            variables = np.append(variables,'Ref2_'+band)
 
     # Tidal angle of primary 
     if fitinfo['fit_tideang']:
@@ -1008,9 +1039,15 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
         variables = np.append(variables,'TideAng')
 
     # Third light
-    if fitinfo['fit_L3']:
-        p0_init = np.append(p0_init,[np.random.uniform(0,0.25,nw)],axis=0)
-        variables = np.append(variables,'L3')
+    for i in range(nbands):
+        band = ubands[i]
+        try:
+            do = fitinfo['fit_L3'][i]
+        except:
+            do = fitinfo['fit_L3']
+        if do:
+            p0_init = np.append(p0_init,[np.random.uniform(0,0.25,nw)],axis=0)
+            variables = np.append(variables,'L3_'+band)
 
     # Epoch of inferior conjunction
     p0_init = np.append(p0_init,[np.random.normal(ebin['t01'],onesec,nw)],axis=0)
@@ -1025,31 +1062,43 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
     ##############################
     # Spot Modeling (using GP)
     ##############################
-    if fitinfo['fit_ooe1']:
-        # Star 1
-        # Quasi-Periodic Kernel for Out of Eclipse Variations
+    for i in range(nbands):
+        band = ubands[i]
+        try:
+            do = fitinfo['fit_ooe1'][i]
+        except:
+            do = fitinfo['fit_ooe1']
+        if do:
+            # Star 1
+            # Quasi-Periodic Kernel for Out of Eclipse Variations
 
-        # Amplitude for QP kernel 1: overall scale of variance and covariance.
-        # Initial distribution informed from GP_Fitter example
-        p0_init = np.append(p0_init,[np.random.lognormal(0.01,0.001,nw)],axis=0)
-        variables = np.append(variables,'OOE_Amp1')
+            # Amplitude for QP kernel 1: overall scale of variance and covariance.
+            # Initial distribution informed from GP_Fitter example
+            p0_init = np.append(p0_init,[np.random.lognormal(0.01,0.001,nw)],axis=0)
+            variables = np.append(variables,'OOE_Amp1_'+band)
         
-        # Taper on periodic peaks (given as a variance). Smaller numbers, more taper.
-        # Initial distribution informed from GP_Fitter example
-        p0_init = np.append(p0_init,[np.random.lognormal(5,1,nw)],axis=0)
-        variables = np.append(variables,'OOE_SineAmp1')
+            # Taper on periodic peaks (given as a variance). Smaller numbers, more taper.
+            # Initial distribution informed from GP_Fitter example
+            p0_init = np.append(p0_init,[np.random.lognormal(5,1,nw)],axis=0)
+            variables = np.append(variables,'OOE_SineAmp1_'+band)
 
-        # Width of each periodic peak (gamma = 1/(2s^2))
-        # Initial distribution informed from GP_Fitter example
-        p0_init = np.append(p0_init,[np.random.lognormal(45,5,nw)],axis=0)
-        variables = np.append(variables,'OOE_Decay1')
-                
-        # Period: Separation of peaks.
-        p0_init = np.append(p0_init,[np.random.lognormal(3.99,0.01,nw)],axis=0)
-        variables = np.append(variables,'OOE_Per1')
+            # Width of each periodic peak (gamma = 1/(2s^2))
+            # Initial distribution informed from GP_Fitter example
+            p0_init = np.append(p0_init,[np.random.lognormal(45,5,nw)],axis=0)
+            variables = np.append(variables,'OOE_Decay1_'+band)
 
+            # Period: Separation of peaks (should this be not specific to each band??)
+            p0_init = np.append(p0_init,[np.random.lognormal(3.99,0.01,nw)],axis=0)
+            variables = np.append(variables,'OOE_Per1_'+band)
+            
+    try:
+        do = True if any(fitinfo['fit_ooe1']) else False
+    except:
+        if length(fitinfo['fit_ooe1']) == 1:
+            do = True if fitinfo['fit_ooe1'] else False
+    if do:
         ### Possible to improve treatment of these nuisance parameters.
-        # Fraction of spots covered
+        # Fraction of spots covered (not band specific!)
         p0_init = np.append(p0_init,[np.random.uniform(0,1,nw)],axis=0)
         variables = np.append(variables,'FSCAve')
 
@@ -1085,7 +1134,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 # Set up MCMC sampler
     print "... initializing emcee sampler"
     tstart = time.time()
-    sampler = emcee.EnsembleSampler(nw, ndim, lnprob, args=(data_dict,fitinfo,ebin),
+    sampler = emcee.EnsembleSampler(nw, ndim, lnprob, args=(data_dict,fitinfo),
                                     kwargs={'debug':debug,'ebin': ebin},
                                     threads=threads)
 # Run burn-in
@@ -1152,7 +1201,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 ################################################################################
 # Input vector to EB parameters
 ################################################################################
-def vec_to_params(x,variables,ebin=None,fitinfo=None,verbose=True):
+def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
 
     """
     ----------------------------------------------------------------------
@@ -1162,15 +1211,17 @@ def vec_to_params(x,variables,ebin=None,fitinfo=None,verbose=True):
     that is compatible with eb.model.
 
     """
-    
-    if len(variables) != len(x):
-        print 'Length of variables not equal to length of input vector'
-        return None,None
+
+    # For band specific variables
+    if band != None:
+        btag = '_'+band
+    else:
+        btag = ''
 
     ##############################
     # Surface brightness ratio
     try:
-        J =   x[variables == 'J'][0] 
+        J =   x[variables == 'J'+btag][0] 
     except:
         J =  ebin['L2']/ebin['L1']
 
@@ -1227,23 +1278,25 @@ def vec_to_params(x,variables,ebin=None,fitinfo=None,verbose=True):
     ##############################
     # LD params for star 1
     try:
-        q1a = x[variables == 'q1a'][0]  
-        q2a = x[variables == 'q2a'][0]  
+        q1a = x[variables == 'q1a'+btag][0]  
+        q2a = x[variables == 'q2a'+btag][0]  
         u1a, u2a = qtou(q1a,q2a,limb=limb)
     except:
-        u1a = ebin["LDlin1"]   # u1 star 1
-        u2a = ebin["LDnon1"]   # u2 star 1
+        # !!! Finish this !!!
+        # get qs from fitparams['limb_defaults_band']
+        u1a,u2a = qtou(q1a,q2a,limb=limb)
 
 
     ##############################
     # LD params for star 2
     try:
-        q1b = x[variables == 'q1b'][0]  
-        q2b = x[variables == 'q2b'][0] 
+        q1b = x[variables == 'q1b'+btag][0]  
+        q2b = x[variables == 'q2b'+btag][0] 
         u1b, u2b = qtou(q1b,q2b)
     except:
-        u1b = ebin["LDlin2"]   # u1 star 2
-        u2b = ebin["LDnon2"]   # u2 star 2
+        # What would the defaults be!??!
+        u1b = 0.5
+        u2b = 0.5
 
 
     ##############################
@@ -1263,9 +1316,9 @@ def vec_to_params(x,variables,ebin=None,fitinfo=None,verbose=True):
     ##############################
     # Third light
     try:
-        L3 = x[variables == 'L3'][0]
+        L3 = x[variables == 'L3'+btag][0]
     except:
-        L3 = ebin["L3"]
+        L3 = ebin['L3']
     
     ##############################
     # Light travel time
@@ -1522,7 +1575,7 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
 
 
 
-def lnprob(x,data,fitinfo,ebin,debug=False,ebin=None):
+def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
 
     """
     ----------------------------------------------------------------------
@@ -1538,8 +1591,25 @@ def lnprob(x,data,fitinfo,ebin,debug=False,ebin=None):
     variables = fitinfo['variables']
 
     ipdb.set_trace()
-    # Find number of photometric bands and loop through each with the following:
-    
+    # Loop through each dataset in the data dictionary.
+    for key in datadict.keys():
+        data = datadict[key]
+        if key[0:4] == 'phot':
+            int = data['integration']
+            band = data['band']
+            time_ooe = data['ooe'][0,:]
+            flux_ooe = data['ooe'][1,:]
+            err_ooe  = data['ooe'][2,:]
+            parm,vder = vec_to_params(x,variables,band=band,ebin=ebin)
+
+
+
+
+            
+            
+    nphot = numphot(data)
+    photi = np.where(data.keys() == 'phot')
+        
     # Get band name from the data dictionary   
     # Issue vec_to_params for each photometry data set
     parm,vder = vec_to_params(x,variables,ebin=ebin)
@@ -1548,10 +1618,8 @@ def lnprob(x,data,fitinfo,ebin,debug=False,ebin=None):
     # eb model
     # Create log likelihood
 
-    # Model RV points
     
-
-
+    # Model RV points
 
     try:
         vsys = x[variables == 'Vsys'][0]
@@ -1562,7 +1630,7 @@ def lnprob(x,data,fitinfo,ebin,debug=False,ebin=None):
 
     #!!! Loop though all unique photometric bands and assign limb darkening
     # - Search variables for 'q*a*' and loop through each set of 4
-    # - put 0 - 1 prior directly in loops
+    # - put q = 0 - 1 prior directly in loops
     # - Option Tie LDs to Claret using stellar parameters if desired
     # - else use input LDs
     
