@@ -112,6 +112,7 @@ def r_to_m(r):
 def ebinput(m1=None,m2=None,                        # Stellar masses
             r1=0.5,r2=0.3,                          # Stellar radii
             l1=None,l2=None,                        # Stellar luminosity
+            L3=0.0,                                 # Third light (fractional amount)
             ecc=0.0,omega=0.0,impact=0,             # Orbital shape and orientation
             period=5.0,t0=2457998.0,                # Ephemeris Sept 1, 2017 (~ TESS launch)
             vsys=10.0,                              # System velocity
@@ -129,22 +130,22 @@ def ebinput(m1=None,m2=None,                        # Stellar masses
 
     # Set mass to be equal to radius in solar units if flag is set
     if not m1:
-        print '... converting primary radius to estiated mass assuming main sequence star'
         m1 = r_to_m(r1)
+        print '... estimating mass of primary star: %f' % m1
     if not m2:
-        print '... converting secondary radius to estiated mass assuming main sequence star'
         m2 = r_to_m(r2)
+        print '...  estimating mass of secondary star: %f' % m2
 
     # Mass ratio is not used unless gravity darkening is considered.
     massratio = m2/m1 
 
     # Surface brightness ratio
     if not l1:
-        print '... converting primary radius to estiated luminosity assuming main sequence star'
         l1 = r_to_l(r1)
+        print '... estimating luminosity of primary star: %f Lsun' % l1
     if not l2:
-        print '... converting secondary radius to estiated luminosity assuming main sequence star'
         l2 = r_to_l(r2)
+        print '... estimating luminosity of secondary star: %f Lsun' % l2
 
     # Effective temperatures
     Teff1 = (l1*c.Lsun/(4*np.pi*(r1*c.Rsun)**2*c.sb ))**(0.25)
@@ -178,7 +179,8 @@ def ebinput(m1=None,m2=None,                        # Stellar masses
 
 
     # Create initial ebpar dictionary
-    ebin = {'L1':l1, 'L2':l2, 'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
+    ebin = {'L1':l1, 'L2':l2, 'L3': L3,
+            'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
             'Mratio':massratio, 'ecosw':ecosw0, 'esinw':esinw0,
             'Period':period, 't01':t0, 't02':None, 'dt12':None,
             'tdur1':None, 'tdur2':None,'bjd':bjd,
@@ -314,7 +316,7 @@ def make_phot_data(ebin,
     # Need to do something to estimate a realistic surface brightness ratio
     # ms = pd.read_csv('MS_Colors.csv',header=0) 
     J = teff_to_j(ebin['Teff1'],ebin['Teff2'],band,network=network)
-    print 'Surface brightness ratio in '+band+' band estimated to be %.3f' % J
+    print '... estimating surface brightness ratio in '+band+' band: %.3f' % J
     
     l1 = ebin['L1']
     l2 = ebin['L2']
@@ -664,6 +666,7 @@ def make_model_data(ebin,
                     nphot=None,                             # Number of photometry datasets
                     band=None,                              # Photometric bands of each dataset
                     photnoise=None,                         # Noise of each photometric dataset
+                    L3=None,                                # Third light in each band
                     q1a=None,q2a=None,q1b=None,q2b=None,    # LD params for each photometric band
                     limb='quad',                            # LD type                    
                     obsdur=None,int=None,                   # Duration of obs, and int time
@@ -690,6 +693,7 @@ def make_model_data(ebin,
                               q1b=q1b[i],q2b=q2b[i],
                               obsdur=obsdur[i],int=int[i],
                               durfac=durfac[i],
+                              L3=L3[i],
                               gravdark=gravdark,reflection=reflection,
                               ellipsoidal=ellipsoidal,
                               lighttravel=lighttravel,
@@ -1001,9 +1005,13 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
             p0_init = np.append(p0_init,[np.random.uniform(q2b*.999,q2b*1.001,nw)],axis=0)
             variables = np.append(variables,'q2b_'+band)
         else:
-            q1,q2 = get_limb_qs(Mstar=ebin['Mstar1'],Rstar=ebin['Rstar1'],Tstar=ebin['Teff1'],
-                                limb='quad',network=fitinfo['network'],band=band)
-            fitinfo['limb_defaults'+band] = np.array([q1,q2])
+            print 'Using default limb darkening parameters calculated from input stellar parameters'
+            q1a,q2a = get_limb_qs(Mstar=ebin['Mstar1'],Rstar=ebin['Rstar1'],Tstar=ebin['Teff1'],
+                                  limb='quad',network=fitinfo['network'],band=band)
+            q1b,q2b = get_limb_qs(Mstar=ebin['Mstar2'],Rstar=ebin['Rstar2'],Tstar=ebin['Teff2'],
+                                  limb='quad',network=fitinfo['network'],band=band)
+            fitinfo['limb_defaults1_'+band] = np.array([q1a,q2a])
+            fitinfo['limb_defaults2_'+band] = np.array([q1b,q2b])
 
             
     # Gravity darkening
@@ -1223,8 +1231,8 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
     try:
         J =   x[variables == 'J'+btag][0] 
     except:
+        print "WARNING: you're really NOT going to fit for surface brightness ratio ?! "
         J =  ebin['L2']/ebin['L1']
-
 
     ##############################
     # Scaled sum of stellar radii
@@ -1264,7 +1272,8 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
     ##############################
     # Period
     try:
-        period = x[variables == 'Period'][0]
+        ipdb.set_trace()
+        period = x[variables == 'Period']
     except:
         period = ebin['Period']
         
@@ -1278,26 +1287,31 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
     ##############################
     # LD params for star 1
     try:
-        q1a = x[variables == 'q1a'+btag][0]  
-        q2a = x[variables == 'q2a'+btag][0]  
+        q1a = x[variables == 'q1a_'+btag][0]  
+        q2a = x[variables == 'q2a_'+btag][0]  
         u1a, u2a = qtou(q1a,q2a,limb=limb)
     except:
-        # !!! Finish this !!!
-        # get qs from fitparams['limb_defaults_band']
-        u1a,u2a = qtou(q1a,q2a,limb=limb)
-
+        try:
+            q1a,q2a = fitinfo['limb_defaults1_'+band]
+            u1a,u2a = qtou(q1a,q2a,limb=limb)
+        except:
+            print 'WARNING: using (unrealistic) default values for limb darkening!'
+            u1a=0.5 ; u2a=0.5
 
     ##############################
     # LD params for star 2
     try:
-        q1b = x[variables == 'q1b'+btag][0]  
-        q2b = x[variables == 'q2b'+btag][0] 
+        q1b = x[variables == 'q1b_'+btag][0]  
+        q2b = x[variables == 'q2b_'+btag][0] 
         u1b, u2b = qtou(q1b,q2b)
     except:
-        # What would the defaults be!??!
-        u1b = 0.5
-        u2b = 0.5
-
+        try:
+            q1b,q2b = fitinfo['limb_defaults2_'+band]
+            u1b,u2b = qtou(q1b,q2b,limb=limb)
+        except:
+            print 'WARNING: using (unrealistic) default values for limb darkening!'
+            u1b=0.5 ; u2b=0.5
+ 
 
     ##############################
     # Mass ratio
@@ -1312,6 +1326,7 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
         massratio  = ebin['Mratio']
         ktot = ebin['Ktot']
         vsys = ebin['Vsys']
+
 
     ##############################
     # Third light
@@ -1591,20 +1606,18 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
     variables = fitinfo['variables']
 
     ipdb.set_trace()
+    key = datadict.keys()[1]
     # Loop through each dataset in the data dictionary.
     for key in datadict.keys():
         data = datadict[key]
         if key[0:4] == 'phot':
             int = data['integration']
             band = data['band']
+            parm,vder = vec_to_params(x,variables,band=band,ebin=ebin,fitinfo=fitinfo)
+
             time_ooe = data['ooe'][0,:]
             flux_ooe = data['ooe'][1,:]
             err_ooe  = data['ooe'][2,:]
-            parm,vder = vec_to_params(x,variables,band=band,ebin=ebin)
-
-
-
-
             
             
     nphot = numphot(data)
