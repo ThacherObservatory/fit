@@ -35,7 +35,7 @@ obsdur = [90.0,10.0,10.0,10.0]
 inttime = [1800.0,300.,300.,300.]
 durfac = [3.0,2,2,2]
 RVsamples = 20
-spotamp1 = [0.2, 0., 0., 0.]
+spotamp1 = [1.0, 0., 0., 0.]
 spotP1 = np.pi*86400/period
 spotfrac1 = [0.5,0.0,0.0,0.0]
 spotbase1 = np.zeros(4)
@@ -66,7 +66,7 @@ datadict = col.OrderedDict(sorted(datadict.items()))
 
 ebs.check_model(datadict)
 
-ubands = ebs.uniquebands(datadict)
+ubands = ebs.uniquebands(datadict,quiet=True)
 
 fitinfo = ebs.fit_params(nwalkers=100,burnsteps=100,mcmcsteps=100,clobber=True,
                          fit_ooe1=[True,False,False,False],network=network)

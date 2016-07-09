@@ -406,13 +406,14 @@ def make_phot_data(ebin,
         # GD1 = 0.32, GD2 = 0.32 for low mass stars?
         pass
     else:
-        GD1 = 0.0 ; GD2 = 0.0
+        GD1 = 0.32 ; GD2 = 0.32
 
     if reflection:
         #  'Ref1':0.4,  'Ref2':0.4
         pass
     else:
-        Ref1 = 0.0 ; Ref2 = 0.0
+        # Standard values?
+        Ref1 = 0.4 ; Ref2 = 0.4
 
     if not tideang:
         tideang = 0.0
@@ -502,7 +503,7 @@ def make_phot_data(ebin,
 
     # tref remains zero so that the ephemeris within parm manifests correctly
     lightmodel = compute_eclipse(tfinal,parm,integration=integration,modelfac=modelfac,
-                                     fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
+                                     fitrvs=False,tref=0.0,period=period,ooe1=None,ooe2=None,
                                      unsmooth=False,spotflag=spotflag)
     parm[eb.PAR_Q] = ebin['Mratio']
     
@@ -529,7 +530,7 @@ def make_phot_data(ebin,
         np.savetxt('lightcurve_model_'+band+'.txt',lout.T)
         np.savetxt('ooe_model_'+band+'.txt',ooe.T)
 
-    data = {'light':lout, 'ooe':ooe, 'band':band, 'integration':integration, 'L3': L3}
+    data = {'light':lout, 'ooe':ooe, 'band':band, 'integration':integration, 'L3': L3, 'limb': limb}
         
     return data
 
@@ -869,7 +870,7 @@ def numbands(data_dict):
     return length(np.unique(np.array(bands)))
 
 
-def uniquebands(data_dict):
+def uniquebands(data_dict,quiet=False):
     """
     Determine the number of unique photometry bands
     """
@@ -877,7 +878,8 @@ def uniquebands(data_dict):
     bands = [data_dict[key]['band'] for key in photkeys]
     _, idx = np.unique(bands, return_index=True)
     final = np.array(bands)[np.sort(idx)].tolist()
-    print 'Unique bands are ',final
+    if not quiet:
+        print 'Unique bands are ',final
     return final
 
 
@@ -1061,11 +1063,6 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
     p0_init = np.append(p0_init,[np.random.normal(ebin['t01'],onesec,nw)],axis=0)
     variables = np.append(variables,'t0')
 
-    # Period
-    if fitinfo['fit_period']:
-        p0_init = np.append(p0_init,[np.random.uniform(ebin['Period']-onesec,ebin['Period']+onesec,nw)],axis=0)
-        variables = np.append(variables,'Period')
-
 
     ##############################
     # Spot Modeling (using GP)
@@ -1082,21 +1079,21 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 
             # Amplitude for QP kernel 1: overall scale of variance and covariance.
             # Initial distribution informed from GP_Fitter example
-            p0_init = np.append(p0_init,[np.random.lognormal(0.01,0.001,nw)],axis=0)
+            p0_init = np.append(p0_init,[np.random.lognormal(np.log(0.01),0.001,nw)],axis=0)
             variables = np.append(variables,'OOE_Amp1_'+band)
         
             # Taper on periodic peaks (given as a variance). Smaller numbers, more taper.
             # Initial distribution informed from GP_Fitter example
-            p0_init = np.append(p0_init,[np.random.lognormal(5,1,nw)],axis=0)
+            p0_init = np.append(p0_init,[np.random.lognormal(np.log(5),1,nw)],axis=0)
             variables = np.append(variables,'OOE_SineAmp1_'+band)
 
             # Width of each periodic peak (gamma = 1/(2s^2))
             # Initial distribution informed from GP_Fitter example
-            p0_init = np.append(p0_init,[np.random.lognormal(45,5,nw)],axis=0)
+            p0_init = np.append(p0_init,[np.random.lognormal(np.log(45),5,nw)],axis=0)
             variables = np.append(variables,'OOE_Decay1_'+band)
 
             # Period: Separation of peaks (should this be not specific to each band??)
-            p0_init = np.append(p0_init,[np.random.lognormal(3.99,0.01,nw)],axis=0)
+            p0_init = np.append(p0_init,[np.random.lognormal(np.log(3.99),0.01,nw)],axis=0)
             variables = np.append(variables,'OOE_Per1_'+band)
             
     try:
@@ -1209,7 +1206,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 ################################################################################
 # Input vector to EB parameters
 ################################################################################
-def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
+def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,limb='quad',verbose=True):
 
     """
     ----------------------------------------------------------------------
@@ -1237,9 +1234,9 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
     ##############################
     # Scaled sum of stellar radii
     try:
-        rratio =  x[variables == 'Rsum'][0] 
+        rsum =  x[variables == 'Rsum'][0] 
     except:
-        rratio = ebin['Rsum_a']
+        rsum = ebin['Rsum_a']
 
     ##############################
     # Radius ratio
@@ -1272,8 +1269,7 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
     ##############################
     # Period
     try:
-        ipdb.set_trace()
-        period = x[variables == 'Period']
+        period = x[variables == 'Period'][0]
     except:
         period = ebin['Period']
         
@@ -1287,30 +1283,30 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
     ##############################
     # LD params for star 1
     try:
-        q1a = x[variables == 'q1a_'+btag][0]  
-        q2a = x[variables == 'q2a_'+btag][0]  
+        q1a = x[variables == 'q1a'+btag][0]  
+        q2a = x[variables == 'q2a'+btag][0]  
         u1a, u2a = qtou(q1a,q2a,limb=limb)
     except:
         try:
             q1a,q2a = fitinfo['limb_defaults1_'+band]
             u1a,u2a = qtou(q1a,q2a,limb=limb)
         except:
-            print 'WARNING: using (unrealistic) default values for limb darkening!'
-            u1a=0.5 ; u2a=0.5
+            print 'WARNING: using (probably unrealistic) default values for limb darkening!'
+            u1a=0.5 ; u2a=0.2
 
     ##############################
     # LD params for star 2
     try:
-        q1b = x[variables == 'q1b_'+btag][0]  
-        q2b = x[variables == 'q2b_'+btag][0] 
+        q1b = x[variables == 'q1b'+btag][0]  
+        q2b = x[variables == 'q2b'+btag][0] 
         u1b, u2b = qtou(q1b,q2b)
     except:
         try:
             q1b,q2b = fitinfo['limb_defaults2_'+band]
             u1b,u2b = qtou(q1b,q2b,limb=limb)
         except:
-            print 'WARNING: using (unrealistic) default values for limb darkening!'
-            u1b=0.5 ; u2b=0.5
+            print 'WARNING: using (probably unrealistic) default values for limb darkening!'
+            u1b=0.5 ; u2b=0.2
  
 
     ##############################
@@ -1334,6 +1330,7 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
         L3 = x[variables == 'L3'+btag][0]
     except:
         L3 = ebin['L3']
+        print 'WARNING: Using default value for L3 in '+btag[1:]+' band = %f' % L3
     
     ##############################
     # Light travel time
@@ -1347,31 +1344,37 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
     ##############################
     # Gravity darkening
     try:
-        GD1 = x[variables == 'GD1'][0]
+        GD1 = x[variables == 'GD1'+btag][0]
     except:
-        GD1 = ebin['GD1']   # gravity darkening, std. value
+        GD1 = 0.32
 
     try:
-        GD2 = x[variables == 'GD2'][0]
+        GD2 = x[variables == 'GD2'+btag][0]
     except:
-        GD2 = ebin['GD2']   # gravity darkening, std. value
+        GD2 = 0.32
 
     ##############################
     # Reflection
     try:
-        Ref1 = x[variables == 'Ref1'][0]
+        Ref1 = x[variables == 'Ref1'+btag][0]
     except:
-        Ref1 =  ebin['Ref1']  # albedo, std. value
+        Ref1 =  0.4
 
     try:
-        Ref2 = x[variables == 'Ref2'][0]
+        Ref2 = x[variables == 'Ref2'+btag][0]
     except:
-        Ref2 =  ebin['Ref2']  # albedo, std. value
+        Ref2 =  0.4
+
+    ####################
+    # Tidal Angle
+    try:
+        tideang = x[variables == 'TideAng'][0]
+    except:
+        tideang = 0.0
         
-
-
-    ##############################
+    ####################################################
     # Internal spot parameters
+    # -- these won't be used, but are here for completeness
     try:
         spotP1      = x[variables == 'Rot1'][0]        # rotation parameter (1 = sync.) 
         spotfrac1   = x[variables == 'spFrac1'][0]     # fraction of spots eclipsed     
@@ -1445,12 +1448,10 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
              'spSinCos2': sincosamp2,                  # sinecosine amp, star 2                      
              'spSqSinCos2': squaredamp2,               # cos^2-sin^2 amp, star 2                     
              'light_tt': cltt,                         # light travel time
-             'ktot': ktot,                             # total RV amplitude
+             'Ktot': ktot,                             # total RV amplitude
              'Vsys': vsys}                             # system velocity
 
     parm, vder = dict_to_params(ebpar)
-
-    
 
     # OTHER NOTES:
     #
@@ -1474,7 +1475,7 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
 #    print "Model parameters:"
 #    for name, value, unit in zip(eb.parnames, parm, eb.parunits):
 #        print "{0:<10} {1:14.6f} {2}".format(name, value, unit)
-        
+
     # Derived parameters.
     try:
         vder = eb.getvder(parm, vsys, ktot)
@@ -1495,7 +1496,7 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,verbose=True):
 
 
 def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None,
-                    period=None,ooe1fit=None,ooe2fit=None,unsmooth=False,spotflag=False):
+                    period=None,ooe1=None,ooe2=None,unsmooth=False,spotflag=False):
 
     """
     ----------------------------------------------------------------------
@@ -1539,44 +1540,29 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
         # time sequences
         tdarr = darr + tarr
 
-        phiarr = foldtime(tdarr,t0=tref,period=period)/period
-
-        if (np.max(phiarr) - np.min(phiarr)) > 0.5:
-            phiarr[phiarr < 0] += 1.0
+#        phiarr = foldtime(tdarr,t0=tref,period=period)/period
+#        if (np.max(phiarr) - np.min(phiarr)) > 0.5:
+#            phiarr[phiarr < 0] += 1.0
         
-#        # Compute ol1 and ol2 vectors if needed
-#        if np.shape(ooe1fit):
-#            ol1 = np.polyval(ooe1fit,phiarr)
-#        else:
-#            ol1 = None
-#
-#        if np.shape(ooe2fit):
-#            ol2 = np.polyval(ooe2fit,phiarr)
-#        else:
-#            ol2 = None
-
-
-        # Will need to update this to encorporate GP predictions for OOE light
-        ol1  = None ; ol2 = None
-
+        if type(ooe1) != type(None):
+            # !!! Can't do this!!! arrrg!!!
+            ol1 = ooe1.predict(flux_ooe,time)
+        ipdb.set_trace()
+        
         typ = np.empty_like(tdarr, dtype=np.uint8)
 
         # can use eb.OBS_LIGHT to get light output or
         # eb.OBS_MAG to get mag output        
         typ.fill(eb.OBS_LIGHT)
-        if spotflag:
-            # To create spots modulations using sines and cosines built into eb code
-            # need to use time array.
+
+        if length(ooe1) == length(tdarr) and length(ooe2) == length(tdarr):
+            yarr = eb.model(parm, tdarr, typ, ol1=ol1,ol2=ol2)
+        if length(ooe1) == length(tdarr) and length(ooe2) != length(tdarr):
+            yarr = eb.model(parm, tdarr, typ, ol1=ol1)
+        if length(ooe1) != length(tdarr) and length(ooe2) == length(tdarr):
+            yarr = eb.model(parm, tdarr, typ, ol2=ol2)
+        if length(ooe1) != length(tdarr) and length(ooe2) != length(tdarr):
             yarr = eb.model(parm, tdarr, typ)
-        else:
-            if length(ol1) == length(phiarr) and length(ol2) == length(phiarr):
-                yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI, ol1=ol1, ol2=ol2)
-            if length(ol1) == length(phiarr) and not length(ol2) == length(phiarr):
-                yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI, ol1=ol1)
-            if length(ol2) == length(phiarr) and not length(ol1) == length(phiarr):
-                yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI, ol2=ol2)
-            if ol1 == None and ol2 == None:
-                yarr = eb.model(parm, phiarr, typ, eb.FLAG_PHI)
                 
         # Average over each integration time
         smoothmodel = np.sum(yarr,axis=0)/np.float(modelfac)
@@ -1605,27 +1591,113 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
 
     variables = fitinfo['variables']
 
-    ipdb.set_trace()
-    key = datadict.keys()[1]
+    ###################################################
     # Loop through each dataset in the data dictionary.
     for key in datadict.keys():
         data = datadict[key]
+
+        ####################
+        # Photometry dataset
         if key[0:4] == 'phot':
             int = data['integration']
             band = data['band']
-            parm,vder = vec_to_params(x,variables,band=band,ebin=ebin,fitinfo=fitinfo)
-
-            time_ooe = data['ooe'][0,:]
+            btag = '_'+band
+            limb = data['limb']
+            parm,vder = vec_to_params(x,variables,band=band,ebin=ebin,fitinfo=fitinfo,limb=limb)
+            if debug:
+                print "Model parameters:"
+                for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
+                    print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+                print "Derived parameters:"
+                for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
+                    print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+            ##############################
+            # LD Priors
+            # Exclude conditions that give unphysical limb darkening parameters
+            try:
+                q1a = x[variables == 'q1a'+btag][0]  
+                q2a = x[variables == 'q2a'+btag][0]  
+                q1b = x[variables == 'q1b'+btag][0]  
+                q2b = x[variables == 'q2b'+btag][0]  
+                if q1b > 1 or q1b < 0 or q2b > 1 or q2b < 0 or np.isnan(q1b) or np.isnan(q2b):
+                    return -np.inf        
+                if q1a > 1 or q1a < 0 or q2a > 1 or q2a < 0 or np.isnan(q1a) or np.isnan(q2a):
+                    return -np.inf        
+            except:
+                pass
+            
+            ##############################
+            # Extract data from dictionary
+            period = parm[eb.PAR_P]
+            # Out of eclipse data
+            time_ooe = data['ooe'][0,:]-ebin['bjd']
             flux_ooe = data['ooe'][1,:]
             err_ooe  = data['ooe'][2,:]
+            # All data
+            time   = data['light'][0,:]-ebin['bjd']
+            flux   = data['light'][1,:]
+            err    = data['light'][2,:]
+
             
+            ##############################
+            # GP spot modeling 
+            ##############################
+            # Spots on primary star
+            try:
+                theta1 = np.exp(np.array([x[variables=='OOE_Amp1'+btag][0],x[variables=='OOE_SineAmp1'+btag][0], \
+                                          x[variables=='OOE_Per1'+btag][0],x[variables=='OOE_Decay1'+btag][0]]))
+                k1 =  theta1[0] * ExpSquaredKernel(theta1[1]) * ExpSine2Kernel(theta1[2],theta1[3])
+                gp1 = george.GP(k1,mean=np.mean(flux_ooe))
+                try:
+                    gp1.compute(time_ooe,yerr=err_ooe,sort=True)
+                except (ValueError, np.linalg.LinAlgError):
+                    print 'WARNING: Could not invert GP matrix!'
+                    return -np.inf
+                
+            except:
+                gp1 = None
+
+            # Spots on secondary star
+            try:
+                theta2 = np.exp(np.array([x[variables=='OOE_Amp2'+btag][0],x[variables=='OOE_SineAmp2'+btag][0], \
+                                          x[variables=='OOE_Per2'+btag][0],x[variables=='OOE_Decay2'+btag][0]]))
+                k2 =  theta2[0] * ExpSquaredKernel(theta2[1]) * ExpSine2Kernel(theta2[2],theta2[3])
+                gp2 = george.GP(k2,mean=np.mean(flux_ooe))
+                try:
+                    gp2.compute(time_ooe,yerr=err_ooe,sort=True)
+                except (ValueError, np.linalg.LinAlgError):
+                    print 'WARNING: Could not invert GP matrix!'
+                    return -np.inf
+            except:
+                gp2 = None
+
+
+            if False:
+                plt.ion()
+                plt.figure(99)
+                plt.plot(time,flux,'ko')
+                ooe_model,ooe_cov = gp1.predict(flux_ooe,time)
+                plt.plot(time,ooe_model,'ro')
+                tsamp = np.linspace(-0.2,2.5,10000)
+                samp_model, samp_cov = gp1.predict(flux_ooe, tsamp)
+                plt.plot(tsamp,samp_model,'c-')
+
+            ipdb.set_trace()
+                
+            sm  = compute_eclipse(time,parm,integration=int,fitrvs=False,
+                                  tref=t0,period=period,ooe1=[gp1,flux_ooe1],ooe2=gp2)
+  
+
             
-    nphot = numphot(data)
-    photi = np.where(data.keys() == 'phot')
-        
+
+            
+        else:
+            print 'Gonna hafta do somethin here!'
+            pass
+
+    ipdb.set_trace()
     # Get band name from the data dictionary   
     # Issue vec_to_params for each photometry data set
-    parm,vder = vec_to_params(x,variables,ebin=ebin)
     # Impose priors on parameters
     # Spot model on OOE light
     # eb model
@@ -1743,7 +1815,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
     
         
         sm  = compute_eclipse(time,parm,integration=ebin['integration'],
-                              fitrvs=False,tref=t0,period=period,fitooe1=True)
+                              fitrvs=False,tref=t0,period=period,ooe1=False)
 
         
     ################################
