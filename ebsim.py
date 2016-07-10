@@ -1493,6 +1493,25 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,limb='quad',verbo
     return parm, vder
 
 
+def get_time_stack(t,integration=None,modelfac=11.0):
+    """
+    Get time sampled by modelfac so that averaging can be done over
+    the specified integration time
+    """
+    dvec = np.linspace(-1*(modelfac-1)/2,(modelfac-1)/2,num=modelfac)
+    dvec *= integration/(np.float(modelfac)*24.0*3600.0)
+    
+    # Expand t vector into an array of the same dimensions
+    ones = np.ones(len(t))
+    darr = np.outer(dvec,ones)    
+    tarr = np.reshape(np.tile(t,modelfac),(modelfac,len(t)))
+    
+    # Combine differential array and time array to get "modelfac" number of
+    # time sequences
+    tdarr = darr + tarr
+
+    return tdarr
+
 
 
 def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None,
@@ -1502,7 +1521,7 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
     ----------------------------------------------------------------------
     compute_eclipse:
     --------------
-    Function to compute eclipse light curve and RV data for given input model.
+    Function to compute eclipse light curve or RV data for given input model.
 
     options:
     --------
@@ -1522,32 +1541,17 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
         if not integration:
             print 'You need to supply an integration time for light curve data!'
             sys.exit()
-        if tref == None or period == None:
-            print "Must supply a reference time AND period for "\
+        if tref == None:
+            print "Must supply a reference time for "\
                 +"calculation of a light curve"
             
         # Create array of time offset values that we will average over to account
         # for integration time
-        dvec = np.linspace(-1*(modelfac-1)/2,(modelfac-1)/2,num=modelfac)
-        dvec *= integration/(np.float(modelfac)*24.0*3600.0)
-    
-        # Expand t vector into an array of the same dimensions
-        ones = np.ones(len(t))
-        darr = np.outer(dvec,ones)    
-        tarr = np.reshape(np.tile(t,modelfac),(modelfac,len(t)))
-        
-        # Combine differential array and time array to get "modelfac" number of
-        # time sequences
-        tdarr = darr + tarr
+        tdarr = get_time_stack(t,integration=integration,modelfac=modelfac)
 
 #        phiarr = foldtime(tdarr,t0=tref,period=period)/period
 #        if (np.max(phiarr) - np.min(phiarr)) > 0.5:
 #            phiarr[phiarr < 0] += 1.0
-        
-        if type(ooe1) != type(None):
-            # !!! Can't do this!!! arrrg!!!
-            ol1 = ooe1.predict(flux_ooe,time)
-        ipdb.set_trace()
         
         typ = np.empty_like(tdarr, dtype=np.uint8)
 
@@ -1556,15 +1560,15 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
         typ.fill(eb.OBS_LIGHT)
 
         if length(ooe1) == length(tdarr) and length(ooe2) == length(tdarr):
-            yarr = eb.model(parm, tdarr, typ, ol1=ol1,ol2=ol2)
+            yarr = eb.model(parm, tdarr, typ, ol1=ooe1,ol2=ooe2)
         if length(ooe1) == length(tdarr) and length(ooe2) != length(tdarr):
-            yarr = eb.model(parm, tdarr, typ, ol1=ol1)
+            yarr = eb.model(parm, tdarr, typ, ol1=ooe1)
         if length(ooe1) != length(tdarr) and length(ooe2) == length(tdarr):
-            yarr = eb.model(parm, tdarr, typ, ol2=ol2)
+            yarr = eb.model(parm, tdarr, typ, ol2=ooe2)
         if length(ooe1) != length(tdarr) and length(ooe2) != length(tdarr):
             yarr = eb.model(parm, tdarr, typ)
                 
-        # Average over each integration time
+        # Average over each integration time (with modelfac number of samples)
         smoothmodel = np.sum(yarr,axis=0)/np.float(modelfac)
         model = yarr[(modelfac-1)/2,:]
 
@@ -1595,7 +1599,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
     # Loop through each dataset in the data dictionary.
     for key in datadict.keys():
         data = datadict[key]
-
+        
         ####################
         # Photometry dataset
         if key[0:4] == 'phot':
@@ -1650,12 +1654,17 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 gp1 = george.GP(k1,mean=np.mean(flux_ooe))
                 try:
                     gp1.compute(time_ooe,yerr=err_ooe,sort=True)
+                    tdarr = get_time_stack(time,integration=int)
+                    # need to deal with the fact that tdarr is not 1 dimensional !!!
+                    ipdb.set_trace()
+                    ooe1_model,ooe1_cov = gp1.predict(flux_ooe,tdarr)
+                    ooe1 = ooe1_model-1.0
                 except (ValueError, np.linalg.LinAlgError):
-                    print 'WARNING: Could not invert GP matrix!'
+                    print 'WARNING: Could not invert GP matrix 1!'
                     return -np.inf
                 
             except:
-                gp1 = None
+                ooe1 = None
 
             # Spots on secondary star
             try:
@@ -1665,11 +1674,14 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 gp2 = george.GP(k2,mean=np.mean(flux_ooe))
                 try:
                     gp2.compute(time_ooe,yerr=err_ooe,sort=True)
+                    tdarr = get_time_stack(time,integration=int)
+                    ooe2_model,ooe1_cov = gp2.predict(flux_ooe,tdarr)
+                    ooe2 = ooe2_model-1.0
                 except (ValueError, np.linalg.LinAlgError):
-                    print 'WARNING: Could not invert GP matrix!'
+                    print 'WARNING: Could not invert GP matrix 2!'
                     return -np.inf
             except:
-                gp2 = None
+                ooe2 = None
 
 
             if False:
@@ -1685,12 +1697,8 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             ipdb.set_trace()
                 
             sm  = compute_eclipse(time,parm,integration=int,fitrvs=False,
-                                  tref=t0,period=period,ooe1=[gp1,flux_ooe1],ooe2=gp2)
-  
+                                  tref=t0,period=period,ooe1=ooe1,ooe2=ooe2)
 
-            
-
-            
         else:
             print 'Gonna hafta do somethin here!'
             pass
