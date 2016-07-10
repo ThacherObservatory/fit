@@ -1555,8 +1555,7 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
         
         typ = np.empty_like(tdarr, dtype=np.uint8)
 
-        # can use eb.OBS_LIGHT to get light output or
-        # eb.OBS_MAG to get mag output        
+        # can use eb.OBS_LIGHT to get light output or eb.OBS_MAG to get mags
         typ.fill(eb.OBS_LIGHT)
 
         if length(ooe1) == length(tdarr) and length(ooe2) == length(tdarr):
@@ -1655,7 +1654,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 try:
                     gp1.compute(time_ooe,yerr=err_ooe,sort=True)
                     tdarr = get_time_stack(time,integration=int)
-                    # need to deal with the fact that tdarr is not 1 dimensional !!!
+                    # !!! need to deal with the fact that tdarr is not 1 dimensional !!!
                     ipdb.set_trace()
                     ooe1_model,ooe1_cov = gp1.predict(flux_ooe,tdarr)
                     ooe1 = ooe1_model-1.0
