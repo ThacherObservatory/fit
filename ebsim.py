@@ -1547,7 +1547,7 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
             sys.exit()
         if tref == None:
             print "Must supply a reference time for "\
-                +"calculation of a light curve"
+                +"calculation of a light curve (not true, anymore!)"
             
         # Create array of time offset values that we will average over to account
         # for integration time
@@ -1566,9 +1566,14 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
             yarr = eb.model(parm, tdarr, typ, ol1=ooe1,ol2=ooe2)
         if length(ooe1) == length(tdarr) and length(ooe2) != length(tdarr):
             yarr = eb.model(parm, tdarr, typ, ol1=ooe1)
-#            yarr1 = eb.model(parm, tdarr, typ)
-#            print 'Compute eclipse stop!'
-#            ipdb.set_trace()
+            yarr1 = eb.model(parm, tdarr, typ)
+            print 'Compute eclipse stop!'
+            plt.ion()
+            plt.figure(101)
+            plt.clf()
+            plt.plot(tdarr, yarr, 'ko')
+            plt.plot(tdarr, yarr1, 'go')
+            ipdb.set_trace()
         if length(ooe1) != length(tdarr) and length(ooe2) == length(tdarr):
             yarr = eb.model(parm, tdarr, typ, ol2=ooe2)
         if length(ooe1) != length(tdarr) and length(ooe2) != length(tdarr):
@@ -1713,12 +1718,13 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 samp_model, samp_cov = gp1.predict(flux_ooe, tsamp)
                 plt.plot(tsamp,samp_model,'m-',label='ooe predict')
                 plt.legend(loc='best',numpoints=1)
-                ipdb.set_trace()
 
-            # Correct ooe1 for the fact that variations are in total light
             if not fitinfo['fit_ellipsoidal'] and not fitinfo['fit_gravdark']:
                 parm[eb.PAR_Q] = 0.0
 
+            # Correct ooe1 for the fact that variations are in total light
+#            ooe1 = 
+            
             sm  = compute_eclipse(time,parm,integration=int,fitrvs=False,
                                   ooe1=ooe1,ooe2=ooe2)
 
