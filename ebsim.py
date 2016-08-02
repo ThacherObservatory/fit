@@ -1346,24 +1346,28 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,limb='quad',verbo
     try:
         GD1 = x[variables == 'GD1'+btag][0]
     except:
-        GD1 = 0.32
+#        GD1 = 0.32
+        GD1 = 0.0
 
     try:
         GD2 = x[variables == 'GD2'+btag][0]
     except:
-        GD2 = 0.32
+#        GD2 = 0.32
+        GD2 = 0.0
 
     ##############################
     # Reflection
     try:
         Ref1 = x[variables == 'Ref1'+btag][0]
     except:
-        Ref1 =  0.4
+#        Ref1 =  0.4
+        Ref1 =  0.0
 
     try:
         Ref2 = x[variables == 'Ref2'+btag][0]
     except:
-        Ref2 =  0.4
+#        Ref2 =  0.4
+        Ref2 =  0.0
 
     ####################
     # Tidal Angle
@@ -1561,6 +1565,8 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
         if length(ooe1) == length(tdarr) and length(ooe2) == length(tdarr):
             yarr = eb.model(parm, tdarr, typ, ol1=ooe1,ol2=ooe2)
         if length(ooe1) == length(tdarr) and length(ooe2) != length(tdarr):
+            print 'Compute eclipse stop!'
+            ipdb.set_trace()
             yarr = eb.model(parm, tdarr, typ, ol1=ooe1)
         if length(ooe1) != length(tdarr) and length(ooe2) == length(tdarr):
             yarr = eb.model(parm, tdarr, typ, ol2=ooe2)
@@ -1614,6 +1620,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 print "Derived parameters:"
                 for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
                     print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+
             ##############################
             # LD Priors
             # Exclude conditions that give unphysical limb darkening parameters
@@ -1641,6 +1648,14 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             flux   = data['light'][1,:]
             err    = data['light'][2,:]
 
+            ##########################################################
+            # Need to back out OOE variations from star 1 and star 2
+            # given the EB parameters. (see eb_model.c).
+            # Corrected OOE light will be what GP will be conditioned
+            # on
+            ##########################################################
+            #!!! Start here
+
             
             ##############################
             # GP spot modeling 
@@ -1654,9 +1669,9 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 try:
                     gp1.compute(time_ooe,yerr=err_ooe,sort=True)
                     tdarr = get_time_stack(time,integration=int)
-                    # !!! need to deal with the fact that tdarr is not 1 dimensional !!!
-                    ipdb.set_trace()
-                    ooe1_model,ooe1_cov = gp1.predict(flux_ooe,tdarr)
+                    ooe1_model = np.zeros_like(tdarr)
+                    for i in range(np.shape(tdarr)[0]):
+                        ooe1_model[i,:],cov = gp1.predict(flux_ooe,tdarr[i,:])
                     ooe1 = ooe1_model-1.0
                 except (ValueError, np.linalg.LinAlgError):
                     print 'WARNING: Could not invert GP matrix 1!'
@@ -1674,7 +1689,9 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 try:
                     gp2.compute(time_ooe,yerr=err_ooe,sort=True)
                     tdarr = get_time_stack(time,integration=int)
-                    ooe2_model,ooe1_cov = gp2.predict(flux_ooe,tdarr)
+                    ooe2_model = np.zeros_like(tdarr)
+                    for i in range(np.shape(tdarr)[0]):
+                        ooe2_model[i,:],cov = gp2.predict(flux_ooe,tdarr[i,:])
                     ooe2 = ooe2_model-1.0
                 except (ValueError, np.linalg.LinAlgError):
                     print 'WARNING: Could not invert GP matrix 2!'
@@ -1682,21 +1699,24 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             except:
                 ooe2 = None
 
-
-            if False:
+            if True:
                 plt.ion()
                 plt.figure(99)
                 plt.plot(time,flux,'ko')
-                ooe_model,ooe_cov = gp1.predict(flux_ooe,time)
-                plt.plot(time,ooe_model,'ro')
+                plt.plot(tdarr,ooe1+1,'ro')
                 tsamp = np.linspace(-0.2,2.5,10000)
                 samp_model, samp_cov = gp1.predict(flux_ooe, tsamp)
                 plt.plot(tsamp,samp_model,'c-')
 
-            ipdb.set_trace()
-                
             sm  = compute_eclipse(time,parm,integration=int,fitrvs=False,
-                                  tref=t0,period=period,ooe1=ooe1,ooe2=ooe2)
+                                  ooe1=ooe1,ooe2=ooe2)
+
+            plt.ion()
+            plt.figure(100)
+            plt.plot(time,flux,'ko')
+            plt.plot(time,sm,'ro')
+            ipdb.set_trace()
+      
 
         else:
             print 'Gonna hafta do somethin here!'
