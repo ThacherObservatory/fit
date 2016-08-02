@@ -1565,9 +1565,10 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
         if length(ooe1) == length(tdarr) and length(ooe2) == length(tdarr):
             yarr = eb.model(parm, tdarr, typ, ol1=ooe1,ol2=ooe2)
         if length(ooe1) == length(tdarr) and length(ooe2) != length(tdarr):
-            print 'Compute eclipse stop!'
-            ipdb.set_trace()
             yarr = eb.model(parm, tdarr, typ, ol1=ooe1)
+#            yarr1 = eb.model(parm, tdarr, typ)
+#            print 'Compute eclipse stop!'
+#            ipdb.set_trace()
         if length(ooe1) != length(tdarr) and length(ooe2) == length(tdarr):
             yarr = eb.model(parm, tdarr, typ, ol2=ooe2)
         if length(ooe1) != length(tdarr) and length(ooe2) != length(tdarr):
@@ -1702,11 +1703,21 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             if True:
                 plt.ion()
                 plt.figure(99)
-                plt.plot(time,flux,'ko')
-                plt.plot(tdarr,ooe1+1,'ro')
+                plt.clf()
+                plt.plot(time,flux,'ko',label='raw')
+                plt.plot(time_ooe,flux_ooe,'o',mfc='none',mec='red',mew=2,label='ooe')
+                plt.plot(tdarr[0,:],ooe1[0,:]+1,'go',markersize=5,mec='none',label='ooe predict data')
+                for i in np.arange(np.shape(tdarr)[0] -1)+1:
+                    plt.plot(tdarr[i,:],ooe1[i,:]+1,'go',markersize=5,mec='none')
                 tsamp = np.linspace(-0.2,2.5,10000)
                 samp_model, samp_cov = gp1.predict(flux_ooe, tsamp)
-                plt.plot(tsamp,samp_model,'c-')
+                plt.plot(tsamp,samp_model,'m-',label='ooe predict')
+                plt.legend(loc='best',numpoints=1)
+                ipdb.set_trace()
+
+            # Correct ooe1 for the fact that variations are in total light
+            if not fitinfo['fit_ellipsoidal'] and not fitinfo['fit_gravdark']:
+                parm[eb.PAR_Q] = 0.0
 
             sm  = compute_eclipse(time,parm,integration=int,fitrvs=False,
                                   ooe1=ooe1,ooe2=ooe2)
@@ -1714,7 +1725,8 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             plt.ion()
             plt.figure(100)
             plt.plot(time,flux,'ko')
-            plt.plot(time,sm,'ro')
+            plt.plot(time,sm,'go')
+            plt.plot(time,sm,'go')
             ipdb.set_trace()
       
 
@@ -3359,7 +3371,7 @@ def vec_to_params_orig(x,ebpar,fitinfo=None,verbose=True):
         ktot  = x[variables == 'Ktot'][0]
         vsys  = x[variables == 'Vsys'][0]
     except:
-        parm[eb.PAR_Q]  = ebpar['Mratio']
+#        parm[eb.PAR_Q]  = ebpar['Mratio']
         ktot = ebpar['Ktot']
         vsys = ebpar['Vsys']
 
@@ -3386,7 +3398,8 @@ def vec_to_params_orig(x,ebpar,fitinfo=None,verbose=True):
         parm[eb.PAR_REFL1]  = ebpar['Ref1']  # albedo, std. value
         parm[eb.PAR_REFL2]  = ebpar['Ref2']  # albedo, std. value
 
-
+    if not ebpar['gravdark'] and not ebpar['gravdark']:
+        parm[eb.PAR_Q]  = 0
 
     if ebpar['Rot1'] and fitinfo == None:
         parm[eb.PAR_ROT1]   = ebpar['Rot1']        # rotation parameter (1 = sync.)
