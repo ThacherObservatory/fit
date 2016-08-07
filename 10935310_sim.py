@@ -74,11 +74,8 @@ fitinfo = ebs.fit_params(nwalkers=100,burnsteps=100,mcmcsteps=100,clobber=True,
 ebs.ebsim_fit(datadict,fitinfo,ebin,debug=False)
 
 
-
 import sys
 sys.exit()
-
-
 
 
 plt.ion()

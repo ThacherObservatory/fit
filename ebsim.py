@@ -328,6 +328,7 @@ def make_phot_data(ebin,
 
     # Spot amplitudes with random phase
     if spotamp1:
+        print 'Creating spot modulation for band '+band
         spotflag1 = True
         if spotP1 == 0.0:
             print "Spot Period 1 = 0: Spots on star 1 will not be implemented!"
@@ -795,10 +796,10 @@ def check_model(data_dict):
 
             plt.figure(i)
             plt.clf()
-            plt.plot(time,light,'.',label='All data')
-            plt.plot(tooe,looe,'.',label='Out-of-eclipse data')
+            plt.plot(time,light,'ko',label='All data')
+            plt.plot(tooe,looe,'o',mfc='none',mec='r',mew=2,label='Out-of-eclipse data')
             plt.title('Photometric Data for Band '+data['band'])
-            plt.legend(loc='best')
+            plt.legend(loc='best',numpoints=1)
 
     if data_dict.has_key('RVdata'):
         data = data_dict['RVdata']
@@ -815,7 +816,7 @@ def check_model(data_dict):
         plt.plot(t1,rv1,'bo',label='Primary Star')
         plt.plot(t2,rv2,'go',label='Secondary Star')
         plt.title('Radial Velocity Data')
-        plt.legend(loc='best')
+        plt.legend(loc='best',numpoints=1)
 
     plt.ioff()
     return
@@ -968,8 +969,9 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
                                                        ebin['esinw']*1.0001, nw)],axis=0)
     variables = np.append(variables,'esinw')
 
-    # Mid-eclipse time
-    p0_init = np.append(p0_init,[np.random.normal(ebin['t01'],onesec,nw)],axis=0)
+    
+    # Epoch of inferior conjunction
+    p0_init = np.append(p0_init,[np.random.normal(0.0,onesec,nw)],axis=0)
     variables = np.append(variables,'t0')
 
     
@@ -1059,10 +1061,6 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
         if do:
             p0_init = np.append(p0_init,[np.random.uniform(0,0.25,nw)],axis=0)
             variables = np.append(variables,'L3_'+band)
-
-    # Epoch of inferior conjunction
-    p0_init = np.append(p0_init,[np.random.normal(ebin['t01'],onesec,nw)],axis=0)
-    variables = np.append(variables,'t0')
 
 
     ##############################
@@ -1187,9 +1185,9 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 
     # Dump the initial parameter dictionary, fit information dictionary, and the
     # data used in the fit into files for reproduceability.
-    pickle.dump(ebpar,open(directory+"ebpar.p", "wb" ))
+    pickle.dump(ebin,open(directory+"ebpar.p", "wb" ))
     pickle.dump(fitinfo,open(directory+"fitinfo.p", "wb" ))
-    pickle.dump(data,open(directory+"data.p", "wb" ))
+    pickle.dump(data_dict,open(directory+"data.p", "wb" ))
 
     # Write out chains to disk
     if fitinfo['write']:
@@ -1435,7 +1433,7 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,limb='quad',verbo
              'TideAng': tideang,                       # tidal angle in (degrees)
              'L3': L3,                                 # third light
              'phi0': 0.0,                              # phase of inf. conj. (i think!)
-             't0': 0.0, # t0 will be added in later    # epoch of inf. conj. (if phi0=0)
+             't0': t0,                                 # epoch of inf. conj. (if phi0=0)
              'Period': period,                         # period of binary
              'Magoff':0.0,                             # magnitude zeropoint (if using mags)
              'Rot1': spotP1,                           # rotation parameter (frac. of period)
@@ -1548,14 +1546,15 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
             print 'You need to supply an integration time for light curve data!'
             sys.exit()
         if tref == None:
-            print "Must supply a reference time for "\
-                +"calculation of a light curve (not true, anymore!)"
+            pass
+        else:
+            t -= tref
             
         # Create array of time offset values that we will average over to account
         # for integration time
         tdarr = get_time_stack(t,integration=integration,modelfac=modelfac)
 
-#        phiarr = foldtime(tdarr,t0=tref,period=period)/period
+#        phiarr = foldtime(tdarr,t0=0.0,period=period)/period
 #        if (np.max(phiarr) - np.min(phiarr)) > 0.5:
 #            phiarr[phiarr < 0] += 1.0
         
@@ -1568,20 +1567,6 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
             yarr = eb.model(parm, tdarr, typ, ol1=ooe1,ol2=ooe2)
         if length(ooe1) == length(tdarr) and length(ooe2) != length(tdarr):
             yarr = eb.model(parm, tdarr, typ, ol1=ooe1)
-            if debug:
-                yarr1 = eb.model(parm, tdarr, typ)
-                plt.ion()
-                plt.figure(101)
-                plt.clf()
-                plt.plot(tdarr[0,:], yarr[0,:], 'ko',mec='none',label='Out of eclipse variations')
-                for i in np.arange(np.shape(tdarr)[0] -1)+1:
-                    plt.plot(tdarr[i,:],yarr[i,:],'ko',markersize=5,mec='none')
-                plt.plot(tdarr[0,:], yarr1[0,:], 'go',mec='none',label='No out of eclipse variations')
-                for i in np.arange(np.shape(tdarr)[0] -1)+1:
-                    plt.plot(tdarr[i,:],yarr1[i,:],'go',markersize=5,mec='none')
-                plt.legend(numpoints=1)
-                plt.xlim(-0.2,0.2)
-                plt.title('Yarr vs. Yarr1 from compute_eclipse')
         if length(ooe1) != length(tdarr) and length(ooe2) == length(tdarr):
             yarr = eb.model(parm, tdarr, typ, ol2=ooe2)
         if length(ooe1) != length(tdarr) and length(ooe2) != length(tdarr):
@@ -1593,7 +1578,7 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
 
         # Return unsmoothed model if requested
         if unsmooth:
-            return yarr#model
+            return model
         else:
             return smoothmodel
 
@@ -1713,45 +1698,42 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     ooe1_model = np.zeros_like(tdarr)
                     for i in range(np.shape(tdarr)[0]):
                         ooe1_model[i,:],cov = gp1.predict(flux_ooe,tdarr[i,:])
-                    ooe1_raw = ooe1_model-1.0
-                    # Correct ooe1 for the fact that variations are in total light
-                    rsq1 = parm[eb.PAR_RASUM]/(1+parm[eb.PAR_RR])
-                    rsq2 = rsq1*(parm[eb.PAR_RR])**2
-                    ldint1 = 1 - (1.0/3.0)*parm[eb.PAR_LDLIN1] - (1.0/6.0)*parm[eb.PAR_LDNON1]
-                    ldint2 = 1 - (1.0/3.0)*parm[eb.PAR_LDLIN2] - (1.0/6.0)*parm[eb.PAR_LDNON2]
-                    L1 = rsq1*ldint1
-                    L2 = rsq2*ldint2 * parm[eb.PAR_J]
-                    norm = 1.0 / (L1 + L2)
-                    L1 *= norm
-                    L2 *= norm
-                    L3 = parm[eb.PAR_L3]
-                    ooe1 = (((((ooe1_raw+1)-L3)/(1-L3))*(1/L1) - L2/L1)-1)
-                    if debug:
-                        plt.ion()
-                        plt.figure(99)
-                        plt.clf()
-                        plt.plot(time,flux,'ko',label='raw')
-                        plt.plot(time_ooe,flux_ooe,'o',mfc='none',mec='red',mew=2,label='ooe')
-                        plt.plot(tdarr[0,:],ooe1[0,:]+1,'go',markersize=5,mec='none',label='ooe predict data')
-                        for i in np.arange(np.shape(tdarr)[0] -1)+1:
-                            plt.plot(tdarr[i,:],ooe1[i,:]+1,'go',markersize=5,mec='none')
-                        tsamp = np.linspace(-0.2,2.5,10000)
-                        samp_model, samp_cov = gp1.predict(flux_ooe, tsamp)
-                        plt.plot(tsamp,samp_model,'m-',label='ooe predict')
-                        t_model, t_cov = gp1.predict(flux_ooe,time)
-                        plt.legend(loc='best',numpoints=1)
-                        plt.title('Flux and GP prediction')
-                        plt.xlim(-0.2,0.2)
-                        val1 = ooe1[0,0]
-                        print 'First gp model point value = %.7f' % val1
-
                 except (ValueError, np.linalg.LinAlgError):
                     print 'WARNING: Could not invert GP matrix 1!'
                     return -np.inf
-                
+                ooe1_raw = ooe1_model-1.0
+                # Correct ooe1 for the fact that variations are in total light
+                rsq1 = parm[eb.PAR_RASUM]/(1+parm[eb.PAR_RR])
+                rsq2 = rsq1*(parm[eb.PAR_RR])**2
+                ldint1 = 1 - (1.0/3.0)*parm[eb.PAR_LDLIN1] - (1.0/6.0)*parm[eb.PAR_LDNON1]
+                ldint2 = 1 - (1.0/3.0)*parm[eb.PAR_LDLIN2] - (1.0/6.0)*parm[eb.PAR_LDNON2]
+                L1 = rsq1*ldint1
+                L2 = rsq2*ldint2 * parm[eb.PAR_J]
+                norm = 1.0 / (L1 + L2)
+                L1 *= norm
+                L2 *= norm
+                L3 = parm[eb.PAR_L3]
+                ooe1 = (((((ooe1_raw+1)-L3)/(1-L3))*(1/L1) - L2/L1)-1)
+                if debug:
+                    plt.ion()
+                    plt.figure(99)
+                    plt.clf()
+                    plt.plot(time,flux,'ko',label='raw')
+                    plt.plot(time_ooe,flux_ooe,'o',mfc='none',mec='red',mew=2,label='ooe')
+                    plt.plot(tdarr[0,:],ooe1_raw[0,:]+1,'go',markersize=5,mec='none',label='ooe predict data')
+                    for i in np.arange(np.shape(tdarr)[0] -1)+1:
+                        plt.plot(tdarr[i,:],ooe1_raw[i,:]+1,'go',markersize=5,mec='none')
+                    tsamp = np.linspace(-0.2,2.5,1000)
+                    samp_model, samp_cov = gp1.predict(flux_ooe, tsamp)
+                    plt.plot(tsamp,samp_model,'m-',label='ooe predict')
+                    t_model, t_cov = gp1.predict(flux_ooe,time)
+                    plt.legend(loc='best',numpoints=1)
+                    plt.title('Flux and GP prediction')
+                    #plt.xlim(-0.2,0.2)
+                    val1 = ooe1[0,0]
+                    print 'First gp model point value = %.7f' % val1
             except:
                 ooe1 = None
-
                 
             # Spots on secondary star
             try:
@@ -1766,7 +1748,6 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
 
             # Add to log likelihood function
             lf += np.sum(-1.0*(sm - flux)**2/(2.0*err**2))
-            print lf
             
             if debug:
                 plt.ion()
@@ -1775,16 +1756,15 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 plt.plot(time,flux,'ko',label='raw')
                 plt.plot(time_ooe,flux_ooe,'o',mfc='none',mec='red',mew=2,label='ooe')
                 plt.plot(time,sm,'go',label='eb model')
-                plt.plot(tsamp,samp_model,'m-',label='ooe predict')
-                plt.legend(numpoints=1)
+                if length(ooe1) > 1:
+                    plt.plot(tsamp,samp_model,'m-',label='ooe predict')
+                plt.legend(numpoints=1,loc='best')
                 plt.title('Flux, and EB model')
-                plt.xlim(-0.2,0.2)
 
 
         ####################
         # RV dataset
         elif key[0:2] == 'RV':
-#            print 'Doing RV dataset!'
             parm,vder = vec_to_params(x,variables,ebin=ebin,fitinfo=fitinfo)
             rvdata1 = data['rv1']
             rvdata2 = data['rv2']
@@ -1809,11 +1789,11 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 rv1 = rvmodel1*k1 + vsys
                 rvmodel2 = compute_eclipse(rvdata2[0,:]-ebin['bjd'],parm,fitrvs=True)
                 rv2 = -1.0*rvmodel2*k2 + vsys
-                lfrv1 = -np.sum((rv1 - rvdata1[1,:])**2/(2.0*rvdata1[2,:]))
-                lfrv2 = -np.sum((rv2 - rvdata2[1,:])**2/(2.0*rvdata2[2,:]))
+                lfrv1 = -np.sum((rv1 - rvdata1[1,:])**2/(2.0*rvdata1[2,:]**2))
+                lfrv2 = -np.sum((rv2 - rvdata2[1,:])**2/(2.0*rvdata2[2,:]**2))
                 lfrv = lfrv1 + lfrv2
                 lf  += lfrv
-                if True:
+                if debug:
                     plt.ion()
                     plt.figure(987)
                     plt.clf()
@@ -1838,15 +1818,10 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     plt.plot(np.linspace(-0.5,0.5,10000),rvcomp2,'r--')
                     plt.xlim(-0.5,0.5)
 
-                #print 'Finished RV dataset!'
-                #ipdb.set_trace()
-                print lf
-
     if np.isnan(lf):
         print 'ln(prob) is not a number!!!'
         lf = -np.inf
 
-    ipdb.set_trace()
     return lf
 
 
@@ -3404,7 +3379,7 @@ def lnprob_old():
         plt.ylabel(r"$I(\theta)/I(0)$",fontsize=18)
         plt.title('Limb Darkening')
         
-        plt.legend()
+        plt.legend(loc='best',numpoints=1)
         pdb.set_trace()
 
     if fitinfo['tie_LD']:
@@ -3423,3 +3398,23 @@ def lnprob_old():
         parm[eb.PAR_LDNON1] = u2a  # u2 star 1
         parm[eb.PAR_LDLIN2] = u1b  # u1 star 2
         parm[eb.PAR_LDNON2] = u2b  # u2 star 2
+
+
+
+"""
+For plotting of compute_eclipse
+            if debug:
+                yarr1 = eb.model(parm, tdarr, typ)
+                plt.ion()
+                plt.figure(101)
+                plt.clf()
+                plt.plot(tdarr[0,:], yarr[0,:], 'ko',mec='none',label='Out of eclipse variations')
+                for i in np.arange(np.shape(tdarr)[0] -1)+1:
+                    plt.plot(tdarr[i,:],yarr[i,:],'ko',markersize=5,mec='none')
+                plt.plot(tdarr[0,:], yarr1[0,:], 'go',mec='none',label='No out of eclipse variations')
+                for i in np.arange(np.shape(tdarr)[0] -1)+1:
+                    plt.plot(tdarr[i,:],yarr1[i,:],'go',markersize=5,mec='none')
+                plt.legend(loc='best',numpoints=1)
+                plt.xlim(-0.2,0.2)
+                plt.title('Yarr vs. Yarr1 from compute_eclipse')
+"""
