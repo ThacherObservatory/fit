@@ -278,6 +278,7 @@ def make_phot_data(ebin,
                    q1a=None,q2a=None,q1b=None,q2b=None,    # LD params
                    J=None,                                 # Surface brightness ratio
                    L3=0.0,                                 # Third light
+                   ooe1=None,ooe2=None,                    # Out of eclipse light variations
                    photnoise=0.0003,                       # Photometric noise
                    gravdark=False,reflection=False,        # Higher order effects
                    ellipsoidal=False,                      # Ellipsoidal variations (caution!)
@@ -1228,7 +1229,7 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,limb='quad',verbo
     try:
         J =   x[variables == 'J'+btag][0] 
     except:
-        print "WARNING: you're really NOT going to fit for surface brightness ratio ?! "
+        #print "WARNING: you're really NOT going to fit for surface brightness ratio ?! "
         J =  ebin['L2']/ebin['L1']
 
     ##############################
@@ -1291,7 +1292,7 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,limb='quad',verbo
             q1a,q2a = fitinfo['limb_defaults1_'+band]
             u1a,u2a = qtou(q1a,q2a,limb=limb)
         except:
-            print 'WARNING: using (probably unrealistic) default values for limb darkening!'
+            #print 'WARNING: using (probably unrealistic) default values for limb darkening!'
             u1a=0.5 ; u2a=0.2
 
     ##############################
@@ -1305,7 +1306,7 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,limb='quad',verbo
             q1b,q2b = fitinfo['limb_defaults2_'+band]
             u1b,u2b = qtou(q1b,q2b,limb=limb)
         except:
-            print 'WARNING: using (probably unrealistic) default values for limb darkening!'
+            #print 'WARNING: using (probably unrealistic) default values for limb darkening!'
             u1b=0.5 ; u2b=0.2
  
 
@@ -1329,8 +1330,8 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,limb='quad',verbo
     try:
         L3 = x[variables == 'L3'+btag][0]
     except:
+        #print 'WARNING: Using default value for L3 in '+btag[1:]+' band = %f' % L3
         L3 = ebin['L3']
-        print 'WARNING: Using default value for L3 in '+btag[1:]+' band = %f' % L3
     
     ##############################
     # Light travel time
@@ -1519,7 +1520,8 @@ def get_time_stack(t,integration=None,modelfac=11.0):
 
 
 def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None,
-                    period=None,ooe1=None,ooe2=None,unsmooth=False,spotflag=False):
+                    period=None,ooe1=None,ooe2=None,unsmooth=False,spotflag=False,
+                    debug=False):
 
     """
     ----------------------------------------------------------------------
@@ -1566,14 +1568,20 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
             yarr = eb.model(parm, tdarr, typ, ol1=ooe1,ol2=ooe2)
         if length(ooe1) == length(tdarr) and length(ooe2) != length(tdarr):
             yarr = eb.model(parm, tdarr, typ, ol1=ooe1)
-            yarr1 = eb.model(parm, tdarr, typ)
-            print 'Compute eclipse stop!'
-            plt.ion()
-            plt.figure(101)
-            plt.clf()
-            plt.plot(tdarr, yarr, 'ko')
-            plt.plot(tdarr, yarr1, 'go')
-            ipdb.set_trace()
+            if debug:
+                yarr1 = eb.model(parm, tdarr, typ)
+                plt.ion()
+                plt.figure(101)
+                plt.clf()
+                plt.plot(tdarr[0,:], yarr[0,:], 'ko',mec='none',label='Out of eclipse variations')
+                for i in np.arange(np.shape(tdarr)[0] -1)+1:
+                    plt.plot(tdarr[i,:],yarr[i,:],'ko',markersize=5,mec='none')
+                plt.plot(tdarr[0,:], yarr1[0,:], 'go',mec='none',label='No out of eclipse variations')
+                for i in np.arange(np.shape(tdarr)[0] -1)+1:
+                    plt.plot(tdarr[i,:],yarr1[i,:],'go',markersize=5,mec='none')
+                plt.legend(numpoints=1)
+                plt.xlim(-0.2,0.2)
+                plt.title('Yarr vs. Yarr1 from compute_eclipse')
         if length(ooe1) != length(tdarr) and length(ooe2) == length(tdarr):
             yarr = eb.model(parm, tdarr, typ, ol2=ooe2)
         if length(ooe1) != length(tdarr) and length(ooe2) != length(tdarr):
@@ -1585,7 +1593,7 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
 
         # Return unsmoothed model if requested
         if unsmooth:
-            return model
+            return yarr#model
         else:
             return smoothmodel
 
@@ -1606,6 +1614,9 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
 
     variables = fitinfo['variables']
 
+    # Initiate log probabilty variable
+    lf = 0
+
     ###################################################
     # Loop through each dataset in the data dictionary.
     for key in datadict.keys():
@@ -1620,6 +1631,8 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             limb = data['limb']
             parm,vder = vec_to_params(x,variables,band=band,ebin=ebin,fitinfo=fitinfo,limb=limb)
             if debug:
+                print 'Doing band '+band+' dataset!'
+                print 'Data dictionary key = '+key
                 print "Model parameters:"
                 for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
                     print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
@@ -1627,9 +1640,12 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
                     print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
 
+
+    ##############################  Priors ##############################
+
             ##############################
-            # LD Priors
-            # Exclude conditions that give unphysical limb darkening parameters
+            # LD priors
+            ##############################
             try:
                 q1a = x[variables == 'q1a'+btag][0]  
                 q2a = x[variables == 'q2a'+btag][0]  
@@ -1641,7 +1657,29 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     return -np.inf        
             except:
                 pass
-            
+
+            ########################################
+            # Eclipse timing can't be that far off
+            ########################################
+            t0 = parm[eb.PAR_T0]
+            if np.abs(t0) > 1800:
+                return -np.inf
+ 
+            ##############################
+            # Third light restrictions
+            ##############################
+            if parm[eb.PAR_L3] > 1 or parm[eb.PAR_L3] < 0:
+                print 'L3 out of bounds!'
+                return -np.inf
+
+            ############################################################
+            # No gravitational lensing or other exotic effects allowed.
+            ############################################################
+            if parm[eb.PAR_J] < 0:
+                print 'Surf. Br. Rat. out of bounds!'
+                return -np.inf
+
+
             ##############################
             # Extract data from dictionary
             period = parm[eb.PAR_P]
@@ -1654,15 +1692,12 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             flux   = data['light'][1,:]
             err    = data['light'][2,:]
 
-            ##########################################################
-            # Need to back out OOE variations from star 1 and star 2
-            # given the EB parameters. (see eb_model.c).
-            # Corrected OOE light will be what GP will be conditioned
-            # on
-            ##########################################################
-            #!!! Start here
+            ############################################################
+            # Mass ratio should be zero unless ellipsoidal or grav dark
+            ############################################################
+            if not fitinfo['fit_ellipsoidal'] and not fitinfo['fit_gravdark']:
+                parm[eb.PAR_Q] = 0.0
 
-            
             ##############################
             # GP spot modeling 
             ##############################
@@ -1678,7 +1713,38 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     ooe1_model = np.zeros_like(tdarr)
                     for i in range(np.shape(tdarr)[0]):
                         ooe1_model[i,:],cov = gp1.predict(flux_ooe,tdarr[i,:])
-                    ooe1 = ooe1_model-1.0
+                    ooe1_raw = ooe1_model-1.0
+                    # Correct ooe1 for the fact that variations are in total light
+                    rsq1 = parm[eb.PAR_RASUM]/(1+parm[eb.PAR_RR])
+                    rsq2 = rsq1*(parm[eb.PAR_RR])**2
+                    ldint1 = 1 - (1.0/3.0)*parm[eb.PAR_LDLIN1] - (1.0/6.0)*parm[eb.PAR_LDNON1]
+                    ldint2 = 1 - (1.0/3.0)*parm[eb.PAR_LDLIN2] - (1.0/6.0)*parm[eb.PAR_LDNON2]
+                    L1 = rsq1*ldint1
+                    L2 = rsq2*ldint2 * parm[eb.PAR_J]
+                    norm = 1.0 / (L1 + L2)
+                    L1 *= norm
+                    L2 *= norm
+                    L3 = parm[eb.PAR_L3]
+                    ooe1 = (((((ooe1_raw+1)-L3)/(1-L3))*(1/L1) - L2/L1)-1)
+                    if debug:
+                        plt.ion()
+                        plt.figure(99)
+                        plt.clf()
+                        plt.plot(time,flux,'ko',label='raw')
+                        plt.plot(time_ooe,flux_ooe,'o',mfc='none',mec='red',mew=2,label='ooe')
+                        plt.plot(tdarr[0,:],ooe1[0,:]+1,'go',markersize=5,mec='none',label='ooe predict data')
+                        for i in np.arange(np.shape(tdarr)[0] -1)+1:
+                            plt.plot(tdarr[i,:],ooe1[i,:]+1,'go',markersize=5,mec='none')
+                        tsamp = np.linspace(-0.2,2.5,10000)
+                        samp_model, samp_cov = gp1.predict(flux_ooe, tsamp)
+                        plt.plot(tsamp,samp_model,'m-',label='ooe predict')
+                        t_model, t_cov = gp1.predict(flux_ooe,time)
+                        plt.legend(loc='best',numpoints=1)
+                        plt.title('Flux and GP prediction')
+                        plt.xlim(-0.2,0.2)
+                        val1 = ooe1[0,0]
+                        print 'First gp model point value = %.7f' % val1
+
                 except (ValueError, np.linalg.LinAlgError):
                     print 'WARNING: Could not invert GP matrix 1!'
                     return -np.inf
@@ -1686,310 +1752,102 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             except:
                 ooe1 = None
 
+                
             # Spots on secondary star
             try:
-                theta2 = np.exp(np.array([x[variables=='OOE_Amp2'+btag][0],x[variables=='OOE_SineAmp2'+btag][0], \
-                                          x[variables=='OOE_Per2'+btag][0],x[variables=='OOE_Decay2'+btag][0]]))
-                k2 =  theta2[0] * ExpSquaredKernel(theta2[1]) * ExpSine2Kernel(theta2[2],theta2[3])
-                gp2 = george.GP(k2,mean=np.mean(flux_ooe))
-                try:
-                    gp2.compute(time_ooe,yerr=err_ooe,sort=True)
-                    tdarr = get_time_stack(time,integration=int)
-                    ooe2_model = np.zeros_like(tdarr)
-                    for i in range(np.shape(tdarr)[0]):
-                        ooe2_model[i,:],cov = gp2.predict(flux_ooe,tdarr[i,:])
-                    ooe2 = ooe2_model-1.0
-                except (ValueError, np.linalg.LinAlgError):
-                    print 'WARNING: Could not invert GP matrix 2!'
-                    return -np.inf
+                ooe2 = None
             except:
                 ooe2 = None
 
-            if True:
+
+            # Compute model!
+            sm = compute_eclipse(time,parm,integration=int,fitrvs=False,
+                                  ooe1=ooe1,ooe2=ooe2)
+
+            # Add to log likelihood function
+            lf += np.sum(-1.0*(sm - flux)**2/(2.0*err**2))
+            print lf
+            
+            if debug:
                 plt.ion()
-                plt.figure(99)
+                plt.figure(100)
                 plt.clf()
                 plt.plot(time,flux,'ko',label='raw')
                 plt.plot(time_ooe,flux_ooe,'o',mfc='none',mec='red',mew=2,label='ooe')
-                plt.plot(tdarr[0,:],ooe1[0,:]+1,'go',markersize=5,mec='none',label='ooe predict data')
-                for i in np.arange(np.shape(tdarr)[0] -1)+1:
-                    plt.plot(tdarr[i,:],ooe1[i,:]+1,'go',markersize=5,mec='none')
-                tsamp = np.linspace(-0.2,2.5,10000)
-                samp_model, samp_cov = gp1.predict(flux_ooe, tsamp)
+                plt.plot(time,sm,'go',label='eb model')
                 plt.plot(tsamp,samp_model,'m-',label='ooe predict')
-                plt.legend(loc='best',numpoints=1)
-
-            if not fitinfo['fit_ellipsoidal'] and not fitinfo['fit_gravdark']:
-                parm[eb.PAR_Q] = 0.0
-
-            # Correct ooe1 for the fact that variations are in total light
-#            ooe1 = 
-            
-            sm  = compute_eclipse(time,parm,integration=int,fitrvs=False,
-                                  ooe1=ooe1,ooe2=ooe2)
-
-            plt.ion()
-            plt.figure(100)
-            plt.plot(time,flux,'ko')
-            plt.plot(time,sm,'go')
-            plt.plot(time,sm,'go')
-            ipdb.set_trace()
-      
-
-        else:
-            print 'Gonna hafta do somethin here!'
-            pass
-
-    ipdb.set_trace()
-    # Get band name from the data dictionary   
-    # Issue vec_to_params for each photometry data set
-    # Impose priors on parameters
-    # Spot model on OOE light
-    # eb model
-    # Create log likelihood
-
-    
-    # Model RV points
-
-    try:
-        vsys = x[variables == 'Vsys'][0]
-        ktot = x[variables == 'Ktot'][0]
-    except:
-        vsys = 0.0
-        ktot = 0.0
-
-    #!!! Loop though all unique photometric bands and assign limb darkening
-    # - Search variables for 'q*a*' and loop through each set of 4
-    # - put q = 0 - 1 prior directly in loops
-    # - Option Tie LDs to Claret using stellar parameters if desired
-    # - else use input LDs
-    
-    if fitinfo['tie_LD']:
-        T1,logg1,T2,logg2 = get_teffs_loggs(parm,vsys,ktot)
-
-        u1a = ldc1func(T1,logg1)[0][0]
-        u2a = ldc2func(T1,logg1)[0][0]
-        
-        u1b = ldc1func(T2,logg2)[0][0]
-        u2b = ldc2func(T2,logg2)[0][0]
-        
-        q1a,q2a = utoq(u1a,u2a,limb=limb)        
-        q1b,q2b = utoq(u1b,u2b,limb=limb)
-        
-        parm[eb.PAR_LDLIN1] = u1a  # u1 star 1
-        parm[eb.PAR_LDNON1] = u2a  # u2 star 1
-        parm[eb.PAR_LDLIN2] = u1b  # u1 star 2
-        parm[eb.PAR_LDNON2] = u2b  # u2 star 2
-
-    elif fitinfo['fit_limb']:
-        q1a = x[variables == 'q1a'][0]  
-        q2a = x[variables == 'q2a'][0]  
-        q1b = x[variables == 'q1b'][0]  
-        q2b = x[variables == 'q2b'][0]  
-        u1a,u2a = qtou(q1a,q2a,limb=ebin['limb'])        
-        u1b,u2b = qtou(q1b,q2b,limb=ebin['limb'])
-        parm[eb.PAR_LDLIN1] = u1a  # u1 star 1
-        parm[eb.PAR_LDNON1] = u2a  # u2 star 1
-        parm[eb.PAR_LDLIN2] = u1b  # u1 star 2
-        parm[eb.PAR_LDNON2] = u2b  # u2 star 2
-    else:
-        q1a,q2a = utoq(ebin['LDlin1'],epbar['LDnon1'],limb=ebin['limb'])
-        q1b,q2b = utoq(ebin['LDlin2'],epbar['LDnon2'],limb=ebin['limb'])
-        
-
-    ##############################
-    # LD Priors
-    # Exclude conditions that give unphysical limb darkening parameters
-    if q1b > 1 or q1b < 0 or q2b > 1 or q2b < 0 or np.isnan(q1b) or np.isnan(q2b):
-        return -np.inf        
-    if q1a > 1 or q1a < 0 or q2a > 1 or q2a < 0 or np.isnan(q1a) or np.isnan(q2a):
-        return -np.inf        
-
-    
-    if fitinfo['fit_L3']:
-        if parm[eb.PAR_L3] > 1 or parm[eb.PAR_L3] < 0:
-            return -np.inf
-
-    # No gravitational lensing or other exotic effects allowed.
-    if parm[eb.PAR_J] < 0:
-        return -np.inf
-
-    # Primary eclipse
-    t0 = parm[eb.PAR_T0]
-    if np.abs(t0) > 1800:
-        return -np.inf
-    
-    period = parm[eb.PAR_P]
-    time   = data['light'][0,:]-ebin['bjd']
-    flux   = data['light'][1,:]
-    eflux  = data['light'][2,:]
-
-    # 
-    if fitinfo['fit_ooe1'] or fitinfo['fit_ooe2']:
-        # Loop through each primary and secondary eclipse and fit each event using
-        # individual spot parameters.
-        ttm1 = foldtime(time,t0=t0,period=period)
-        
-        # Phases of contact points
-        (ps, pe, ss, se) = eb.phicont(parm)
+                plt.legend(numpoints=1)
+                plt.title('Flux, and EB model')
+                plt.xlim(-0.2,0.2)
 
 
-### Compute eclipse model for given input parameters ###
-    massratio = parm[eb.PAR_Q]
-    if massratio < 0 or massratio > 10:
-        return -np.inf
+        ####################
+        # RV dataset
+        elif key[0:2] == 'RV':
+#            print 'Doing RV dataset!'
+            parm,vder = vec_to_params(x,variables,ebin=ebin,fitinfo=fitinfo)
+            rvdata1 = data['rv1']
+            rvdata2 = data['rv2']
 
-    if not fitinfo['fit_ellipsoidal']:
-        parm[eb.PAR_Q] = 0.0
+            # need this for the RVs!
+            massratio = x[variables == 'Mratio'][0]
+            parm[eb.PAR_Q] = massratio 
+            vsys = x[variables == 'Vsys'][0]
+            ktot = x[variables == 'Ktot'][0]
 
-    ##############################
-    # Spot modeling 
-    ##############################
-    # Spots on primary
-    if fitinfo['fit_ooe1'] and not fitinfo['fit_ooe2']:
-        res = flux-sm
-        theta = np.exp(np.array([x[variables=='OOE_Amp1'],x[variables=='OOE_SineAmp1'],
-                                x[variables=='OOE_Per1'],x['OOE_Decay1']]))
-        k =  theta[0] * ExpSquaredKernel(theta[1]) * ExpSine2Kernel(theta[2],theta[3])
-        gp = george.GP(k,mean=np.mean(res))
-        try:
-            gp.compute(time, 4,sort=True)
-        except (ValueError, np.linalg.LinAlgError):
-            return -np.inf
-        lf = gp.lnlikelihood(res, quiet=True)
-    
-        
-        sm  = compute_eclipse(time,parm,integration=ebin['integration'],
-                              fitrvs=False,tref=t0,period=period,ooe1=False)
+            t0 = parm[eb.PAR_T0]
+            period = parm[eb.PAR_P]
 
-        
-    ################################
-    # Spots on secondary
-    if fitinfo['fit_ooe2'] and not fitinfo['fit_ooe1']:
-        pass
+            if fitinfo['fit_rvs']:
+                if (vsys > max(np.max(rvdata1[1,:]),np.max(rvdata2[1,:]))) or \
+                   (vsys < min(np.min(rvdata1[1,:]),np.min(rvdata2[1,:]))): 
+                    return -np.inf
 
-    ################################
-    # Spots on primary and secondary    
-    if fitinfo['fit_ooe1'] and fitinfo['fit_ooe2']:
-        pass
-    
-    ##############################
-    # No spots
-    if not fitinfo['fit_ooe2'] and not fitinfo['fit_ooe1']:
-        sm  = compute_eclipse(time,parm,integration=ebin['integration'],fitrvs=False,tref=t0,period=period)
-        # Log Likelihood
-        lf = np.sum(-1.0*(sm - flux)**2/(2.0*eflux**2))
-        
-    # need this for the RVs!
-    parm[eb.PAR_Q] = massratio
+                rvmodel1 = compute_eclipse(rvdata1[0,:]-ebin['bjd'],parm,fitrvs=True)
+                k2 = ktot/(1+massratio)
+                k1 = k2*massratio
+                rv1 = rvmodel1*k1 + vsys
+                rvmodel2 = compute_eclipse(rvdata2[0,:]-ebin['bjd'],parm,fitrvs=True)
+                rv2 = -1.0*rvmodel2*k2 + vsys
+                lfrv1 = -np.sum((rv1 - rvdata1[1,:])**2/(2.0*rvdata1[2,:]))
+                lfrv2 = -np.sum((rv2 - rvdata2[1,:])**2/(2.0*rvdata2[2,:]))
+                lfrv = lfrv1 + lfrv2
+                lf  += lfrv
+                if True:
+                    plt.ion()
+                    plt.figure(987)
+                    plt.clf()
+                    phi1 = foldtime(rvdata1[0,:]-ebin['bjd'],t0=t0,period=period)/period
+                    plt.plot(phi1,rvdata1[1,:],'ko')
+                    plt.plot(phi1,rv1,'kx')
+                    tcomp = np.linspace(-0.5,0.5,10000)*period+t0
+                    rvmodel1 = compute_eclipse(tcomp,parm,fitrvs=True)
+                    k2 = ktot/(1+massratio)
+                    k1 = k2*massratio
+                    rvcomp1 = rvmodel1*k1 + vsys
+                    plt.plot(np.linspace(-0.5,0.5,10000),rvcomp1,'k--')
+                    plt.annotate(r'$\chi^2$ = %.2f' % -lfrv, [0.05,0.85],horizontalalignment='left',
+                                 xycoords='axes fraction',fontsize='large')
+                    
+                    phi2 = foldtime(rvdata2[0,:]-ebin['bjd'],t0=t0,period=period)/period
+                    plt.plot(phi2,rvdata2[1,:],'ro')
+                    plt.plot(phi2,rv2,'rx')
+                    tcomp = np.linspace(-0.5,0.5,10000)*period+t0
+                    rvmodel2 = compute_eclipse(tcomp,parm,fitrvs=True)
+                    rvcomp2 = -1.0*rvmodel2*k2 + vsys
+                    plt.plot(np.linspace(-0.5,0.5,10000),rvcomp2,'r--')
+                    plt.xlim(-0.5,0.5)
 
-    rvdata1 = data['rv1']
-    rvdata2 = data['rv2']
+                #print 'Finished RV dataset!'
+                #ipdb.set_trace()
+                print lf
 
-    if fitinfo['fit_rvs']:
-        if (vsys > max(np.max(rvdata1[1,:]),np.max(rvdata2[1,:]))) or \
-           (vsys < min(np.min(rvdata1[1,:]),np.min(rvdata2[1,:]))): 
-            return -np.inf
-        rvmodel1 = compute_eclipse(rvdata1[0,:]-ebin['bjd'],parm,fitrvs=True)
-        k2 = ktot/(1+massratio)
-        k1 = k2*massratio
-        rv1 = rvmodel1*k1 + vsys
-        rvmodel2 = compute_eclipse(rvdata2[0,:]-ebin['bjd'],parm,fitrvs=True)
-        rv2 = -1.0*rvmodel2*k2 + vsys
-        lfrv1 = -np.sum((rv1 - rvdata1[1,:])**2/(2.0*rvdata1[2,:]))
-        lfrv2 = -np.sum((rv2 - rvdata2[1,:])**2/(2.0*rvdata2[2,:]))
-        lfrv = lfrv1 + lfrv2
-        lf  += lfrv
-
-    if debug:
-        print "Model parameters:"
-        for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
-            print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
-
-        vder = eb.getvder(parm, vsys, ktot)
-        print "Derived parameters:"
-        for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
-            print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
-
-        tfold = foldtime(time,t0=t0,period=period)
-        keep, = np.where((tfold >= -0.2) & (tfold <=0.2))
-        inds = np.argsort(tfold[keep])
-        tprim = tfold[keep][inds]
-        xprim = flux[keep][inds]
-        mprim = sm[keep][inds]
-        plt.ion()
-        plt.figure(91)
-        plt.clf()
-        plt.subplot(2, 2, 1)
-        plt.plot(tprim,xprim,'ko')
-        plt.plot(tprim,mprim,'r-')
-        chi1 = -1*lf1
-        plt.annotate(r'$\chi^2$ = %.0f' % chi1, [0.05,0.87],
-                     horizontalalignment='left',xycoords='axes fraction',fontsize='large')
-
-
-        tfold_pos = foldtime_pos(time,t0=t0,period=period)
-        ph_pos = tfold_pos/period
-        keep, = np.where((ph_pos >= 0.3) & (ph_pos <=0.7))
-        inds = np.argsort(tfold_pos[keep])
-        tsec = tfold_pos[keep][inds]
-        xsec = flux[keep][inds]
-        msec = sm[keep][inds]
-        plt.subplot(2, 2, 2)
-        plt.plot(tsec,xsec,'ko')
-        plt.plot(tsec,msec,'r-')
-
-        plt.subplot(2, 1, 2)
-        phi1 = foldtime(rvdata1[0,:]-ebin['bjd'],t0=t0,period=period)/period
-        plt.plot(phi1,rvdata1[1,:],'ko')
-        plt.plot(phi1,rv1,'kx')
-        tcomp = np.linspace(-0.5,0.5,10000)*period+t0
-        rvmodel1 = compute_eclipse(tcomp,parm,fitrvs=True)
-        k2 = ktot/(1+massratio)
-        k1 = k2*massratio
-        rvcomp1 = rvmodel1*k1 + vsys
-        plt.plot(np.linspace(-0.5,0.5,10000),rvcomp1,'k--')
-        plt.annotate(r'$\chi^2$ = %.2f' % -lfrv, [0.05,0.85],horizontalalignment='left',
-                     xycoords='axes fraction',fontsize='large')
-  
-        phi2 = foldtime(rvdata2[0,:]-ebin['bjd'],t0=t0,period=period)/period
-        plt.plot(phi2,rvdata2[1,:],'ro')
-        plt.plot(phi2,rv2,'rx')
-        tcomp = np.linspace(-0.5,0.5,10000)*period+t0
-        rvmodel2 = compute_eclipse(tcomp,parm,fitrvs=True)
-        rvcomp2 = -1.0*rvmodel2*k2 + vsys
-        plt.plot(np.linspace(-0.5,0.5,10000),rvcomp2,'r--')
-        plt.xlim(-0.5,0.5)
-        plt.suptitle('Eclipse Fit')
-
-        gamma = np.linspace(0,np.pi/2.0,1000,endpoint=True)
-        theta = gamma*180.0/np.pi
-        mu = np.cos(gamma)
-        Imu1 = 1.0 - u1a*(1.0 - mu) - u2a*(1.0 - mu)**2.0
-        Imu2 = 1.0 - u1b*(1.0 - mu) - u2b*(1.0 - mu)**2.0
-
-
-        plt.figure(92)
-        plt.clf()
-        label1 = '%.2f, ' % u1a + '%.2f' % u2a +' (Primary)'
-        label2 = '%.2f, ' % u1b + '%.2f' % u2b +' (Secondary)'
-        plt.plot(theta,Imu1,label=label1)
-        plt.plot(theta,Imu2,label=label2)
-        plt.ylim([0,1.0])
-        plt.xlabel(r"$\theta$ (degrees)",fontsize=18)
-        plt.ylabel(r"$I(\theta)/I(0)$",fontsize=18)
-        plt.title('Limb Darkening')
-        
-        plt.legend()
-        pdb.set_trace()
-        
     if np.isnan(lf):
         print 'ln(prob) is not a number!!!'
         lf = -np.inf
 
+    ipdb.set_trace()
     return lf
-
-
 
 
 
@@ -2824,7 +2682,7 @@ def make_model_data_orig(m1=None,m2=None,                        # Stellar masse
     # Time of mid-eclipse will be added later.
     parm[eb.PAR_T0] = 0.0
 
-    debug = True
+#    debug = True
     if debug:
         print "Model parameters:"
         for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
@@ -3465,3 +3323,103 @@ def vec_to_params_orig(x,ebpar,fitinfo=None,verbose=True):
 
     return parm, vder
 
+
+def lnprob_old():
+    if debug:
+        print "Model parameters:"
+        for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
+            print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+
+        vder = eb.getvder(parm, vsys, ktot)
+        print "Derived parameters:"
+        for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
+            print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+
+        tfold = foldtime(time,t0=t0,period=period)
+        keep, = np.where((tfold >= -0.2) & (tfold <=0.2))
+        inds = np.argsort(tfold[keep])
+        tprim = tfold[keep][inds]
+        xprim = flux[keep][inds]
+        mprim = sm[keep][inds]
+        plt.ion()
+        plt.figure(91)
+        plt.clf()
+        plt.subplot(2, 2, 1)
+        plt.plot(tprim,xprim,'ko')
+        plt.plot(tprim,mprim,'r-')
+        chi1 = -1*lf1
+        plt.annotate(r'$\chi^2$ = %.0f' % chi1, [0.05,0.87],
+                     horizontalalignment='left',xycoords='axes fraction',fontsize='large')
+
+
+        tfold_pos = foldtime_pos(time,t0=t0,period=period)
+        ph_pos = tfold_pos/period
+        keep, = np.where((ph_pos >= 0.3) & (ph_pos <=0.7))
+        inds = np.argsort(tfold_pos[keep])
+        tsec = tfold_pos[keep][inds]
+        xsec = flux[keep][inds]
+        msec = sm[keep][inds]
+        plt.subplot(2, 2, 2)
+        plt.plot(tsec,xsec,'ko')
+        plt.plot(tsec,msec,'r-')
+
+        plt.subplot(2, 1, 2)
+        phi1 = foldtime(rvdata1[0,:]-ebin['bjd'],t0=t0,period=period)/period
+        plt.plot(phi1,rvdata1[1,:],'ko')
+        plt.plot(phi1,rv1,'kx')
+        tcomp = np.linspace(-0.5,0.5,10000)*period+t0
+        rvmodel1 = compute_eclipse(tcomp,parm,fitrvs=True)
+        k2 = ktot/(1+massratio)
+        k1 = k2*massratio
+        rvcomp1 = rvmodel1*k1 + vsys
+        plt.plot(np.linspace(-0.5,0.5,10000),rvcomp1,'k--')
+        plt.annotate(r'$\chi^2$ = %.2f' % -lfrv, [0.05,0.85],horizontalalignment='left',
+                     xycoords='axes fraction',fontsize='large')
+  
+        phi2 = foldtime(rvdata2[0,:]-ebin['bjd'],t0=t0,period=period)/period
+        plt.plot(phi2,rvdata2[1,:],'ro')
+        plt.plot(phi2,rv2,'rx')
+        tcomp = np.linspace(-0.5,0.5,10000)*period+t0
+        rvmodel2 = compute_eclipse(tcomp,parm,fitrvs=True)
+        rvcomp2 = -1.0*rvmodel2*k2 + vsys
+        plt.plot(np.linspace(-0.5,0.5,10000),rvcomp2,'r--')
+        plt.xlim(-0.5,0.5)
+        plt.suptitle('Eclipse Fit')
+
+        gamma = np.linspace(0,np.pi/2.0,1000,endpoint=True)
+        theta = gamma*180.0/np.pi
+        mu = np.cos(gamma)
+        Imu1 = 1.0 - u1a*(1.0 - mu) - u2a*(1.0 - mu)**2.0
+        Imu2 = 1.0 - u1b*(1.0 - mu) - u2b*(1.0 - mu)**2.0
+
+
+        plt.figure(92)
+        plt.clf()
+        label1 = '%.2f, ' % u1a + '%.2f' % u2a +' (Primary)'
+        label2 = '%.2f, ' % u1b + '%.2f' % u2b +' (Secondary)'
+        plt.plot(theta,Imu1,label=label1)
+        plt.plot(theta,Imu2,label=label2)
+        plt.ylim([0,1.0])
+        plt.xlabel(r"$\theta$ (degrees)",fontsize=18)
+        plt.ylabel(r"$I(\theta)/I(0)$",fontsize=18)
+        plt.title('Limb Darkening')
+        
+        plt.legend()
+        pdb.set_trace()
+
+    if fitinfo['tie_LD']:
+        T1,logg1,T2,logg2 = get_teffs_loggs(parm,vsys,ktot)
+
+        u1a = ldc1func(T1,logg1)[0][0]
+        u2a = ldc2func(T1,logg1)[0][0]
+        
+        u1b = ldc1func(T2,logg2)[0][0]
+        u2b = ldc2func(T2,logg2)[0][0]
+        
+        q1a,q2a = utoq(u1a,u2a,limb=limb)        
+        q1b,q2b = utoq(u1b,u2b,limb=limb)
+        
+        parm[eb.PAR_LDLIN1] = u1a  # u1 star 1
+        parm[eb.PAR_LDNON1] = u2a  # u2 star 1
+        parm[eb.PAR_LDLIN2] = u1b  # u1 star 2
+        parm[eb.PAR_LDNON2] = u2b  # u2 star 2
