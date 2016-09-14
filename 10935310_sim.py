@@ -71,11 +71,12 @@ ubands = ebs.uniquebands(datadict,quiet=True)
 fitinfo = ebs.fit_params(nwalkers=100,burnsteps=100,mcmcsteps=100,clobber=True,
                          fit_ooe1=[True,False,False,False],network=network)
 
+import sys
+sys.exit()
+
 ebs.ebsim_fit(datadict,fitinfo,ebin,debug=False)
 
 
-import sys
-sys.exit()
 
 
 plt.ion()

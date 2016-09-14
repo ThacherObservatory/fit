@@ -16,12 +16,16 @@ time0 = time[s] ; flux0=flux[s] ; err0=err[s]
 
 a = np.array([4697,6918,9139,11360,13581,15802])
 b = np.array([6918,9139,11360,13581,15802,18026])
+#for testing 4-6
+#a = a[3:]
+#b = b[3:]
+
 
 a1 = np.array([0,21,0])
 b1 = np.array([31,50,35])
 
-dir = np.array(['first_interval','second_interval','third_interval'])
-
+dir = np.array(['first_interval','second_interval','third_interval','fourth_interval','fifth_interval','sixth_interval'])
+#dir = dir[3:]
 
 
 def lnprob(theta,time,flux,err):
@@ -79,7 +83,8 @@ def lnprob(theta,time,flux,err):
 
 for i in range(len(a)):
     print("starting interval " +str(i+1))
-
+    if i < 3:
+	continue
     time = time0[a[i]:b[i]]
     flux = flux0[a[i]:b[i]]
     err = err0[a[i]:b[i]]
@@ -157,9 +162,9 @@ for i in range(len(a)):
 
     # Initialize the MCMC Hammer
     p0 = gp.kernel.vector
-    nwalkers = 10
-    burnsteps = 50
-    mcmcsteps = 50
+    nwalkers = 20
+    burnsteps = 1000
+    mcmcsteps = 1000
     ndim = len(p0)
     p0_vec = [p0[j]+1e-2*np.random.randn(nwalkers) for j in range(ndim)]
     p0_init = np.array(p0_vec).T
