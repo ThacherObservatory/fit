@@ -35,10 +35,10 @@ obsdur = [90.0,10.0,10.0,10.0]
 inttime = [1800.0,300.,300.,300.]
 durfac = [3.0,2,2,2]
 RVsamples = 20
-spotamp1 = [0.0, 0., 0., 0.]
+spotamp1 = [1.0, 0., 0., 0.]
 spotP1 = np.pi*86400/period
 spotfrac1 = [0.5,0.0,0.0,0.0]
-spotbase1 = np.zeros(4)
+spotbase1 = [-0.1,0.0,0.0,0.0]
 spotamp2 = np.zeros(4)
 spotfrac2 = np.zeros(4)
 spotbase2 = np.zeros(4)
@@ -52,35 +52,32 @@ ebin = ebs.ebinput(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2/c.Rsun,
                    
 
 datadict = ebs.make_model_data(ebin,nphot=nphot,band=band,photnoise=photnoise,
-                                 q1a=q1a,q2a=q2a,q1b=q1b,q2b=q2b,L3=L3,
-                                 obsdur=obsdur,int=inttime,durfac=durfac,
-                                 RVsamples=RVsamples,
-                                 spotamp1=spotamp1, spotP1=spotP1, spotfrac1=spotfrac1,
-                                 P1double=P1double, spotbase1=spotbase1,
-                                 spotamp2=spotamp2, spotfrac2=spotfrac2,
-                                 spotbase2=spotbase2,
-                                 network=network,write=False)
+                               q1a=q1a,q2a=q2a,q1b=q1b,q2b=q2b,L3=L3,
+                               obsdur=obsdur,int=inttime,durfac=durfac,
+                               RVsamples=RVsamples,
+                               spotamp1=spotamp1, spotP1=spotP1, spotfrac1=spotfrac1,
+                               P1double=P1double, spotbase1=spotbase1,
+                               spotamp2=spotamp2, spotfrac2=spotfrac2,
+                               spotbase2=spotbase2,
+                               network=network,write=False)
                                  
 
 datadict = col.OrderedDict(sorted(datadict.items()))
 
-ebs.check_model(datadict)
+#ebs.check_model(datadict)
 
 ubands = ebs.uniquebands(datadict,quiet=True)
 
 fitinfo = ebs.fit_params(nwalkers=100,burnsteps=100,mcmcsteps=100,clobber=True,
                          fit_ooe1=[True,False,False,False],network=network)
 
-import sys
+ebs.ebsim_fit(datadict,fitinfo,ebin,debug=False,threads=1)
+
+
 sys.exit()
 
-ebs.ebsim_fit(datadict,fitinfo,ebin,debug=False)
-
-
-
-
 plt.ion()
-ebs.check_model(data)
+ebs.check_model(datadict)
 time = data['light'][0,:]
 flux = data['light'][1,:]
 ttm1 = 86400.0*ebs.foldtime(time,t0=t0,period=period/86400.0)/period

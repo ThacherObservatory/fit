@@ -408,14 +408,14 @@ def make_phot_data(ebin,
         # GD1 = 0.32, GD2 = 0.32 for low mass stars?
         pass
     else:
-        GD1 = 0.32 ; GD2 = 0.32
+        GD1 = 0.0 ; GD2 = 0.0
 
     if reflection:
+        # Standard values?
         #  'Ref1':0.4,  'Ref2':0.4
         pass
     else:
-        # Standard values?
-        Ref1 = 0.4 ; Ref2 = 0.4
+        Ref1 = 0.0 ; Ref2 = 0.0
 
     if not tideang:
         tideang = 0.0
@@ -682,7 +682,7 @@ def make_model_data(ebin,
                     spotfrac1=0.0,spotbase1=0.0,            # Fraction of spots eclipsed, and base
                     spotamp2=None,spotP2=0.0,P2double=False,# Spot amplitude and period frac for star 2
                     spotfrac2=0.0,spotbase2=0.0,            # Fraction of spots eclipsed, and base
-                    write=False,network=None,outpath='./'):    # Network info
+                    write=False,network=None,outpath='./'): # Network info
 
 
 
@@ -799,6 +799,7 @@ def check_model(data_dict):
             plt.plot(time,light,'ko',label='All data')
             plt.plot(tooe,looe,'o',mfc='none',mec='r',mew=2,label='Out-of-eclipse data')
             plt.title('Photometric Data for Band '+data['band'])
+            plt.axhline(y=1.0,linestyle='--',color='g',linewidth=1.5)
             plt.legend(loc='best',numpoints=1)
 
     if data_dict.has_key('RVdata'):
@@ -1570,8 +1571,17 @@ def compute_eclipse(t,parm,integration=None,modelfac=11.0,fitrvs=False,tref=None
         if length(ooe1) != length(tdarr) and length(ooe2) == length(tdarr):
             yarr = eb.model(parm, tdarr, typ, ol2=ooe2)
         if length(ooe1) != length(tdarr) and length(ooe2) != length(tdarr):
+#            vsys = parm[]
+#            ktot = parm[]
+#            ipdb.set_trace()
+#            print "Model parameters:"
+#            for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
+#                print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+#                vder = eb.getvder(parm, ebin['Vsys'], ktot)
+#            print "Derived parameters:"
+#            for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
+#                print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
             yarr = eb.model(parm, tdarr, typ)
-                
         # Average over each integration time (with modelfac number of samples)
         smoothmodel = np.sum(yarr,axis=0)/np.float(modelfac)
         model = yarr[(modelfac-1)/2,:]
