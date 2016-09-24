@@ -21,7 +21,7 @@ l1 = 4*np.pi*r1**2*c.sb*T1**4
 T2 = 2750.0
 l2 = 4*np.pi*r2**2*c.sb*T2**4
 J  = l2/l1
-network = 'swift'
+network = 'bellerophon'
 
 nphot = 4
 band = ['Kp','J','H','K']
@@ -68,16 +68,17 @@ datadict = col.OrderedDict(sorted(datadict.items()))
 
 ubands = ebs.uniquebands(datadict,quiet=True)
 
-fitinfo = ebs.fit_params(nwalkers=100,burnsteps=100,mcmcsteps=100,clobber=True,
+fitinfo = ebs.fit_params(nwalkers=1000,burnsteps=1000,mcmcsteps=2000,clobber=True,
                          fit_ooe1=[True,False,False,False],network=network)
 
-ebs.ebsim_fit(datadict,fitinfo,ebin,debug=False,threads=1)
+ebs.ebsim_fit(datadict,fitinfo,ebin,debug=False,threads=32)
 
 
-sys.exit()
 
 plt.ion()
 ebs.check_model(datadict)
+sys.exit()
+
 time = data['light'][0,:]
 flux = data['light'][1,:]
 ttm1 = 86400.0*ebs.foldtime(time,t0=t0,period=period/86400.0)/period
