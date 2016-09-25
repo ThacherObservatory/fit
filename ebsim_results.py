@@ -16,7 +16,7 @@ import ebsim as ebs
 from done_in import done_in
 
 
-def analyze_run(run,network=None,thin=10,full=False,cadence='short'):
+def analyze_run(network=None,thin=10,full=False,cadence='short'):
 
     chains,lp = get_chains(run,network=network,cadence=cadence)
     
@@ -49,8 +49,7 @@ def plot_chains(seq_num,network=None,cadence='short'):
     
 
 
-def get_chains(seq_num,network=None,cadence='short'):
-    path = reb.get_path(network=network)+cadence+'/'+str(seq_num)+'/'
+def get_chains(path='./',network=None,cadence='short'):
     ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
     data    = pickle.load( open( path+'data.p', 'rb' ) )
     fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
@@ -61,7 +60,7 @@ def get_chains(seq_num,network=None,cadence='short'):
     for i in np.arange(len(variables)):
         try:
             print "Reading MCMC chains for "+variables[i]
-            tmp = np.loadtxt(path+variables[i]+'chain.txt')
+            tmp = np.loadtxt(path+variables[i]+'_chain.txt')
             if i == 0:
                 chains = np.zeros((len(tmp),len(variables)))
                 
@@ -80,8 +79,58 @@ def get_chains(seq_num,network=None,cadence='short'):
 
 
 
-def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='short',
-                thin=False,frac=0.001,nbins=100,rpmax=1,durmax=10,sigrange=5.0):
+def varnameconv(variables):
+    '''
+    Convert variable names to plot friendly strings
+    '''
+    
+    varmatch = np.array(["J","Rsum","Rratio","cosi",
+                         "ecosw","esinw",
+                         "magoff","t0","Period",
+                         "q1a", "q2a", "q1b", "q2b","u1a","u1b",
+                         "Mratio","L3",
+                         "Rot1","spFrac1","spBase1","spSin1","spCos1","spSinCos1","spSqSinCos1",
+                         "Rot2","spFrac2","spBase2","spSin2","spCos2","spSinCos2","spSqSinCos2",
+                         "OOE_Amp1","OOE_SineAmp1","OOE_Decay1","OOE_Per1","FSCAve",
+                         "Ktot","Vsys"])
+
+    varnames = np.array(["Surf. Br. Ratio", r"$(R_1+R_2)/a$", r"$R_2/R_1$", r"$\cos i$", 
+                         r"$e\cos\omega$",r"$e\sin\omega$",
+                         r"$\Delta m_0$", r"$\Delta t_0$ (s)","$\Delta P$ (s)",
+                         r"$q_1^p$",r"$q_2^p$",r"$q_1^s$",r"$q_2^s$",r"$u_1^p$",r"$u_1^s$",
+                         r"$M_2/M_1$", r"$L_3$",
+                         r"$P_{rot}^p$","Sp. Frac. 1","Sp. Base 1","Sin Amp 1","Cos Amp 1","SinCos Amp 1",r"Cos$^2$-Sin$^2$ Amp 1",
+                         r"$P_{rot}^s$","Sp. Frac. 2","Sp. Base 2","Sin Amp 2","Cos Amp 2","SinCos Amp 2",r"Cos$^2$-Sin$^2$ Amp 2",
+                         "OOE Amp","OOE Sine Amp","OOE Decay","OOE Period","Frac. Sp. Cov.",
+                         r"$K_{\rm tot}$ (km/s)", r"$V_{\rm sys}$ (km/s)"])
+
+    varvec = []
+
+    for var in variables:
+        nmatch = 0
+        for i in range(length(varmatch)):
+            varm = varmatch[i]
+            nch = length(varm)
+            if var[0:nch] == varm:
+                if length(var) > nch:
+                    tag = var.split('_')[-1]
+                else:
+                    tag = ''
+                varvec.append(varnames[i]+' '+tag)
+                nmatch +=1
+        if nmatch == 0:
+            varvec.append('ERROR')
+
+    if length(varvec) != length(variables):
+        print 'ERROR in varnameconv: missing variable names'
+
+    return varvec
+
+
+
+def best_vals(path='./',chains=False,lp=False,network=None,bindiv=20.0,
+              thin=False,frac=0.001,nbins=100,rpmax=1,
+              durmax=10,sigrange=5.0):
 
 
     """
@@ -94,8 +143,6 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
     """
 
     plot_params(linewidth=1.5,fontsize=12)
-
-    path = reb.get_path(network=network)+cadence+'/'+str(seq_num)+'/'
     
     ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
     data    = pickle.load( open( path+'data.p', 'rb' ) )
@@ -105,29 +152,16 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
 
     variables = fitinfo['variables']
 
-    var_init = ebpar['variables']
-    p_init = ebpar['p_init']
+#    var_init = ebpar['variables']
+#    p_init = ebpar['p_init']
     
     # Use supplied chains or read from disk
     if not np.shape(chains):
-        for i in np.arange(len(variables)):
-            try:
-                print "Reading MCMC chains for "+variables[i]
-                tmp = np.loadtxt(path+variables[i]+'chain.txt')
-                if i == 0:
-                    chains = np.zeros((len(tmp),len(variables)))
-
-                chains[:,i] = tmp
-            except:
-                print variables[i]+'chain.txt does not exist on disk !'
+        chains,lp = get_chains(path=path)
 
     if not np.shape(lp):
-        try:
-            print "Reading ln(prob) chain"
-            lp = np.loadtxt(path+'lnprob.txt')
-        except:
-            print 'lnprob.txt does not exist. Exiting'
-            return
+        print 'lnprob.txt does not exist. Exiting'
+        return
 
 #  Get maximum likelihood values
     bestvals = np.zeros(len(variables))
@@ -154,14 +188,29 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
         lp = lp[0::thin]
         chains = thinchains 
 
-    varnames = ebs.varnameconv(variables)
+    varnames = varnameconv(variables)
 
-
+    ##############################
     # Primary Variables
-    priminds, = np.where((np.array(variables) == 'J') ^ (np.array(variables) =='Rsum') ^ 
-                         (np.array(variables) == 'Rratio') ^ (np.array(variables) == 'ecosw') ^ 
-                         (np.array(variables) == 'esinw') ^ (np.array(variables) == 'cosi'))
+    ##############################
+    nbands = ebs.numbands(data)
+    if nbands == 1:
+        priminds, = np.where((np.array(variables) =='Rsum') ^ (np.array(variables) == 'Rratio') ^
+                             (np.array(variables) == 'ecosw') ^ (np.array(variables) == 'esinw') ^
+                             (np.array(variables) == 'cosi'))
+        priminds = []
+        for i in range(length(variables)):
+            var = variables[i]
+            if var[0] == 'J':
+                priminds = np.append(priminds,i)
 
+    else:
+        priminds, = np.where((np.array(variables) =='Rsum') ^ (np.array(variables) == 'Rratio') ^
+                             (np.array(variables) == 'ecosw') ^ (np.array(variables) == 'esinw') ^
+                             (np.array(variables) == 'cosi'))
+        
+    priminds = np.sort(priminds)
+    
     plt.ioff()
     plt.figure(4,figsize=(8.5,11),dpi=300)    
     plt.clf()
@@ -184,8 +233,8 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
         print out.format(bestvals[i], med, mode, interval)
         
         # actual value
-        ind, = np.where(np.array(var_init) == np.array(variables)[i])
-        val = p_init[ind]
+#        ind, = np.where(np.array(var_init) == np.array(variables)[i])
+#        val = p_init[ind]
         
         # do plot
         plotnum += 1
@@ -200,23 +249,77 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
         #    plt.xlim([minval,maxval])
         plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
         plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
-        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
+#        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
         plt.xlabel(varnames[i])
         plt.ylabel(r'$dP$')
         if plotnum == 1:
-            plt.title('Parameter Distributions for Run '+str(seq_num))
+            plt.title('Parameter Distributions for Primary Variables')
 
     plt.subplots_adjust(hspace=0.55)
-    plt.savefig(path+'params1.png', dpi=300)
+    plt.savefig(path+'primary_params.png', dpi=300)
     plt.clf()
 
+    ########################################################################################
+    # If there are multiple photometric bands, plot up surface brightness ratios on one plot
+    jinds = []
+    if nbands > 1:
+        for i in range(length(variables)):
+            var = variables[i]
+            if var[0] == 'J':
+                jinds = np.append(jinds,i).astype('int')
 
+        plt.ioff()
+        plt.figure(4,figsize=(8.5,11),dpi=300)    
+        plt.clf()
+        plotnum = 0
+        for i in jinds:
+            print ''
+            dist = chains[:,i]
+            med,mode,interval,lo,hi = distparams(dist)
+            meds[i] = med
+            modes[i] = mode
+            onesigs[i] = interval
+            minval = np.min(dist)
+            maxval = np.max(dist)
+            sigval = rb.std(dist)
+            maxval = med + sigrange*np.abs(hi-med)
+            minval = med - sigrange*np.abs(med-lo)
+            nb = min(np.ceil((maxval-minval) / (interval/bindiv)),500)
+            print 'Best fit parameters for '+variables[i]        
+            out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+            print out.format(bestvals[i], med, mode, interval)
+            
+            # actual value
+            #        ind, = np.where(np.array(var_init) == np.array(variables)[i])
+            #        val = p_init[ind]
+            
+            plotnum += 1
+            plt.subplot(len(jinds),1,plotnum)
+            print "Computing histogram of data"
+            pinds, = np.where((dist >= minval) & (dist <= maxval))
+            try:
+                plt.hist(dist[pinds],bins=nb,normed=True,edgecolor='none')
+            except:
+                plt.hist(dist,bins=nb,normed=True,edgecolor='none')
+            
+            #    plt.xlim([minval,maxval])
+            plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
+            plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+            #        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
+            plt.xlabel(varnames[i])
+            plt.ylabel(r'$dP$')
+            plt.title('Parameter Distributions for Surf. Br. Ratios')
+            
+        plt.subplots_adjust(hspace=0.55)
+        plt.savefig(path+'surfbright_params.png', dpi=300)
+        plt.clf()
 
-
-# Second set of parameters
-    secinds, = np.where((np.array(variables) == 'period') ^(np.array(variables) == 't0') ^
-                        (np.array(variables) == 'massratio') ^ (np.array(variables) == 'ktot') ^
-                        (np.array(variables) == 'vsys'))
+    ##############################
+    # Second set of parameters
+    ##############################
+    secinds, = np.where((np.array(variables) == 'Period') ^(np.array(variables) == 't0') ^
+                        (np.array(variables) == 'Mratio') ^ (np.array(variables) == 'Ktot') ^
+                        (np.array(variables) == 'Vsys'))
 
     plt.figure(5,figsize=(8.5,11),dpi=300)    
     plt.clf()
@@ -227,7 +330,7 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
             dist   = (chains[:,i] - (ebpar["t01"] - ebpar['bjd']))*24.*3600.0
             t0val = bestvals[i]
             bestvals[i] = (t0val -(ebpar["t01"] - ebpar['bjd']))*24.*3600.0
-        elif variables[i] == 'period':
+        elif variables[i] == 'Period':
             dist   = (chains[:,i] - ebpar["Period"])*24.*3600.0
             pval  =  bestvals[i]
             bestvals[i] = (pval - ebpar["Period"])*24.*3600.0
@@ -249,12 +352,12 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
         print out.format(bestvals[i], med, mode, interval)
         
         # actual value
-        ind, = np.where(np.array(var_init) == np.array(variables)[i])
+        #        ind, = np.where(np.array(var_init) == np.array(variables)[i])
         
-        if variables[i] == 'period': 
-            val = (p_init[ind] -  ebpar["Period"])*24*3600.0
-        else:
-            val = p_init[ind]
+        #if variables[i] == 'Period': 
+        #    val = (p_init[ind] -  ebpar["Period"])*24*3600.0
+        #else:
+        #    val = p_init[ind]
         
         # do plot
         plotnum += 1
@@ -268,45 +371,98 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
         plt.xlim([minval,maxval])
         plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
         plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
-        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
+#        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
         plt.xlabel(varnames[i])
         plt.ylabel(r'$dP$')
         if plotnum == 1:
-            plt.title('Parameter Distributions for Run '+str(seq_num))
+            plt.title('Parameter Distributions for Secondary Variables')
         if variables[i] == 't0':
             plt.annotate(r'$t_0$ = %.6f BJD' % ebpar["t01"], xy=(0.96,0.8),
                          ha="right",xycoords='axes fraction',fontsize='large')
             bestvals[i] = t0val
-        if variables[i] == 'period':
+        if variables[i] == 'Period':
             plt.annotate(r'$P$ = %.6f d' % ebpar["Period"], xy=(0.96,0.8),
                          ha="right",xycoords='axes fraction',fontsize='large')
             bestvals[i] = pval
 
     plt.subplots_adjust(hspace=0.55)
-    plt.savefig(path+'params2.png', dpi=300)
+    plt.savefig(path+'secondary_params.png', dpi=300)
     plt.clf()
 
 
 
-    plotnum = 1
-    # For the remaining variables
-    allinds = np.array(list(priminds) + list(secinds))
-    allinds = np.sort(allinds)
-    if len(allinds) < len(variables):
-        print ''
-        print "Starting plots for remaining variables"
-        plt.figure(6,figsize=(8.5,11),dpi=300)
-        vinds = np.arange(len(variables))
-        missedi = []
-        for vi in vinds:
-            try:
-                leni = len(np.where(vi == allinds)[0])
-                if leni == 0:
-                    missedi.append(vi)
-            except:
-                pass
 
-        for i in missedi:
+
+    ###############################
+    # Limb darkening
+    ###############################
+    bands = ebs.uniquebands(data)
+    nplot = 1
+    for band in bands:
+        ldinds, = np.where((np.array(variables) =='q1a_'+band) ^ (np.array(variables) == 'q2a_'+band) ^
+                             (np.array(variables) == 'q1b_'+band) ^ (np.array(variables) == 'q2b_'+band))
+        
+        ldinds = np.sort(ldinds)
+    
+        plt.ioff()
+        plt.figure(4,figsize=(8.5,11),dpi=300)    
+        plt.clf()
+        plotnum = 0
+        for i in ldinds:
+            print ''
+            dist = chains[:,i]
+            med,mode,interval,lo,hi = distparams(dist)
+            meds[i] = med
+            modes[i] = mode
+            onesigs[i] = interval
+            sigval = rb.std(dist)
+            minval = 0.0
+            maxval = 1.0
+            nb = min(np.ceil((maxval-minval) / (interval/bindiv)),500)
+            print 'Best fit parameters for '+variables[i]        
+            out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+            print out.format(bestvals[i], med, mode, interval)
+        
+            # actual value
+            #        ind, = np.where(np.array(var_init) == np.array(variables)[i])
+            #        val = p_init[ind]
+
+            plotnum += 1
+            plt.subplot(len(ldinds),1,plotnum)
+            print "Computing histogram of data"
+            pinds, = np.where((dist >= minval) & (dist <= maxval))
+            try:
+                plt.hist(dist[pinds],bins=nb,normed=True,edgecolor='none')
+            except:
+                plt.hist(dist,bins=nb,normed=True,edgecolor='none')
+            
+            #    plt.xlim([minval,maxval])
+            plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
+            plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+            #        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
+            plt.xlabel(varnames[i])
+            plt.ylabel(r'$dP$')
+            plt.title('LD Parameter Distributions for '+band+' band')
+
+        plt.subplots_adjust(hspace=0.55)
+        plt.savefig(path+'LD_params_'+band+'.png', dpi=300)
+        plt.clf()
+        nplot += 1
+
+
+    ##############################
+    # Out of eclipse parameters
+    ##############################
+    ooeinds = []
+    for i in range(length(variables)):
+        var = variables[i]
+        if var[0:3] == 'OOE' or var[0:3] == 'FSC':
+            ooeinds = np.append(ooeinds,i).astype('int')
+
+    if length(ooeinds) > 0:
+
+        plotnum = 0
+        for i in ooeinds:
             print ''
             dist   = chains[:,i]
             
@@ -314,29 +470,21 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
             meds[i] = med
             modes[i] = mode
             onesigs[i] = interval
-            minval = np.min(dist)
-            maxval = np.max(dist)
-            sigval = rb.std(dist)
             maxval = med + sigrange*np.abs(hi-med)
             minval = med - sigrange*np.abs(med-lo)
-            if variables[i][0] == 'q':
-                minval = 0.0
-                maxval = 1.0
-            else:
-                sigval = rb.std(dist)
-                minval = np.min(dist) - sigval
-                maxval = np.max(dist) + sigval
+            sigval = rb.std(dist)
             nb = min(np.ceil((maxval-minval) / (interval/bindiv)),500)
             print 'Best fit parameters for '+variables[i]        
             out = variables[i]+': max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
             print out.format(bestvals[i], med, mode, interval)
             
             # actual value
-            ind, = np.where(np.array(var_init) == np.array(variables)[i])
-            val = p_init[ind]
+#            ind, = np.where(np.array(var_init) == np.array(variables)[i])
+#            val = p_init[ind]
         
-             # do plot
-            plt.subplot(len(missedi),1,plotnum)
+            # do plot
+            plotnum += 1
+            plt.subplot(len(ooeinds),1,plotnum)
             print "Computing histogram of data"
             pinds, = np.where((dist >= minval) & (dist <= maxval))
             try:
@@ -346,38 +494,18 @@ def best_vals(seq_num,chains=False,lp=False,network=None,bindiv=20.0,cadence='sh
             plt.xlim([minval,maxval])
             plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
             plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
-            plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
+#            plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
             plt.xlabel(varnames[i])
             plt.ylabel(r'$dP$')
-            if plotnum == 1:
-                plt.title('Parameter Distributions for Run '+str(seq_num))
-            plotnum += 1
+            plt.title('Distributions for Out of Eclipse Parameters')
             
         plt.subplots_adjust(hspace=0.55)
-        plt.savefig(path+'params3.png', dpi=300)
+        plt.savefig(path+'OOE_params.png', dpi=300)
         plt.clf()
  
-   # calculate limb darkening parameters
-#    if limb == 'quad':
-#        ind1, = np.where(variables == 'q1a')
-#        ind2, = np.where(variables == 'q2a')        
-#        u1a,u2a =  qtou(bestvals[ind1],bestvals[ind2],limb=limb)
-#        ldc = [u1a,u2a]
-#        plot_limb_curves(ldc=ldc,limbmodel=limb,write=True,network=network)
-#        ind1, = np.where(variables == 'q1b')
-#        ind2, = np.where(variables == 'q2b')        
-#        u1a,u2a =  qtou(bestvals[ind1],bestvals[ind2],limb=limb)
-#        ldc = [u1a,u2a]
-#        plot_limb_curves(ldc=ldc,limbmodel=limb,write=True,network=network)
-#
-#
-#
-#    vals = [[bestvals],[meds],[modes],[onesigs]]
 
-#    ebs.lnprob(bestvals,data,ebpar,fitinfo,debug=True)
-    
-    plot_model(bestvals,data,ebpar,fitinfo,data,tag='_fit',
-               network=network,cadence=cadence)
+#    plot_model(bestvals,data,ebpar,fitinfo,data,tag='_fit',
+#               network=network,cadence=cadence)
 
     f = open(path+'fitparams.txt','w')
     for i in np.arange(len(variables)):

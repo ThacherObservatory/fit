@@ -1876,48 +1876,10 @@ def GR_test(chains,variables=False):
    return Rs
 
 
-
-
-# !!! Needs modification
-def varnameconv(variables):
-
-    varmatch = np.array(["J","Rsum","Rratio","cosi",
-                         "ecosw","esinw",
-                         "magoff","t0","Period",
-                         "q1a", "q2a", "q1b", "q2b","u1a","u1b",
-                         "MRatio","L3",
-                         "Rot1","spFrac1","spBase1","spSin1","spCos1","spSinCos1","spSqSinCos1",
-                         "Rot2","spFrac2","spBase2","spSin2","spCos2","spSinCos2","spSqSinCos2",
-                         "c0_1","c1_1","c2_1","c3_1","c4_1","c5_1",
-                         "c0_2","c1_2","c2_2","c3_2","c4_2","c5_2",
-                         "Ktot","Vsys"])
-
-    varnames = np.array(["Surf. Br. Ratio", r"$(R_1+R_2)/a$", r"$R_2/R_1$", r"$\cos i$", 
-                         r"$e\cos\omega$",r"$e\sin\omega$",
-                         r"$\Delta m_0$", r"$\Delta t_0$ (s)","$\Delta P$ (s)",
-                         "$q_1^p$","$q_2^p$","$q_1^s$","$q_2^s$","$u_1^p$","$u_1^s$",
-                         "$M_2/M_1$", "$L_3$",
-                         "$P_{rot}^p$","Sp. Frac. 1", "Sp. Base 1", "Sin Amp 1", "Cos Amp 1", "SinCos Amp 1", "Cos$^2$-Sin$^2$ Amp 1",
-                         "$P_{rot}^s$","Sp. Frac. 2", "Sp. Base 2", "Sin Amp 2", "Cos Amp 2", "SinCos Amp 2", "Cos$^2$-Sin$^2$ Amp 2",
-                         "$C_0$ (eclipse 1)","$C_1$ (eclipse 1)","$C_2$ (eclipse 1)",
-                         "$C_3$ (eclipse 1)","$C_4$ (eclipse 1)","$C_5$ (eclipse 1)",
-                         "$C_0$ (eclipse 2)","$C_1$ (eclipse 2)","$C_2$ (eclipse 2)",
-                         "$C_3$ (eclipse 2)","$C_4$ (eclipse 2)","$C_5$ (eclipse 2)",
-                         r"$K_{\rm tot}$ (km/s)", r"$V_{\rm sys}$ (km/s)"])
-
-    varvec = []
-    for var in variables:
-        ind, = np.where(var == varmatch)
-        if length(ind) == 1:
-            varvec.append(varnames[ind[0]])
-
-    return varvec
-
-
-
-
 def get_teffs_loggs(parm,vsys,ktot):
-
+    '''
+    Function to return the effective temperatures and log(g)s for the stars given a parameter vector
+    '''
     # Get physical parameters
     ecosw = parm[eb.PAR_ECOSW]
     esinw = parm[eb.PAR_ESINW]
@@ -2396,6 +2358,22 @@ def get_limb_coeff(Tstar,loggstar,filter='Kp',plot=False,network=None,limb='quad
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
 
 
 
@@ -3428,3 +3406,6 @@ For plotting of compute_eclipse
                 plt.xlim(-0.2,0.2)
                 plt.title('Yarr vs. Yarr1 from compute_eclipse')
 """
+
+
+
