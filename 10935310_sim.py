@@ -21,7 +21,7 @@ l1 = 4*np.pi*r1**2*c.sb*T1**4
 T2 = 2750.0
 l2 = 4*np.pi*r2**2*c.sb*T2**4
 J  = l2/l1
-network = 'bellerophon'
+network = 'swift'
 
 nphot = 4
 band = ['Kp','J','H','K']
@@ -63,6 +63,8 @@ datadict = ebs.make_model_data(ebin,nphot=nphot,band=band,photnoise=photnoise,
                                  
 
 datadict = col.OrderedDict(sorted(datadict.items()))
+
+sys.exit()
 
 #ebs.check_model(datadict)
 
