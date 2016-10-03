@@ -269,26 +269,26 @@ l2 = 4*np.pi*r2**2*c.sb*T2**4
 J  = l2/l1
 network = 'bellerophon'
 
-nphot = 4
-band = ['Kp','J','H','K']
-photnoise = [0.0003,0.002,0.005,0.01]
-q1a = [0.5,0.4,0.3,0.2]
-q2a = [0.1,0.2,0.3,0.4]
-q1b = [0.7,0.6,0.5,0.4]
-q2b = [0.1,0.2,0.3,0.4]
-L3  = [0.0,0.0,0.0,0.0] 
-obsdur = [90.0,10.0,10.0,10.0]
-inttime = [1800.0,300.,300.,300.]
-durfac = [3.0,2,2,2]
-RVsamples = 20
-spotamp1 = [1.0, 0., 0., 0.]
-spotP1 = np.pi*86400/period
-spotfrac1 = [0.5,0.0,0.0,0.0]
-spotbase1 = [-0.1,0.0,0.0,0.0]
-spotamp2 = np.zeros(4)
-spotfrac2 = np.zeros(4)
-spotbase2 = np.zeros(4)
-P1double = 0.8
+#nphot = 4
+#band = ['Kp','J','H','K']
+#photnoise = [0.0003,0.002,0.005,0.01]
+#q1a = [0.5,0.4,0.3,0.2]
+#q2a = [0.1,0.2,0.3,0.4]
+#q1b = [0.7,0.6,0.5,0.4]
+#q2b = [0.1,0.2,0.3,0.4]
+#L3  = [0.0,0.0,0.0,0.0] 
+#obsdur = [90.0,10.0,10.0,10.0]
+#inttime = [1800.0,300.,300.,300.]
+#durfac = [3.0,2,2,2]
+#RVsamples = 20
+#spotamp1 = [1.0, 0., 0., 0.]
+#spotP1 = np.pi*86400/period
+#spotfrac1 = [0.5,0.0,0.0,0.0]
+#spotbase1 = [-0.1,0.0,0.0,0.0]
+#spotamp2 = np.zeros(4)
+#spotfrac2 = np.zeros(4)
+#spotbase2 = np.zeros(4)
+#P1double = 0.8
 
 
 ebin = ebs.ebinput(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2/c.Rsun,
@@ -307,10 +307,9 @@ fitinfo = ebs.fit_params(nwalkers=500,burnsteps=500,mcmcsteps=1000,clobber=True,
                          fit_ooe1=[True,False,False,False],network=network,
                          outpath=dpath)
 
-ebs.ebsim_fit(datadict,fitinfo,ebin,debug=False,threads=32)
+ebs.ebsim_fit(datadict,fitinfo,ebin,debug=False,threads=30)
 
 sys.exit()
-
 plt.ion()
 ebs.check_model(datadict)
 
