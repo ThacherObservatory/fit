@@ -8,7 +8,7 @@ from astropy.io.fits import open, getdata
 import sys
 
 plot = False
-bellerophon = False
+bellerophon = True
 
 ######################################################################
 # Photometry data
