@@ -7,6 +7,9 @@ import collections as col
 from astropy.io.fits import open, getdata
 import sys
 
+plot = False
+bellerophon = False
+
 ######################################################################
 # Photometry data
 # datadict['phot0'].keys()
@@ -21,8 +24,11 @@ import sys
 ######################################################################
 # Kepler Data (optical)
 ######################################################################
-dpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/Refine/'
-dpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
+if bellerophon:
+    dpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
+else:
+    dpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/Refine/'
+
 file1 = '10935310_1_norm.dat'
 file2 = '10935310_2_norm.dat'
 
@@ -34,12 +40,18 @@ i = np.argsort(kpdata[:,0])
 data = kpdata[i,:].T
 data[0,:] += 2454833.0
 
-plt.ion()
-plt.figure(0)
-plt.clf()
-plt.plot(data[0,:],data[1,:],'.k')
+
+inds, = np.where((data[0,:] > 2455560) & (data[0,:] < 2455640))
+data = data[:,inds]
+
+if plot:
+    plt.ion()
+    plt.figure(0)
+    plt.clf()
+    plt.plot(data[0,:],data[1,:],'.k')
 
 phot0 = {'light':data}
+
 
 # From: /Users/jonswift/Astronomy/EBs/outdata/10935310/Refine/10935310.out
 period = 4.128795073
@@ -61,10 +73,11 @@ ooeiprim = np.append(ooei1,ooei2)
 ooeisec  = np.append(ooei3,ooei4)
 
 ooei = np.append(ooeiprim,ooeisec)
-plt.figure(0)
-plt.clf()
-plt.plot(ph1,data[1,:],'.k')
-plt.plot(ph1[ooei],data[1,ooei],'.r')
+if plot:
+    plt.figure(0)
+    plt.clf()
+    plt.plot(ph1,data[1,:],'.k')
+    plt.plot(ph1[ooei],data[1,ooei],'.r')
 
 phot0['ooe'] = data[:,ooei]
 
@@ -84,8 +97,11 @@ phot0['band'] = 'Kp'
 # Mimir Data (near infrared)
 ######################################################################
 
-dpath = '/Users/jonswift/Astronomy/EBs/KIC10935310/'
-dpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
+if bellerophon:
+    dpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
+else:
+    dpath = '/Users/jonswift/Astronomy/EBs/KIC10935310/'
+
 file = 'KIC 10935310_UT2014Jul30.fits'
 data, header = getdata(dpath+file, 0, header=True)
 
@@ -123,11 +139,12 @@ ooej /= norm
 errj = np.zeros(len(lightj))+rb.std(ooej)
 errooej = np.zeros(len(ooej))+rb.std(ooej)
 
-plt.ion()
-plt.figure(1)
-plt.clf()
-plt.plot(jdj,lightj,'.k')
-plt.plot(tooej,ooej,'.r')
+if plot:
+    plt.ion()
+    plt.figure(1)
+    plt.clf()
+    plt.plot(jdj,lightj,'.k')
+    plt.plot(tooej,ooej,'.r')
 
 light = np.array([jdj,lightj,errj])
 
@@ -161,11 +178,12 @@ ooeh /= norm
 errh = np.zeros(len(lighth))+rb.std(ooeh)
 errooeh = np.zeros(len(ooeh))+rb.std(ooeh)
 
-plt.ion()
-plt.figure(2)
-plt.clf()
-plt.plot(jdh,lighth,'.k')
-plt.plot(tooeh,ooeh,'.r')
+if plot:
+    plt.ion()
+    plt.figure(2)
+    plt.clf()
+    plt.plot(jdh,lighth,'.k')
+    plt.plot(tooeh,ooeh,'.r')
 
 light = np.array([jdh,lighth,errh])
 
@@ -199,10 +217,11 @@ ooek /= norm
 errk = np.zeros(len(lightk))+rb.std(ooek)
 errooek = np.zeros(len(ooek))+rb.std(ooek)
 
-plt.figure(3)
-plt.clf()
-plt.plot(jdk,lightk,'.k')
-plt.plot(tooek,ooek,'.r')
+if plot:
+    plt.figure(3)
+    plt.clf()
+    plt.plot(jdk,lightk,'.k')
+    plt.plot(tooek,ooek,'.r')
 
 light = np.array([jdk,lightk,errk])
 
@@ -230,18 +249,22 @@ phot3['L3'] = 0.0802
 # Each rv1 and rv2 has dimensions (3,npts)
 # JD, RV, RVerr
 
-dpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/RVs/'
-dpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
+if bellerophon:
+    dpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
+else:
+    dpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/RVs/'
+
 file1 = 'KIC10935310_comp1_BJD.dat'
 file2 = 'KIC10935310_comp2_BJD.dat'
 
 rv1 = np.loadtxt(dpath+file1).T
 rv2 = np.loadtxt(dpath+file2).T
 
-plt.figure(4)
-plt.clf()
-plt.errorbar(rv1[0,:]%period,rv1[1,:],rv1[2,:],fmt='o',color='k')
-plt.errorbar(rv2[0,:]%period,rv2[1,:],rv2[2,:],fmt='o',color='r')
+if plot:
+    plt.figure(4)
+    plt.clf()
+    plt.errorbar(rv1[0,:]%period,rv1[1,:],rv1[2,:],fmt='o',color='k')
+    plt.errorbar(rv2[0,:]%period,rv2[1,:],rv2[2,:],fmt='o',color='r')
 
 RVdata = {'rv1':rv1,'rv2':rv2}
 
@@ -267,7 +290,11 @@ l1 = 4*np.pi*r1**2*c.sb*T1**4
 T2 = 2750.0
 l2 = 4*np.pi*r2**2*c.sb*T2**4
 J  = l2/l1
-network = 'bellerophon'
+
+if bellerophon:
+    network = 'bellerophon'
+else:
+    network = 'swift'
 
 #nphot = 4
 #band = ['Kp','J','H','K']
@@ -303,13 +330,13 @@ datadict = col.OrderedDict(sorted(datadict.items()))
 
 ubands = ebs.uniquebands(datadict,quiet=True)
 
-fitinfo = ebs.fit_params(nwalkers=500,burnsteps=500,mcmcsteps=1000,clobber=True,
+fitinfo = ebs.fit_params(nwalkers=100,burnsteps=50,mcmcsteps=50,clobber=True,
                          fit_ooe1=[True,False,False,False],network=network,
                          outpath=dpath)
-
-ebs.ebsim_fit(datadict,fitinfo,ebin,debug=False,threads=30)
+ebs.ebsim_fit(datadict,fitinfo,ebin,debug=False,threads=31)
 
 sys.exit()
+
 plt.ion()
 ebs.check_model(datadict)
 
