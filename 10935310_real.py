@@ -8,12 +8,11 @@ from astropy.io.fits import open, getdata
 import sys
 
 plot = False
-bellerophon = True
+bellerophon = False
 
 ######################################################################
 # Photometry data
-# datadict['phot0'].keys()
-# ['ooe', 'light', 'integration', 'band', 'L3', 'limb']
+# datadict['phot0'].keys()# ['ooe', 'light', 'integration', 'band', 'L3', 'limb']
 # np.shape(ooe) = (3,npts) => JD, normphot, err (just ooe data)
 # np.shape(light) = (3,npts) => JD, normphot, err (all data)
 # 'integration' = integration time in seconds
@@ -333,7 +332,7 @@ ubands = ebs.uniquebands(datadict,quiet=True)
 fitinfo = ebs.fit_params(nwalkers=100,burnsteps=50,mcmcsteps=50,clobber=True,
                          fit_ooe1=[True,False,False,False],network=network,
                          outpath=dpath)
-ebs.ebsim_fit(datadict,fitinfo,ebin,debug=False,threads=31)
+ebs.ebsim_fit(datadict,fitinfo,ebin,debug=True,threads=1)
 
 sys.exit()
 

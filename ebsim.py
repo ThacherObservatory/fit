@@ -6,7 +6,6 @@
 # TO DO:
 # ------
 #
-# Compute limb darkening for multiple bands
 # Realistic surface brightness ratio given main sequence radius and band
 # (see MS_COLORS.csv)
 
@@ -18,7 +17,7 @@
 # Need independent J, qs, L3, photnoise for each band.
 
 
-import sys,math,ipdb,time,glob,re,os,eb,emcee,pickle
+import sys,math,time,glob,re,os,eb,emcee,pickle,pdb
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -195,8 +194,8 @@ def ebinput(m1=None,m2=None,                        # Stellar masses
 ######################################################################
 # L ratio to surface brightness ratio in a given band
 ######################################################################
-#!!! Under construction !!!
 #!!! Needs some sanity checks!!!!
+#!!! Note this is only used for generating fake data !!!
 
 def teff_to_j(Teff1,Teff2,band,network=None):
 
@@ -972,7 +971,9 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 
     
     # Epoch of inferior conjunction
-    p0_init = np.append(p0_init,[np.random.normal(0.0,onesec,nw)],axis=0)
+    # What should this value be!!??!?!? 0?!?!?
+    val = ebin['t01'] - ebin['bjd']
+    p0_init = np.append(p0_init,[np.random.normal(val,onesec,nw)],axis=0)
     variables = np.append(variables,'t0')
 
     
@@ -1626,6 +1627,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             limb = data['limb']
             parm,vder = vec_to_params(x,variables,band=band,ebin=ebin,fitinfo=fitinfo,limb=limb)
             if debug:
+                print '##################################################'
                 print 'Doing band '+band+' dataset!'
                 print 'Data dictionary key = '+key
                 print "Model parameters:"
@@ -1634,7 +1636,6 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 print "Derived parameters:"
                 for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
                     print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
-
 
     ##############################  Priors ##############################
 
@@ -1657,8 +1658,8 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             # Eclipse timing can't be that far off
             ########################################
             t0 = parm[eb.PAR_T0]
-            if np.abs(t0) > 1800:
-                return -np.inf
+#            if np.abs(t0) > 1800:
+#                return -np.inf
  
             ##############################
             # Third light restrictions
@@ -1739,9 +1740,10 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     t_model, t_cov = gp1.predict(flux_ooe,time)
                     plt.legend(loc='best',numpoints=1)
                     plt.title('Flux and GP prediction')
-                    #plt.xlim(-0.2,0.2)
+                    plt.xlim(np.min(time),np.max(time))
                     val1 = ooe1[0,0]
                     print 'First gp model point value = %.7f' % val1
+                    pdb.set_trace()
             except:
                 ooe1 = None
                 
@@ -1750,7 +1752,6 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 ooe2 = None
             except:
                 ooe2 = None
-
 
             # Compute model!
             sm = compute_eclipse(time,parm,integration=int,fitrvs=False,
@@ -1770,7 +1771,8 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     plt.plot(tsamp,samp_model,'m-',label='ooe predict')
                 plt.legend(numpoints=1,loc='best')
                 plt.title('Flux, and EB model')
-
+                plt.xlim(np.min(time),np.max(time))
+                pdb.set_trace()
 
         ####################
         # RV dataset
