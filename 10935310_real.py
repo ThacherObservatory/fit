@@ -6,9 +6,13 @@ import matplotlib.pyplot as plt
 import collections as col
 from astropy.io.fits import open, getdata
 import sys
+from plot_params import *
+plot_params()
 
 plot = False
 bellerophon = False
+debug = False
+threads = 3
 
 ######################################################################
 # Photometry data
@@ -73,11 +77,12 @@ ooeisec  = np.append(ooei3,ooei4)
 
 ooei = np.append(ooeiprim,ooeisec)
 if plot:
-    plt.figure(0)
+    plt.figure(1)
     plt.clf()
     plt.plot(ph1,data[1,:],'.k')
     plt.plot(ph1[ooei],data[1,ooei],'.r')
-
+    plt.xlim(0,period)
+    
 phot0['ooe'] = data[:,ooei]
 
 int = 6.019802903270
@@ -138,12 +143,17 @@ ooej /= norm
 errj = np.zeros(len(lightj))+rb.std(ooej)
 errooej = np.zeros(len(ooej))+rb.std(ooej)
 
+phj = ebs.foldtime(jdj,period=period,t0=t1)
+phjo = ebs.foldtime(tooej,period=period,t0=t1)
 if plot:
     plt.ion()
-    plt.figure(1)
+    plt.figure(2)
     plt.clf()
-    plt.plot(jdj,lightj,'.k')
-    plt.plot(tooej,ooej,'.r')
+#    plt.plot(jdj,lightj,'.k')
+#    plt.plot(tooej,ooej,'.r')
+    plt.plot(phj,lightj,'.k')
+    plt.plot(phjo,ooej,'.r')
+    plt.title('J Band')
 
 light = np.array([jdj,lightj,errj])
 
@@ -177,12 +187,18 @@ ooeh /= norm
 errh = np.zeros(len(lighth))+rb.std(ooeh)
 errooeh = np.zeros(len(ooeh))+rb.std(ooeh)
 
+phh = ebs.foldtime(jdh,t0=t1,period=period)
+phho = ebs.foldtime(tooeh,t0=t1,period=period)
+
 if plot:
     plt.ion()
-    plt.figure(2)
+    plt.figure(3)
     plt.clf()
-    plt.plot(jdh,lighth,'.k')
-    plt.plot(tooeh,ooeh,'.r')
+#    plt.plot(jdh,lighth,'.k')
+#    plt.plot(tooeh,ooeh,'.r')
+    plt.plot(phh,lighth,'.k')
+    plt.plot(phho,ooeh,'.r')
+    plt.title('H Band')
 
 light = np.array([jdh,lighth,errh])
 
@@ -216,11 +232,17 @@ ooek /= norm
 errk = np.zeros(len(lightk))+rb.std(ooek)
 errooek = np.zeros(len(ooek))+rb.std(ooek)
 
+phk = ebs.foldtime(jdk,t0=t1,period=period)
+phko = ebs.foldtime(tooek,t0=t1,period=period)
+
 if plot:
-    plt.figure(3)
+    plt.figure(4)
     plt.clf()
-    plt.plot(jdk,lightk,'.k')
-    plt.plot(tooek,ooek,'.r')
+#    plt.plot(jdk,lightk,'.k')
+#    plt.plot(tooek,ooek,'.r')
+    plt.plot(phk,lightk,'.k')
+    plt.plot(phko,ooek,'.r')
+    plt.title('K Band')
 
 light = np.array([jdk,lightk,errk])
 
@@ -259,12 +281,16 @@ file2 = 'KIC10935310_comp2_BJD.dat'
 rv1 = np.loadtxt(dpath+file1).T
 rv2 = np.loadtxt(dpath+file2).T
 
-if plot:
-    plt.figure(4)
-    plt.clf()
-    plt.errorbar(rv1[0,:]%period,rv1[1,:],rv1[2,:],fmt='o',color='k')
-    plt.errorbar(rv2[0,:]%period,rv2[1,:],rv2[2,:],fmt='o',color='r')
+phrv1 = (rv1[0,:]-t1)%period
+phrv2 = (rv2[0,:]-t1)%period
 
+if plot:
+    plt.figure(5)
+    plt.clf()
+    plt.errorbar(phrv1,rv1[1,:],rv1[2,:],fmt='o',color='k',linewidth=1.5)
+    plt.errorbar(phrv2,rv2[1,:],rv2[2,:],fmt='o',color='r',linewidth=1.5)
+    plt.xlim(0,period)
+    
 RVdata = {'rv1':rv1,'rv2':rv2}
 
 datadict = {'RVdata':RVdata,'phot0':phot0,
@@ -275,15 +301,15 @@ datadict = {'RVdata':RVdata,'phot0':phot0,
 
 # From Cakirli 2013
 m1 = 0.680 * c.Msun ; r1 = 0.613 * c.Rsun
-m2 = 0.341 * c.Msun ; r2 = 0.897 * c.Rsun
+m2 = 0.341 * c.Msun ; r2 = 0.40 * c.Rsun
 ecc = 0.0 ; omega = 0.0
 period = 4.12879779 * 86400.0
-t0 = 2454957.3221
+#t0 = 2454957.3221
+t0=t1
 sma = (period**2 * c.G * (m1 + m2) / (4 * np.pi**2))**(1.0/3.0)
-impact = sma/r1 * np.cos(np.radians(83.84))
+#impact = sma/r1 * np.cos(np.radians(83.84))
+impact = sma/r1 * np.cos(np.radians(88.0))
 vsys=-4.764
-RVnoise = 5.0
-RVsamples= 10
 T1 = 4320.0
 l1 = 4*np.pi*r1**2*c.sb*T1**4
 T2 = 2750.0
@@ -294,27 +320,6 @@ if bellerophon:
     network = 'bellerophon'
 else:
     network = 'swift'
-
-#nphot = 4
-#band = ['Kp','J','H','K']
-#photnoise = [0.0003,0.002,0.005,0.01]
-#q1a = [0.5,0.4,0.3,0.2]
-#q2a = [0.1,0.2,0.3,0.4]
-#q1b = [0.7,0.6,0.5,0.4]
-#q2b = [0.1,0.2,0.3,0.4]
-#L3  = [0.0,0.0,0.0,0.0] 
-#obsdur = [90.0,10.0,10.0,10.0]
-#inttime = [1800.0,300.,300.,300.]
-#durfac = [3.0,2,2,2]
-#RVsamples = 20
-#spotamp1 = [1.0, 0., 0., 0.]
-#spotP1 = np.pi*86400/period
-#spotfrac1 = [0.5,0.0,0.0,0.0]
-#spotbase1 = [-0.1,0.0,0.0,0.0]
-#spotamp2 = np.zeros(4)
-#spotfrac2 = np.zeros(4)
-#spotbase2 = np.zeros(4)
-#P1double = 0.8
 
 
 ebin = ebs.ebinput(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2/c.Rsun,
@@ -332,7 +337,7 @@ ubands = ebs.uniquebands(datadict,quiet=True)
 fitinfo = ebs.fit_params(nwalkers=100,burnsteps=50,mcmcsteps=50,clobber=True,
                          fit_ooe1=[True,False,False,False],network=network,
                          outpath=dpath)
-ebs.ebsim_fit(datadict,fitinfo,ebin,debug=True,threads=1)
+ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads)
 
 sys.exit()
 

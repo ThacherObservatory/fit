@@ -16,15 +16,13 @@
 # Update make_model_data to be able to produce multiple photometry datasets
 # Need independent J, qs, L3, photnoise for each band.
 
-
-import sys,math,time,glob,re,os,eb,emcee,pickle,pdb
+import sys,time,os,eb,emcee,pickle,pdb
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import constants as c
 import scipy as sp
 import robust as rb
-from scipy.io.idl import readsav
 from length import length
 from statsmodels.nonparametric.kernel_density import KDEMultivariate as KDE
 from stellar import rt_from_m, flux2mag, mag2flux
@@ -972,7 +970,7 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
     
     # Epoch of inferior conjunction
     # What should this value be!!??!?!? 0?!?!?
-    val = ebin['t01'] - ebin['bjd']
+    val = 0.0 #ebin['t01'] - ebin['bjd']
     p0_init = np.append(p0_init,[np.random.normal(val,onesec,nw)],axis=0)
     variables = np.append(variables,'t0')
 
@@ -1658,8 +1656,9 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             # Eclipse timing can't be that far off
             ########################################
             t0 = parm[eb.PAR_T0]
-#            if np.abs(t0) > 1800:
-#                return -np.inf
+            if np.abs(t0) > 1800:
+                print 'T0 out of range!!'
+                return -np.inf
  
             ##############################
             # Third light restrictions
@@ -1680,11 +1679,11 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             # Extract data from dictionary
             period = parm[eb.PAR_P]
             # Out of eclipse data
-            time_ooe = data['ooe'][0,:]-ebin['bjd']
+            time_ooe = data['ooe'][0,:]-ebin['t01']
             flux_ooe = data['ooe'][1,:]
             err_ooe  = data['ooe'][2,:]
             # All data
-            time   = data['light'][0,:]-ebin['bjd']
+            time   = data['light'][0,:]-ebin['t01']
             flux   = data['light'][1,:]
             err    = data['light'][2,:]
 
@@ -1739,8 +1738,9 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     plt.plot(tsamp,samp_model,'m-',label='ooe predict')
                     t_model, t_cov = gp1.predict(flux_ooe,time)
                     plt.legend(loc='best',numpoints=1)
-                    plt.title('Flux and GP prediction')
+                    plt.title('Flux and GP prediction: '+band+' band')
                     plt.xlim(np.min(time),np.max(time))
+                    plt.ylim(np.min(flux)*0.9,np.max(flux)*1.1)
                     val1 = ooe1[0,0]
                     print 'First gp model point value = %.7f' % val1
                     pdb.set_trace()
@@ -1770,8 +1770,9 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 if length(ooe1) > 1:
                     plt.plot(tsamp,samp_model,'m-',label='ooe predict')
                 plt.legend(numpoints=1,loc='best')
-                plt.title('Flux, and EB model')
+                plt.title('Flux and EB model: '+band+' band')
                 plt.xlim(np.min(time),np.max(time))
+                plt.ylim(np.min(flux)*0.9,np.max(flux)*1.1)
                 pdb.set_trace()
 
         ####################
@@ -1795,11 +1796,11 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                    (vsys < min(np.min(rvdata1[1,:]),np.min(rvdata2[1,:]))): 
                     return -np.inf
 
-                rvmodel1 = compute_eclipse(rvdata1[0,:]-ebin['bjd'],parm,fitrvs=True)
+                rvmodel1 = compute_eclipse(rvdata1[0,:]-ebin['t01'],parm,fitrvs=True)
                 k2 = ktot/(1+massratio)
                 k1 = k2*massratio
                 rv1 = rvmodel1*k1 + vsys
-                rvmodel2 = compute_eclipse(rvdata2[0,:]-ebin['bjd'],parm,fitrvs=True)
+                rvmodel2 = compute_eclipse(rvdata2[0,:]-ebin['t01'],parm,fitrvs=True)
                 rv2 = -1.0*rvmodel2*k2 + vsys
                 lfrv1 = -np.sum((rv1 - rvdata1[1,:])**2/(2.0*rvdata1[2,:]**2))
                 lfrv2 = -np.sum((rv2 - rvdata2[1,:])**2/(2.0*rvdata2[2,:]**2))
@@ -1809,7 +1810,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     plt.ion()
                     plt.figure(987)
                     plt.clf()
-                    phi1 = foldtime(rvdata1[0,:]-ebin['bjd'],t0=t0,period=period)/period
+                    phi1 = foldtime(rvdata1[0,:]-ebin['t01'],t0=t0,period=period)/period
                     plt.plot(phi1,rvdata1[1,:],'ko')
                     plt.plot(phi1,rv1,'kx')
                     tcomp = np.linspace(-0.5,0.5,10000)*period+t0
@@ -1821,7 +1822,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     plt.annotate(r'$\chi^2$ = %.2f' % -lfrv, [0.05,0.85],horizontalalignment='left',
                                  xycoords='axes fraction',fontsize='large')
                     
-                    phi2 = foldtime(rvdata2[0,:]-ebin['bjd'],t0=t0,period=period)/period
+                    phi2 = foldtime(rvdata2[0,:]-ebin['t01'],t0=t0,period=period)/period
                     plt.plot(phi2,rvdata2[1,:],'ro')
                     plt.plot(phi2,rv2,'rx')
                     tcomp = np.linspace(-0.5,0.5,10000)*period+t0
