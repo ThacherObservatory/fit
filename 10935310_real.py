@@ -10,9 +10,9 @@ from plot_params import *
 plot_params()
 
 plot = False
-bellerophon = False
+bellerophon = True
 debug = False
-threads = 3
+threads = 30
 
 ######################################################################
 # Photometry data
@@ -29,9 +29,11 @@ threads = 3
 ######################################################################
 if bellerophon:
     dpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
+    outpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
 else:
     dpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/Refine/'
-
+    outpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/MCMC/'
+    
 file1 = '10935310_1_norm.dat'
 file2 = '10935310_2_norm.dat'
 
@@ -334,9 +336,10 @@ datadict = col.OrderedDict(sorted(datadict.items()))
 
 ubands = ebs.uniquebands(datadict,quiet=True)
 
-fitinfo = ebs.fit_params(nwalkers=100,burnsteps=50,mcmcsteps=50,clobber=True,
-                         fit_ooe1=[True,False,False,False],network=network,
-                         outpath=dpath)
+fitinfo = ebs.fit_params(nwalkers=500,burnsteps=1000,mcmcsteps=1000,
+                         clobber=True,fit_ooe1=[True,False,False,False],
+                         network=network,outpath=outpath)
+
 ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads)
 
 sys.exit()
