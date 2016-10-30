@@ -1,4 +1,5 @@
 import ebsim as ebs
+import ebsim_results as ebr
 import numpy as np
 import robust as rb
 import constants as c
@@ -32,7 +33,7 @@ if bellerophon:
     outpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
 else:
     dpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/Refine/'
-    outpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/MCMC/'
+    outpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/MCMC/ebsim_fit/'
     
 file1 = '10935310_1_norm.dat'
 file2 = '10935310_2_norm.dat'
@@ -64,7 +65,7 @@ t1 = 2454957.32213430
 dur1 = 2.62899 / 24.0
 t2 = 2454959.38180266
 dur2 = 2.78933 / 24.0
-durfac = 1.1
+durfac = 1.2
 
 ph1 = (data[0,:]-t1) % period
 ph2 = (data[0,:]-t2) % period
@@ -344,6 +345,7 @@ ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads)
 
 sys.exit()
 
+ebr.get_chains(path=outpath,network='swift')
 plt.ion()
 ebs.check_model(datadict)
 

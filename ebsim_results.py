@@ -14,6 +14,9 @@ from plot_params import plot_params, plot_defaults
 import run_ebsim as reb
 import ebsim as ebs
 from done_in import done_in
+import george
+from george.kernels import ExpSine2Kernel, ExpSquaredKernel, WhiteKernel
+from tqdm import tqdm
 
 
 def analyze_run(network=None,thin=10,full=False,cadence='short'):
@@ -48,8 +51,11 @@ def plot_chains(seq_num,network=None,cadence='short'):
         plt.savefig(path+var+'Chains.png')
     
 
-
-def get_chains(path='./',network=None,cadence='short'):
+def get_chains(path='./'):
+    """
+    Function to read all chains and lnprob for an MCMC run
+    """
+    
     ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
     data    = pickle.load( open( path+'data.p', 'rb' ) )
     fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
@@ -252,9 +258,8 @@ def best_vals(path='./',chains=False,lp=False,network=None,bindiv=20.0,
 #        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
         plt.xlabel(varnames[i])
         plt.ylabel(r'$dP$')
-        if plotnum == 1:
-            plt.title('Parameter Distributions for Primary Variables')
 
+    plt.suptitle('Parameter Distributions for Primary Variables',fontsize=20)
     plt.subplots_adjust(hspace=0.55)
     plt.savefig(path+'primary_params.png', dpi=300)
     plt.clf()
@@ -308,8 +313,8 @@ def best_vals(path='./',chains=False,lp=False,network=None,bindiv=20.0,
             #        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
             plt.xlabel(varnames[i])
             plt.ylabel(r'$dP$')
-            plt.title('Parameter Distributions for Surf. Br. Ratios')
-            
+
+        plt.suptitle('Parameter Distributions for Surf. Br. Ratios',fontsize=20)
         plt.subplots_adjust(hspace=0.55)
         plt.savefig(path+'surfbright_params.png', dpi=300)
         plt.clf()
@@ -374,8 +379,6 @@ def best_vals(path='./',chains=False,lp=False,network=None,bindiv=20.0,
 #        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
         plt.xlabel(varnames[i])
         plt.ylabel(r'$dP$')
-        if plotnum == 1:
-            plt.title('Parameter Distributions for Secondary Variables')
         if variables[i] == 't0':
             plt.annotate(r'$t_0$ = %.6f BJD' % ebpar["t01"], xy=(0.96,0.8),
                          ha="right",xycoords='axes fraction',fontsize='large')
@@ -385,6 +388,8 @@ def best_vals(path='./',chains=False,lp=False,network=None,bindiv=20.0,
                          ha="right",xycoords='axes fraction',fontsize='large')
             bestvals[i] = pval
 
+            
+    plt.suptitle('Parameter Distributions for Secondary Variables',fontsize=20)
     plt.subplots_adjust(hspace=0.55)
     plt.savefig(path+'secondary_params.png', dpi=300)
     plt.clf()
@@ -442,8 +447,8 @@ def best_vals(path='./',chains=False,lp=False,network=None,bindiv=20.0,
             #        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
             plt.xlabel(varnames[i])
             plt.ylabel(r'$dP$')
-            plt.title('LD Parameter Distributions for '+band+' band')
 
+        plt.suptitle('LD Parameter Distributions for '+band+' band',fontsize=20)
         plt.subplots_adjust(hspace=0.55)
         plt.savefig(path+'LD_params_'+band+'.png', dpi=300)
         plt.clf()
@@ -497,8 +502,8 @@ def best_vals(path='./',chains=False,lp=False,network=None,bindiv=20.0,
 #            plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
             plt.xlabel(varnames[i])
             plt.ylabel(r'$dP$')
-            plt.title('Distributions for Out of Eclipse Parameters')
-            
+
+        plt.suptitle('Distributions for Out of Eclipse Parameters',fontsize=20)
         plt.subplots_adjust(hspace=0.55)
         plt.savefig(path+'OOE_params.png', dpi=300)
         plt.clf()
@@ -525,9 +530,8 @@ def best_vals(path='./',chains=False,lp=False,network=None,bindiv=20.0,
 
 
 
-def plot_model(x,data,ebpar,fitinfo,ms=5.0,nbins=100,
-               errorbars=False,durfac=5,enum=1,tag='',network=None,
-               cadence='short'):
+def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
+               durfac=5,tag='',network=None):
 
     """
     ----------------------------------------------------------------------
@@ -537,8 +541,243 @@ def plot_model(x,data,ebpar,fitinfo,ms=5.0,nbins=100,
 
     ----------------------------------------------------------------------
     """
-    plot_params(fontsize=10,linewidth=1.2)
+    #plot_params(fontsize=10,linewidth=1.2)
 
+    variables = fitinfo['variables']
+
+    # Initiate log probabilty variable
+    lf = 0
+
+    ###################################################
+    # Loop through each dataset in the data dictionary.
+    for key in datadict.keys():
+        data = datadict[key]
+        
+        #####################
+        # Photometry datasets
+        if key[0:4] == 'phot':
+            int = data['integration']
+            band = data['band']
+            btag = '_'+band
+            limb = data['limb']
+            parm,vder = ebs.vec_to_params(x,variables,band=band,ebin=ebpar,fitinfo=fitinfo,limb=limb)
+            print '##################################################'
+
+            print "Model parameters:"
+            for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
+                print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+            print "Derived parameters:"
+            for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
+                print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
+
+
+            ##############################
+            # Extract data from dictionary
+            period = parm[eb.PAR_P]
+            # Out of eclipse data
+            time_ooe = data['ooe'][0,:]-ebpar['t01']
+            flux_ooe = data['ooe'][1,:]
+            err_ooe  = data['ooe'][2,:]
+            # All data
+            time   = data['light'][0,:]-ebpar['t01']
+            flux   = data['light'][1,:]
+            err    = data['light'][2,:]
+
+            ############################################################
+            # Mass ratio should be zero unless ellipsoidal or grav dark
+            ############################################################
+            if not fitinfo['fit_ellipsoidal'] and not fitinfo['fit_gravdark']:
+                parm[eb.PAR_Q] = 0.0
+
+
+            ##############################
+            # GP spot modeling 
+            ##############################
+            # Spots on primary star
+            try:
+                theta1 = np.exp(np.array([x[variables=='OOE_Amp1'+btag][0],x[variables=='OOE_SineAmp1'+btag][0], \
+                                          x[variables=='OOE_Per1'+btag][0],x[variables=='OOE_Decay1'+btag][0]]))
+                k1 =  theta1[0] * ExpSquaredKernel(theta1[1]) * ExpSine2Kernel(theta1[2],theta1[3])
+                gp1 = george.GP(k1,mean=np.mean(flux_ooe))
+                try:
+                    gp1.compute(time_ooe,yerr=err_ooe,sort=True)
+                    # For point to point comparison
+                    tdarre = ebs.get_time_stack(time,integration=int)
+                    ooe1_modele = np.zeros_like(tdarre)
+                    for i in range(np.shape(tdarre)[0]):
+                        tvec = tdarre[i,:]
+                        output,cov = gp1.predict(flux_ooe,tvec)
+                        ooe1_modele[i,:] = output
+                        
+                    # For high resolution model
+                    mtime = np.linspace(np.min(time),np.max(time),length(time)*20)
+                    tdarr = ebs.get_time_stack(mtime,integration=int)
+                    ooe1_model = np.zeros_like(tdarr)
+                    pbar = tqdm(desc = 'Generating high resolution model', total = np.shape(ooe1_model)[0])
+                    for i in range(np.shape(tdarr)[0]):
+                        ooe1_model[i,:],cov = gp1.predict(flux_ooe,tdarr[i,:])
+                        pbar.update(1)
+                except (ValueError, np.linalg.LinAlgError):
+                    print 'WARNING: Could not invert GP matrix 1!'
+                    return -np.inf
+                ooe1_raw = ooe1_model-1.0
+                # Correct ooe1 for the fact that variations are in total light
+                rsq1 = parm[eb.PAR_RASUM]/(1+parm[eb.PAR_RR])
+                rsq2 = rsq1*(parm[eb.PAR_RR])**2
+                ldint1 = 1 - (1.0/3.0)*parm[eb.PAR_LDLIN1] - (1.0/6.0)*parm[eb.PAR_LDNON1]
+                ldint2 = 1 - (1.0/3.0)*parm[eb.PAR_LDLIN2] - (1.0/6.0)*parm[eb.PAR_LDNON2]
+                L1 = rsq1*ldint1
+                L2 = rsq2*ldint2 * parm[eb.PAR_J]
+                norm = 1.0 / (L1 + L2)
+                L1 *= norm
+                L2 *= norm
+                L3 = parm[eb.PAR_L3]
+                ooe1 = (((((ooe1_raw+1)-L3)/(1-L3))*(1/L1) - L2/L1)-1)
+            except:
+                ooe1=None
+
+            # Don't currently have a way for fitting this variable
+            ooe2 = None
+
+            # Plot out of eclipse fit
+            plt.figure(99,figsize=(18,4))
+            plt.clf()
+            plt.plot(time,flux,'ko',label='raw')
+            plt.plot(time_ooe,flux_ooe,'o',mfc='none',mec='red',mew=2,label='ooe')
+            plt.plot(tdarre,ooe1_modele,'go',markersize=5,mec='none',label='ooe predict data')
+            plt.plot(tdarre[0,:],ooe1_modele[0,:],'go',markersize=5,mec='none',label='ooe predict data')
+            for i in np.arange(np.shape(tdarre)[0] -1)+1:
+                plt.plot(tdarre[i,:],ooe1_modele[i,:],'go',markersize=5,mec='none')
+            tsamp = np.linspace(-0.2,2.5,1000)
+            samp_model, samp_cov = gp1.predict(flux_ooe, tsamp)
+            plt.plot(tsamp,samp_model,'m-',label='ooe predict')
+            t_model, t_cov = gp1.predict(flux_ooe,time)
+            plt.legend(loc='best',numpoints=1)
+            plt.title('Flux and GP prediction: '+band+' band')
+            plt.xlim(np.min(time),np.max(time))
+            plt.ylim(np.min(flux)*0.9,np.max(flux)*1.1)
+ 
+            # Compute model!
+            sm = ebs.compute_eclipse(mtime,parm,integration=int,fitrvs=False,
+                                     ooe1=ooe1,ooe2=ooe2)
+
+  
+            # Plot the eclipses and the fit
+            (ps,pe,ss,se) = eb.phicont(parm)
+            period = parm[eb.PAR_P]
+            durfac = 10
+            
+            tdur1 = (pe+1 - ps)*period*24.0
+            tdur2 = (se - ss)*period*24.0
+            t01 =  parm[eb.PAR_T0]
+            t02   = t01 + (se+ss)/2*period 
+
+            tfold = ebs.foldtime(time,period=period,t0=t01)
+            phase1 = tfold/period
+
+            mfold = ebs.foldtime(mtime,period=period,t0=t01,phase=False)
+            mphase = ebs.foldtime(mtime,period=period,t0=t01,phase=True)
+            
+            priminds, = np.where((tfold >= -tdur1*durfac/24.) & (tfold <= tdur1*durfac/24.))
+
+            ends, = np.where(np.diff(tfold[priminds]) < 0)
+            neclipse = length(ends)
+            ends = np.append(-1,ends)
+            ends = np.append(ends,len(priminds))
+            plt.figure(100,figsize=(5,10))
+            plt.clf()
+            for n in range(neclipse):
+                # plot data
+                plt.plot(tfold[priminds[ends[n]+1]:priminds[ends[n+1]]]*24.0,
+                         flux[priminds[ends[n]+1]:priminds[ends[n+1]]]+np.float(n)*0.1,
+                         'ko')
+                minds, = np.where((mtime >= time[priminds[ends[n]+1]]) &
+                                   (mtime <= time[priminds[ends[n+1]]]))
+
+                plt.plot(mfold[minds]*24.0,sm[minds]+np.float(n)*0.1,'r')
+            plt.xlim(-2.5,2.5)
+            plt.xlabel('Time from Mid-Eclipse (h)',fontsize=18)
+            plt.ylabel('Normalized Flux + offset',fontsize=18)
+            plt.title('Primary Eclipses',fontsize=20)
+    
+    tstart = -pe*period * durfac
+    tstop  = tstart + obsdur
+
+
+    
+            plt.figure(100)
+            plt.clf()
+            plt.plot(time,flux,'ko',label='raw')
+            plt.plot(time_ooe,flux_ooe,'o',mfc='none',mec='red',mew=2,label='ooe')
+            plt.plot(time,sm,'go',label='eb model')
+            if length(ooe1) > 1:
+                plt.plot(tsamp,samp_model,'m-',label='ooe predict')
+            plt.legend(numpoints=1,loc='best')
+            plt.title('Flux and EB model: '+band+' band')
+            plt.xlim(np.min(time),np.max(time))
+            plt.ylim(np.min(flux)*0.9,np.max(flux)*1.1)
+            
+        ####################
+        # RV dataset
+        elif key[0:2] == 'RV':
+            parm,vder = ebs.vec_to_params(x,variables,ebin=ebpar,fitinfo=fitinfo)
+            rvdata1 = data['rv1']
+            rvdata2 = data['rv2']
+
+            # need this for the RVs!
+            massratio = x[variables == 'Mratio'][0]
+            parm[eb.PAR_Q] = massratio 
+            vsys = x[variables == 'Vsys'][0]
+            ktot = x[variables == 'Ktot'][0]
+
+            t0 = parm[eb.PAR_T0]
+            period = parm[eb.PAR_P]
+
+            rvmodel1 = ebs.compute_eclipse(rvdata1[0,:]-ebpar['t01'],parm,fitrvs=True)
+            k2 = ktot/(1+massratio)
+            k1 = k2*massratio
+            rv1 = rvmodel1*k1 + vsys
+            rvmodel2 = ebs.compute_eclipse(rvdata2[0,:]-ebpar['t01'],parm,fitrvs=True)
+            rv2 = -1.0*rvmodel2*k2 + vsys
+            lfrv1 = -np.sum((rv1 - rvdata1[1,:])**2/(2.0*rvdata1[2,:]**2))
+            lfrv2 = -np.sum((rv2 - rvdata2[1,:])**2/(2.0*rvdata2[2,:]**2))
+            lfrv = lfrv1 + lfrv2
+            
+            lf  += lfrv
+
+            plot_params(fontsize=15,linewidth=1.5)
+
+            # Plot RVs
+            plt.figure(101)
+            plt.clf()
+            phi1 = ebs.foldtime(rvdata1[0,:]-ebpar['t01'],t0=t0,period=period)/period
+            plt.errorbar(phi1,rvdata1[1,:],rvdata1[2,:],color='k',fmt='o',ms=ms)
+#            plt.plot(phi1,rv1,'kx')
+            tcomp = np.linspace(-0.5,0.5,10000)*period+t0
+            rvmodel1 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
+            k2 = ktot/(1+massratio)
+            k1 = k2*massratio
+            rvcomp1 = rvmodel1*k1 + vsys
+            plt.plot(np.linspace(-0.5,0.5,10000),rvcomp1,'b-')
+#            plt.annotate(r'$\chi^2$ = %.2f' % -lfrv, [0.05,0.85],horizontalalignment='left',
+#                         xycoords='axes fraction',fontsize='large')
+                    
+            phi2 = ebs.foldtime(rvdata2[0,:]-ebpar['t01'],t0=t0,period=period)/period
+            plt.errorbar(phi2,rvdata2[1,:],rvdata2[2,:],color='r',fmt='o',ms=ms)
+#            plt.plot(phi2,rv2,'rx')
+            tcomp = np.linspace(-0.5,0.5,10000)*period+t0
+            rvmodel2 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
+            rvcomp2 = -1.0*rvmodel2*k2 + vsys
+            plt.plot(np.linspace(-0.5,0.5,10000),rvcomp2,'c-')
+            plt.xlim(-0.5,0.5)
+            plt.xlabel('Eclipse Phase',fontsize=18)
+            plt.ylabel('Radial Velocity (km/s)',fontsize=18)
+
+        return
+        
+            
+######################################################################
+# This is where the routine started originally
     # Check for output directory   
     path = ebpar['path']
     run_num = int(path.split('/')[-2])
@@ -869,8 +1108,13 @@ def plot_model(x,data,ebpar,fitinfo,ms=5.0,nbins=100,
     return
 
 
+def eclipse_ends(time,flux,parm,ebpar):
+    """ 
+    Assumes time of mid eclipse is zero plus ebpar.t0
+    """
+    pass
 
-
+    
 
 
 def old_crap():

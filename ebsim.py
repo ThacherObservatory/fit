@@ -1660,6 +1660,14 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 print 'T0 out of range!!'
                 return -np.inf
  
+            ###################################################################
+            # Fraction of Spots Covered cannot be more that 1 and less than 0 
+            ###################################################################
+            fsc = x[variables=='FSCAve']
+            if fsc > 1.0 or fsc < 0.0
+                print 'FSCAve out of range!!'
+                return -np.inf
+
             ##############################
             # Third light restrictions
             ##############################
@@ -1700,6 +1708,8 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             try:
                 theta1 = np.exp(np.array([x[variables=='OOE_Amp1'+btag][0],x[variables=='OOE_SineAmp1'+btag][0], \
                                           x[variables=='OOE_Per1'+btag][0],x[variables=='OOE_Decay1'+btag][0]]))
+                if not np.all(np.isfinite(theta1)):
+                    return -np.inf
                 k1 =  theta1[0] * ExpSquaredKernel(theta1[1]) * ExpSine2Kernel(theta1[2],theta1[3])
                 gp1 = george.GP(k1,mean=np.mean(flux_ooe))
                 try:
@@ -1805,10 +1815,12 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 lfrv1 = -np.sum((rv1 - rvdata1[1,:])**2/(2.0*rvdata1[2,:]**2))
                 lfrv2 = -np.sum((rv2 - rvdata2[1,:])**2/(2.0*rvdata2[2,:]**2))
                 lfrv = lfrv1 + lfrv2
+
                 lf  += lfrv
+
                 if debug:
                     plt.ion()
-                    plt.figure(987)
+                    plt.figure(101)
                     plt.clf()
                     phi1 = foldtime(rvdata1[0,:]-ebin['t01'],t0=t0,period=period)/period
                     plt.plot(phi1,rvdata1[1,:],'ko')
