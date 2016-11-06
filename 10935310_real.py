@@ -329,7 +329,6 @@ ebin = ebs.ebinput(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2/c.Rsun,
                    vsys=vsys, period=period/86400.0, t0=t0, ecc=ecc,
                    omega=omega, impact=impact)
                    
-                   
 
 datadict = col.OrderedDict(sorted(datadict.items()))
 
@@ -343,9 +342,14 @@ fitinfo = ebs.fit_params(nwalkers=500,burnsteps=1000,mcmcsteps=1000,
 
 ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads)
 
+
+chains,lp = ebr.get_chains(path=outpath+'30Oct2016/')
+bestvals = ebr.best_vals(path=outpath+'30Oct2016/',chains=chains,lp=lp)
+datadict,fitinfo,ebin = ebr.get_pickles(path=outpath+'30Oct2016/')
+ebr.plot_model(bestvals,datadict,fitinfo,ebin)
 sys.exit()
 
-ebr.get_chains(path=outpath,network='swift')
+
 plt.ion()
 ebs.check_model(datadict)
 

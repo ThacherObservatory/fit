@@ -1,15 +1,19 @@
 import sys,math,pdb,time,glob,re,os,eb,emcee,pickle
+
 import numpy as np
-import matplotlib.pyplot as plt
-import constants as c
-import scipy as sp
 import robust as rb
 from scipy.io.idl import readsav
+from scipy.stats.kde import gaussian_kde
+import scipy as sp
+
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+import matplotlib.gridspec as gridspec
+
+import constants as c
 from length import length
 from statsmodels.nonparametric.kernel_density import KDEMultivariate as KDE
 from stellar import rt_from_m, flux2mag, mag2flux
-import matplotlib as mpl
-from scipy.stats.kde import gaussian_kde
 from plot_params import plot_params, plot_defaults
 import run_ebsim as reb
 import ebsim as ebs
@@ -17,7 +21,6 @@ from done_in import done_in
 import george
 from george.kernels import ExpSine2Kernel, ExpSquaredKernel, WhiteKernel
 from tqdm import tqdm
-
 
 def analyze_run(network=None,thin=10,full=False,cadence='short'):
 
@@ -133,8 +136,16 @@ def varnameconv(variables):
     return varvec
 
 
+def get_pickles(path='./'):
+    
+    ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
+    data    = pickle.load( open( path+'data.p', 'rb' ) )
+    fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
 
-def best_vals(path='./',chains=False,lp=False,network=None,bindiv=20.0,
+    return data,fitinfo,ebpar
+
+
+def best_vals(path='./',chains=False,lp=False,bindiv=20.0,
               thin=False,frac=0.001,nbins=100,rpmax=1,
               durmax=10,sigrange=5.0):
 
@@ -150,10 +161,9 @@ def best_vals(path='./',chains=False,lp=False,network=None,bindiv=20.0,
 
     plot_params(linewidth=1.5,fontsize=12)
     
-    ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
-    data    = pickle.load( open( path+'data.p', 'rb' ) )
-    fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
+    data,fitinfo,ebpar = get_pickles(path=path)
 
+    
     nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
 
     variables = fitinfo['variables']
@@ -392,10 +402,6 @@ def best_vals(path='./',chains=False,lp=False,network=None,bindiv=20.0,
     plt.suptitle('Parameter Distributions for Secondary Variables',fontsize=20)
     plt.subplots_adjust(hspace=0.55)
     plt.savefig(path+'secondary_params.png', dpi=300)
-    plt.clf()
-
-
-
 
 
     ###############################
@@ -451,7 +457,6 @@ def best_vals(path='./',chains=False,lp=False,network=None,bindiv=20.0,
         plt.suptitle('LD Parameter Distributions for '+band+' band',fontsize=20)
         plt.subplots_adjust(hspace=0.55)
         plt.savefig(path+'LD_params_'+band+'.png', dpi=300)
-        plt.clf()
         nplot += 1
 
 
@@ -531,7 +536,7 @@ def best_vals(path='./',chains=False,lp=False,network=None,bindiv=20.0,
 
 
 def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
-               durfac=5,tag='',network=None):
+               durfac=5,tag='',samp=5.0,network=None,write=False):
 
     """
     ----------------------------------------------------------------------
@@ -541,11 +546,17 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
 
     ----------------------------------------------------------------------
     """
-    #plot_params(fontsize=10,linewidth=1.2)
+    plot_params(fontsize=15,linewidth=1.2)
 
     variables = fitinfo['variables']
 
-    # Initiate log probabilty variable
+    try:
+        modelfac = fitinfo['modelfac']
+    except:
+        print 'Model oversampling factor not specified. Using default: 5'
+        modelfac = 5.0
+        
+        # Initiate log probabilty variable
     lf = 0
 
     ###################################################
@@ -593,10 +604,15 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             ##############################
             # GP spot modeling 
             ##############################
+            # Modeling parameters
+            mtime = np.linspace(np.min(time),np.max(time),length(time)*10)
+            
+            print 'Starting spot sequence'
             # Spots on primary star
             try:
                 theta1 = np.exp(np.array([x[variables=='OOE_Amp1'+btag][0],x[variables=='OOE_SineAmp1'+btag][0], \
                                           x[variables=='OOE_Per1'+btag][0],x[variables=='OOE_Decay1'+btag][0]]))
+                theta1 = np.exp(np.array([0.1,2,5,4]))
                 k1 =  theta1[0] * ExpSquaredKernel(theta1[1]) * ExpSine2Kernel(theta1[2],theta1[3])
                 gp1 = george.GP(k1,mean=np.mean(flux_ooe))
                 try:
@@ -604,13 +620,16 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                     # For point to point comparison
                     tdarre = ebs.get_time_stack(time,integration=int)
                     ooe1_modele = np.zeros_like(tdarre)
+                    #plt.figure(137)
+                    #plt.clf()
+                    #plt.plot(time_ooe,flux_ooe,'ko',ms=8)
                     for i in range(np.shape(tdarre)[0]):
                         tvec = tdarre[i,:]
                         output,cov = gp1.predict(flux_ooe,tvec)
                         ooe1_modele[i,:] = output
-                        
+                        #plt.plot(tdarre[i,:],ooe1_modele[i,:],'.')
+                    
                     # For high resolution model
-                    mtime = np.linspace(np.min(time),np.max(time),length(time)*20)
                     tdarr = ebs.get_time_stack(mtime,integration=int)
                     ooe1_model = np.zeros_like(tdarr)
                     pbar = tqdm(desc = 'Generating high resolution model', total = np.shape(ooe1_model)[0])
@@ -621,47 +640,50 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                     print 'WARNING: Could not invert GP matrix 1!'
                     return -np.inf
                 ooe1_raw = ooe1_model-1.0
-                # Correct ooe1 for the fact that variations are in total light
-                rsq1 = parm[eb.PAR_RASUM]/(1+parm[eb.PAR_RR])
-                rsq2 = rsq1*(parm[eb.PAR_RR])**2
-                ldint1 = 1 - (1.0/3.0)*parm[eb.PAR_LDLIN1] - (1.0/6.0)*parm[eb.PAR_LDNON1]
-                ldint2 = 1 - (1.0/3.0)*parm[eb.PAR_LDLIN2] - (1.0/6.0)*parm[eb.PAR_LDNON2]
-                L1 = rsq1*ldint1
-                L2 = rsq2*ldint2 * parm[eb.PAR_J]
-                norm = 1.0 / (L1 + L2)
-                L1 *= norm
-                L2 *= norm
-                L3 = parm[eb.PAR_L3]
-                ooe1 = (((((ooe1_raw+1)-L3)/(1-L3))*(1/L1) - L2/L1)-1)
+                ooe1 = ebs.ooe_to_flux(ooe1_raw,parm)
+
+                ooe1_rawe = ooe1_modele-1.0
+                ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm)
+
             except:
+                print 'Out of eclipse calculation failed.'
                 ooe1=None
+                ooe1e=None
 
-            # Don't currently have a way for fitting this variable
+            # Don't currently have a way for fitting for this...
             ooe2 = None
-
+            
             # Plot out of eclipse fit
-            plt.figure(99,figsize=(18,4))
-            plt.clf()
-            plt.plot(time,flux,'ko',label='raw')
-            plt.plot(time_ooe,flux_ooe,'o',mfc='none',mec='red',mew=2,label='ooe')
-            plt.plot(tdarre,ooe1_modele,'go',markersize=5,mec='none',label='ooe predict data')
-            plt.plot(tdarre[0,:],ooe1_modele[0,:],'go',markersize=5,mec='none',label='ooe predict data')
-            for i in np.arange(np.shape(tdarre)[0] -1)+1:
-                plt.plot(tdarre[i,:],ooe1_modele[i,:],'go',markersize=5,mec='none')
-            tsamp = np.linspace(-0.2,2.5,1000)
-            samp_model, samp_cov = gp1.predict(flux_ooe, tsamp)
-            plt.plot(tsamp,samp_model,'m-',label='ooe predict')
-            t_model, t_cov = gp1.predict(flux_ooe,time)
-            plt.legend(loc='best',numpoints=1)
-            plt.title('Flux and GP prediction: '+band+' band')
-            plt.xlim(np.min(time),np.max(time))
-            plt.ylim(np.min(flux)*0.9,np.max(flux)*1.1)
- 
+            if length(ooe1) > 1:
+                plt.figure(99,figsize=(18,4))
+                plt.clf()
+                plt.plot(time,flux,'ko',label='raw',ms=10)
+                plt.plot(time_ooe,flux_ooe,'o',mfc='none',mec='red',mew=2,label='ooe',ms=10)
+                plt.plot(tdarre[0,:],ooe1_modele[0,:],'go',markersize=5,mec='none',label='ooe predict data')
+                for i in np.arange(np.shape(tdarre)[0]-1)+1:
+                    plt.plot(tdarre[i,:],ooe1_modele[i,:],'go',markersize=5,mec='none')
+
+                t_model, t_cov = gp1.predict(flux_ooe,time)
+                plt.title('Flux and GP prediction: '+band+' band')
+                plt.legend(loc='best',numpoints=1)            
+                #plt.xlim(np.min(time),np.max(time))
+                #plt.ylim(np.min(flux)*0.9,np.max(flux)*1.1)
+                plt.xlim(639.5,644.5)
+                plt.ylim(0.985,1.02)
+                if write:
+                    plt.savefig('OOE_plot.png',dpi=300)
+                else:
+                    plt.show()
+                    pdb.set_trace()
+                    
             # Compute model!
             sm = ebs.compute_eclipse(mtime,parm,integration=int,fitrvs=False,
                                      ooe1=ooe1,ooe2=ooe2)
 
-  
+            sme = ebs.compute_eclipse(time,parm,integration=int,fitrvs=False,
+                                     ooe1=ooe1e,ooe2=ooe2)
+
+            
             # Plot the eclipses and the fit
             (ps,pe,ss,se) = eb.phicont(parm)
             period = parm[eb.PAR_P]
@@ -684,39 +706,126 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             neclipse = length(ends)
             ends = np.append(-1,ends)
             ends = np.append(ends,len(priminds))
-            plt.figure(100,figsize=(5,10))
-            plt.clf()
-            for n in range(neclipse):
-                # plot data
-                plt.plot(tfold[priminds[ends[n]+1]:priminds[ends[n+1]]]*24.0,
-                         flux[priminds[ends[n]+1]:priminds[ends[n+1]]]+np.float(n)*0.1,
-                         'ko')
-                minds, = np.where((mtime >= time[priminds[ends[n]+1]]) &
-                                   (mtime <= time[priminds[ends[n+1]]]))
 
-                plt.plot(mfold[minds]*24.0,sm[minds]+np.float(n)*0.1,'r')
-            plt.xlim(-2.5,2.5)
-            plt.xlabel('Time from Mid-Eclipse (h)',fontsize=18)
-            plt.ylabel('Normalized Flux + offset',fontsize=18)
-            plt.title('Primary Eclipses',fontsize=20)
-    
-    tstart = -pe*period * durfac
-    tstop  = tstart + obsdur
+            #########################
+            # Plot primary eclipses #
+            #########################
+            if neclipse > 1:
+                plt.figure(100,figsize=(5,10))
+                plt.clf()
+                div = 8
+                fs = 18
+                gs = gridspec.GridSpec(div, 1,wspace=0)
+                ax1 = plt.subplot(gs[0:div-1, 0])    
+                offset = 0.05
+                for n in range(neclipse):
+                    # plot data
+                    ax1.plot(tfold[priminds[ends[n]+1]:priminds[ends[n+1]]]*24.0,
+                             flux[priminds[ends[n]+1]:priminds[ends[n+1]]]+np.float(n)*offset,
+                             'ko')
+                    minds, = np.where((mtime >= time[priminds[ends[n]+1]]) &
+                                      (mtime <= time[priminds[ends[n+1]]]))
 
-
-    
-            plt.figure(100)
-            plt.clf()
-            plt.plot(time,flux,'ko',label='raw')
-            plt.plot(time_ooe,flux_ooe,'o',mfc='none',mec='red',mew=2,label='ooe')
-            plt.plot(time,sm,'go',label='eb model')
-            if length(ooe1) > 1:
-                plt.plot(tsamp,samp_model,'m-',label='ooe predict')
-            plt.legend(numpoints=1,loc='best')
-            plt.title('Flux and EB model: '+band+' band')
-            plt.xlim(np.min(time),np.max(time))
-            plt.ylim(np.min(flux)*0.9,np.max(flux)*1.1)
+                    ax1.plot(mfold[minds]*24.0,sm[minds]+np.float(n)*offset,'r')
+                ax1.set_ylabel("Normalized Flux + offset",fontsize=fs)
+                ax1.set_xticklabels(())
+                ax1.set_xlim(-6,6)
+                ax1.set_ylim(0.82,1+((neclipse+1)*offset))
+                ax1.axvline(x=0.0,linestyle='--',color='blue')
             
+                ax2 = plt.subplot(gs[div-1,0])
+                ax2.plot(tfold[priminds]*24.0,(flux-sme)[priminds]*1e3,'ko')
+                ax2.set_xlim(-6,6)
+                ax2.set_xlabel('Time from Mid-Eclipse (h)',fontsize=fs)
+                ax2.set_ylabel('Residuals (x 1000)',fontsize=fs)
+                ax1.set_title('Primary Eclipses: '+band+' Band',fontsize=fs+2)
+                plt.subplots_adjust(hspace=0.1,left=0.18,right=0.98,top=0.95)
+                
+                if write:
+                    plt.savefig('Primary_Eclipses_'+band+'.png',dpi=300)
+                else:
+                    plt.show()
+                    pdb.set_trace()
+
+
+
+                ###########################
+                # Plot secondary eclipses #
+                ###########################
+                tfold2 = ebs.foldtime(time,period=period,t0=t02)
+                mfold2 = ebs.foldtime(mtime,period=period,t0=t02,phase=False)
+                secinds, = np.where((tfold2 >= -tdur2*durfac/24.) & (tfold2 <= tdur2*durfac/24.))
+
+                ends, = np.where(np.diff(tfold2[secinds]) < 0)
+                neclipse = length(ends)
+                ends = np.append(-1,ends)
+                ends = np.append(ends,len(secinds))
+
+                plt.figure(101,figsize=(5,10))
+                plt.clf()
+                div = 8
+                fs = 18
+                gs = gridspec.GridSpec(div, 1,wspace=0)
+                ax1 = plt.subplot(gs[0:div-1, 0])    
+                offset = 0.01
+                for n in range(neclipse):
+                    # plot data
+                    ax1.plot(tfold2[secinds[ends[n]+1]:secinds[ends[n+1]]]*24.0,
+                             flux[secinds[ends[n]+1]:secinds[ends[n+1]]]+np.float(n)*offset,
+                             'ko')
+                    minds, = np.where((mtime >= time[secinds[ends[n]+1]]) &
+                                      (mtime <= time[secinds[ends[n+1]]]))
+                    ax1.plot(mfold2[minds]*24.0,sm[minds]+np.float(n)*offset,'r-')
+                ax1.set_ylabel("Normalized Flux + offset",fontsize=fs)
+                ax1.set_xticklabels(())
+                ax1.set_xlim(-6,6)
+                ax1.set_ylim(0.99,1+((neclipse)*offset))
+                ax1.axvline(x=0.0,linestyle='--',color='blue')
+            
+                ax2 = plt.subplot(gs[div-1,0])
+                ax2.plot(tfold2[secinds]*24.0,(flux-sme)[secinds]*1e3,'ko')
+                ax2.set_xlim(-6,6)
+                ax2.set_xlabel('Time from Mid-Eclipse (h)',fontsize=fs)
+                ax2.set_ylabel('Residuals (x 1000)',fontsize=fs)
+                ax1.set_title('Secondary Eclipses: '+band+' Band',fontsize=fs+2)
+                plt.subplots_adjust(hspace=0.1,left=0.18,right=0.98,top=0.95)
+                if write:
+                    plt.savefig('Secondary_Eclipses_'+band+'.png',dpi=300)
+                else:
+                    plt.show()
+                    pdb.set_trace()
+    
+            elif neclipse <= 1 :
+                plt.figure(102,figsize=(10,8))
+                plt.clf()
+                div = 4
+                fs = 18
+                gs = gridspec.GridSpec(div, 1,wspace=0)
+                ax1 = plt.subplot(gs[0:div-1, 0])    
+                # plot data
+                ax1.plot(tfold[priminds]*24.0,flux[priminds],'ko')
+                ax1.plot(mfold*24.0,sm,'r')
+                ax1.set_ylabel("Normalized Flux",fontsize=fs)
+                ax1.set_xticklabels(())
+                #ax1.set_xlim(-6,6)
+                #ax1.set_ylim(0.82,1+((neclipse+1)*offset))
+                ax1.axvline(x=0.0,linestyle='--',color='blue')
+            
+                ax2 = plt.subplot(gs[div-1,0])
+                ax2.plot(tfold[priminds]*24.0,(flux-sme)[priminds]*1e3,'ko')
+                #ax2.set_xlim(-6,6)
+                ax2.set_xlabel('Time from Mid-Eclipse (h)',fontsize=fs)
+                ax2.set_ylabel('Residuals (x 1000)',fontsize=fs)
+                ax1.set_title('Primary Eclipse: '+band+' Band',fontsize=fs+2)
+                plt.subplots_adjust(hspace=0.1,left=0.12,right=0.95,top=0.92,bottom=0.12)
+                
+                if write:
+                    plt.savefig('Primary_Eclipse_'+band+'.png',dpi=300)
+                else:
+                    plt.show()
+                    pdb.set_trace()
+  
+
         ####################
         # RV dataset
         elif key[0:2] == 'RV':
@@ -745,26 +854,24 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             
             lf  += lfrv
 
-            plot_params(fontsize=15,linewidth=1.5)
-
             # Plot RVs
-            plt.figure(101)
+            plt.figure(104)
             plt.clf()
             phi1 = ebs.foldtime(rvdata1[0,:]-ebpar['t01'],t0=t0,period=period)/period
             plt.errorbar(phi1,rvdata1[1,:],rvdata1[2,:],color='k',fmt='o',ms=ms)
-#            plt.plot(phi1,rv1,'kx')
+            #plt.plot(phi1,rv1,'kx')
             tcomp = np.linspace(-0.5,0.5,10000)*period+t0
             rvmodel1 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
             k2 = ktot/(1+massratio)
             k1 = k2*massratio
             rvcomp1 = rvmodel1*k1 + vsys
             plt.plot(np.linspace(-0.5,0.5,10000),rvcomp1,'b-')
-#            plt.annotate(r'$\chi^2$ = %.2f' % -lfrv, [0.05,0.85],horizontalalignment='left',
-#                         xycoords='axes fraction',fontsize='large')
-                    
+            chisq = -2*lfrv
+            plt.annotate(r'$\chi^2$ = %.2f' % chisq, xy=(0.1,0.88), ha='left',
+                         xycoords='axes fraction',fontsize='large')
             phi2 = ebs.foldtime(rvdata2[0,:]-ebpar['t01'],t0=t0,period=period)/period
             plt.errorbar(phi2,rvdata2[1,:],rvdata2[2,:],color='r',fmt='o',ms=ms)
-#            plt.plot(phi2,rv2,'rx')
+            #plt.plot(phi2,rv2,'rx')
             tcomp = np.linspace(-0.5,0.5,10000)*period+t0
             rvmodel2 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
             rvcomp2 = -1.0*rvmodel2*k2 + vsys
@@ -772,10 +879,15 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             plt.xlim(-0.5,0.5)
             plt.xlabel('Eclipse Phase',fontsize=18)
             plt.ylabel('Radial Velocity (km/s)',fontsize=18)
+            if write:
+                plt.savefig('RV_plot.png',dpi=300)
+            else:
+                plt.show()
+                pdb.set_trace()
 
-        return
+    return
         
-            
+"""            
 ######################################################################
 # This is where the routine started originally
     # Check for output directory   
@@ -1107,15 +1219,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
 
     return
 
-
-def eclipse_ends(time,flux,parm,ebpar):
-    """ 
-    Assumes time of mid eclipse is zero plus ebpar.t0
-    """
-    pass
-
-    
-
+"""
 
 def old_crap():
 
