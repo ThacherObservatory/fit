@@ -29,7 +29,7 @@ threads = 30
 # Kepler Data (optical)
 ######################################################################
 if bellerophon:
-    dpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
+    dpath = '/home/administrator/Astronomy/EBs/KIC10935310/data/'
     outpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
 else:
     dpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/Refine/'
