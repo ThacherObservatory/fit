@@ -105,7 +105,7 @@ phot0['band'] = 'Kp'
 ######################################################################
 
 if bellerophon:
-    dpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
+    dpath = '/home/administrator/Astronomy/EBs/KIC10935310/data/'
 else:
     dpath = '/Users/jonswift/Astronomy/EBs/KIC10935310/'
 
@@ -274,7 +274,7 @@ phot3['L3'] = 0.0802
 # JD, RV, RVerr
 
 if bellerophon:
-    dpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
+    dpath = '/home/administrator/Astronomy/EBs/KIC10935310/data/'
 else:
     dpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/RVs/'
 
@@ -343,10 +343,11 @@ fitinfo = ebs.fit_params(nwalkers=500,burnsteps=1000,mcmcsteps=1000,
 ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads)
 
 
-chains,lp = ebr.get_chains(path=outpath+'30Oct2016/')
-bestvals = ebr.best_vals(path=outpath+'30Oct2016/',chains=chains,lp=lp)
-datadict,fitinfo,ebin = ebr.get_pickles(path=outpath+'30Oct2016/')
+chains,lp = ebr.get_chains(path=outpath)
+bestvals = ebr.best_vals(path=outpath,chains=chains,lp=lp)
+datadict,fitinfo,ebin = ebr.get_pickles(path=outpath)
 ebr.plot_model(bestvals,datadict,fitinfo,ebin)
+
 sys.exit()
 
 
