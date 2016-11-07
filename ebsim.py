@@ -1756,7 +1756,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     for i in range(np.shape(tdarr)[0]):
                         ooe1_model[i,:],cov = gp1.predict(flux_ooe,tdarr[i,:])
                         if debug:
-                            plt.plot(tdarr[i,:],ooe1_model[i,:],'ro',ms=5)
+                            plt.plot(tdarr[i,:],ooe1_model[i,:],'o',ms=5)
                 except (ValueError, np.linalg.LinAlgError):
                     print 'WARNING: Could not invert GP matrix 1!'
                     return -np.inf
