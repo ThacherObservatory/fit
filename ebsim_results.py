@@ -536,7 +536,7 @@ def best_vals(path='./',chains=False,lp=False,bindiv=20.0,
 
 
 def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
-               durfac=5,tag='',samp=5.0,network=None,write=False):
+               durfac=5,tag='',samp=5.0,network=None,write=False,outpath='./'):
 
     """
     ----------------------------------------------------------------------
@@ -671,7 +671,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 plt.xlim(639.5,644.5)
                 plt.ylim(0.985,1.02)
                 if write:
-                    plt.savefig('OOE_plot.png',dpi=300)
+                    plt.savefig(outpath+'OOE_plot.png',dpi=300)
                 else:
                     plt.show()
                     pdb.set_trace()
@@ -742,7 +742,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 plt.subplots_adjust(hspace=0.1,left=0.18,right=0.98,top=0.95)
                 
                 if write:
-                    plt.savefig('Primary_Eclipses_'+band+'.png',dpi=300)
+                    plt.savefig(outpath+'Primary_Eclipses_'+band+'.png',dpi=300)
                 else:
                     plt.show()
                     pdb.set_trace()
@@ -790,7 +790,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 ax1.set_title('Secondary Eclipses: '+band+' Band',fontsize=fs+2)
                 plt.subplots_adjust(hspace=0.1,left=0.18,right=0.98,top=0.95)
                 if write:
-                    plt.savefig('Secondary_Eclipses_'+band+'.png',dpi=300)
+                    plt.savefig(outpath+'Secondary_Eclipses_'+band+'.png',dpi=300)
                 else:
                     plt.show()
                     pdb.set_trace()
@@ -820,7 +820,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 plt.subplots_adjust(hspace=0.1,left=0.12,right=0.95,top=0.92,bottom=0.12)
                 
                 if write:
-                    plt.savefig('Primary_Eclipse_'+band+'.png',dpi=300)
+                    plt.savefig(outpath+'Primary_Eclipse_'+band+'.png',dpi=300)
                 else:
                     plt.show()
                     pdb.set_trace()
@@ -880,7 +880,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             plt.xlabel('Eclipse Phase',fontsize=18)
             plt.ylabel('Radial Velocity (km/s)',fontsize=18)
             if write:
-                plt.savefig('RV_plot.png',dpi=300)
+                plt.savefig(outpath+'RV_plot.png',dpi=300)
             else:
                 plt.show()
                 pdb.set_trace()

@@ -324,8 +324,6 @@ if bellerophon:
 else:
     network = 'swift'
 
-sys.exit()
-
 ebin = ebs.ebinput(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2/c.Rsun,
                    vsys=vsys, period=period/86400.0, t0=t0, ecc=ecc,
                    omega=omega, impact=impact)
@@ -346,7 +344,7 @@ ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads)
 chains,lp = ebr.get_chains(path=outpath)
 bestvals = ebr.best_vals(path=outpath,chains=chains,lp=lp)
 datadict,fitinfo,ebin = ebr.get_pickles(path=outpath)
-ebr.plot_model(bestvals,datadict,fitinfo,ebin)
+ebr.plot_model(bestvals,datadict,fitinfo,ebin,write=True,outpath=outpath)
 
 sys.exit()
 
