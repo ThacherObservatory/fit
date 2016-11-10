@@ -324,6 +324,7 @@ if bellerophon:
 else:
     network = 'swift'
 
+sys.exit()
 
 ebin = ebs.ebinput(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2/c.Rsun,
                    vsys=vsys, period=period/86400.0, t0=t0, ecc=ecc,
@@ -331,7 +332,6 @@ ebin = ebs.ebinput(m1=m1/c.Msun, m2=m2/c.Msun, r1=r1/c.Rsun, r2=r2/c.Rsun,
                    
 
 datadict = col.OrderedDict(sorted(datadict.items()))
-
 #ebs.check_model(datadict)
 
 ubands = ebs.uniquebands(datadict,quiet=True)
