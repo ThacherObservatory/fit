@@ -1689,7 +1689,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             ##############################
             # Third light restrictions
             ##############################
-            if not fit_info['fit_L3']:
+            if not fitinfo['fit_L3']:
                 parm[eb.PAR_L3] = data['L3'] 
             if parm[eb.PAR_L3] > 1 or parm[eb.PAR_L3] < 0:
                 print 'L3 out of bounds!'
