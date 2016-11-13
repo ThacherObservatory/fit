@@ -287,7 +287,7 @@ def make_phot_data(ebin,
                    Kepshort=False,Keplong=False,           # Short or long cadence Kepler data
                    obsdur=27.4,int=120.0,                  # Duration of obs, and int time
                    durfac=2.0,                             # Amount of data to keep around eclipses
-                   modelfac=5.0,                          # Integration oversampling 
+                   modelfac=5,                             # Integration oversampling 
                    spotamp1=None,spotP1=0.0,P1double=False,# Spot amplitude and period frac for star 1
                    spotfrac1=0.0,spotbase1=0.0,            # Fraction of spots eclipsed, and base
                    spotamp2=None,spotP2=0.0,P2double=False,# Spot amplitude and period frac for star 2
@@ -831,7 +831,7 @@ def fit_params(nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
                fit_lighttravel=True,tie_LD=False,fit_gravdark=False,
                fit_reflection=False,fit_period=True,fit_limb=True,
                fit_rvs=True,fit_ooe1=False,fit_ooe2=False,fit_L3=False,
-               fit_tideang=False,modelfac=5.0,
+               fit_tideang=False,modelfac=5,
                fit_ellipsoidal=False,write=True,thin=1,outpath='./',network=None):
     """ 
     Generate a dictionary that contains all the information about the fit
@@ -1498,7 +1498,7 @@ def vec_to_params(x,variables,band=None,ebin=None,fitinfo=None,limb='quad',verbo
     return parm, vder
 
 
-def get_time_stack(t,integration=None,modelfac=5.0):
+def get_time_stack(t,integration=None,modelfac=5):
     """
     Get time sampled by modelfac so that averaging can be done over
     the specified integration time
@@ -1519,7 +1519,7 @@ def get_time_stack(t,integration=None,modelfac=5.0):
 
 
 
-def compute_eclipse(t,parm,integration=None,modelfac=5.0,fitrvs=False,tref=None,
+def compute_eclipse(t,parm,integration=None,modelfac=5,fitrvs=False,tref=None,
                     period=None,ooe1=None,ooe2=None,unsmooth=False,spotflag=False,
                     debug=False):
 
@@ -1705,25 +1705,30 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             ####################################
             # GP parameters cannot get too big #
             ####################################
-            try:
-                ooe_a1 = x[variables=='OOE_Amp1'+btag][0]
-                ooe_sa1 = x[variables=='OOE_SineAmp1'+btag][0]
-                ooe_p1 = x[variables=='OOE_Per1'+btag][0]
-                ooe_d1 = x[variables=='OOE_Decay1'+btag][0]
-            except:
-                ooe_a1 = 1.0 ; ooe_sa1 = 1.0 ; ooe_p1 = 1.0 ; ooe_d1 = 1.0
-
-            if ooe_a1 > 500.0 or ooe_sa1 > 500.0 or ooe_p1 > 500.0 or ooe_d1 > 500:
-                print 'GP parameters out of range!'
-                return -np.inf
+            if fitinfo['fit_ooe1'][np.int(key[-1])]:
+                try:
+                    ooe_a1 = x[variables=='OOE_Amp1'+btag][0]
+                    ooe_sa1 = x[variables=='OOE_SineAmp1'+btag][0]
+                    ooe_p1 = x[variables=='OOE_Per1'+btag][0]
+                    ooe_d1 = x[variables=='OOE_Decay1'+btag][0]
+                    if np.abs(ooe_a1) > 0.05 or np.abs(ooe_sa1) > 10.0 or \
+                       np.abs(ooe_p1) > 20.0 or np.abs(ooe_d1) > 100.0:
+                        print 'GP parameters out of range!'
+                        return -np.inf
+                except:
+                    print 'OOE parameters not defined!'
+                    pdb.set_trace()
 
             ##########################
             # RV Priors for 10935310 #
             ##########################
             massratio = x[variables == 'Mratio']
-            lf -= (0.53 - massratio)**2/(2*0.14**2)
+            lf -= (0.5 - massratio)**2/(2*0.05**2)
             vsys = x[variables == 'Vsys']
-            lf -= (-4+vsys)**2/(2*2.64**2)
+            lf -= (-4.76+vsys)**2/(2*1.0**2)
+            ktot = x[variables == 'Ktot']
+            lf -= (130.0-ktot)**2/(2*10.0**2)
+
             
             ##############################
             # Extract data from dictionary
@@ -1747,43 +1752,49 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             # GP spot modeling 
             ##############################
             # Spots on primary star
-            try:
-                theta1 = np.exp(np.array([x[variables=='OOE_Amp1'+btag][0],x[variables=='OOE_SineAmp1'+btag][0], \
-                                          x[variables=='OOE_Per1'+btag][0],x[variables=='OOE_Decay1'+btag][0]]))
-                if not np.all(np.isfinite(theta1)):
-                    print 'GP parameters infinite'
-                    return -np.inf
-                k1 =  theta1[0] * ExpSquaredKernel(theta1[1]) * ExpSine2Kernel(theta1[2],theta1[3])
-                gp1 = george.GP(k1,mean=np.mean(flux_ooe))
+            if fitinfo['fit_ooe1'][np.int(key[-1])]:
                 try:
-                    gp1.compute(time_ooe,yerr=err_ooe,sort=True)
-                    tdarr = get_time_stack(time,integration=int,modelfac=modelfac)
-                    ooe1_model = np.zeros_like(tdarr)
-                    if debug:
-                        plt.figure(137)
-                        plt.clf()
-                        plt.plot(time_ooe,flux_ooe,'ko',ms=12)
-                    for i in range(np.shape(tdarr)[0]):
-                        ooe1_model[i,:],cov = gp1.predict(flux_ooe,tdarr[i,:])
+                    theta1 = np.exp(np.array([x[variables=='OOE_Amp1'+btag][0],
+                                              x[variables=='OOE_SineAmp1'+btag][0],
+                                              x[variables=='OOE_Per1'+btag][0],
+                                              x[variables=='OOE_Decay1'+btag][0]]))
+                    if not np.all(np.isfinite(theta1)):
+                        print 'GP parameters infinite'
+                        return -np.inf
+                    k1 =  theta1[0] * ExpSquaredKernel(theta1[1]) * ExpSine2Kernel(theta1[2],theta1[3])
+                    gp1 = george.GP(k1,mean=np.mean(flux_ooe))
+                    try:
+                        gp1.compute(time_ooe,yerr=err_ooe,sort=True)
+                        tdarr = get_time_stack(time,integration=int,modelfac=modelfac)
+                        ooe1_model = np.zeros_like(tdarr)
                         if debug:
-                            plt.plot(tdarr[i,:],ooe1_model[i,:],'o',ms=5)
-                except (ValueError, np.linalg.LinAlgError):
-                    print 'WARNING: Could not invert GP matrix 1!'
-                    return -np.inf
-                # Correct ooe1 for the fact that variations are in total light
-                ooe1_raw = ooe1_model-1.0 # convert absolute to delta
+                            plt.figure(137)
+                            plt.clf()
+                            plt.plot(time_ooe,flux_ooe,'ko',ms=12)
+                        for i in range(np.shape(tdarr)[0]):
+                            ooe1_model[i,:],cov = gp1.predict(flux_ooe,tdarr[i,:])
+                            if debug:
+                                plt.plot(tdarr[i,:],ooe1_model[i,:],'o',ms=5)
+                    except (ValueError, np.linalg.LinAlgError):
+                        print 'WARNING: Could not invert GP matrix 1!'
+                        return -np.inf
+                    # Correct ooe1 for the fact that variations are in total light
+                    ooe1_raw = ooe1_model-1.0 # convert absolute to delta
 
-                ooe1 = ooe_to_flux(ooe1_raw,parm)
+                    ooe1 = ooe_to_flux(ooe1_raw,parm)
 
-            except:
+                except:
+                    ooe1 = None
+            else:
                 ooe1 = None
-                
+                    
             # Spots on secondary star
             try:
                 ooe2 = None
             except:
                 ooe2 = None
 
+                
             # Compute model!
             sm = compute_eclipse(time,parm,integration=int,fitrvs=False,
                                   ooe1=ooe1,ooe2=ooe2)
@@ -2862,7 +2873,7 @@ def make_model_data_orig(m1=None,m2=None,                        # Stellar masse
         parm[eb.PAR_Q] = 0.0
 
     # tref remains zero so that the ephemeris within parm manifests correctly
-    lightmodel = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=5.0,
+    lightmodel = compute_eclipse(tfinal,parm,integration=ebpar['integration'],modelfac=5,
                                      fitrvs=False,tref=0.0,period=period,ooe1fit=None,ooe2fit=None,
                                      unsmooth=False,spotflag=spotflag)
 
@@ -2904,7 +2915,7 @@ def make_model_data_orig(m1=None,m2=None,                        # Stellar masse
     if tRV == None:
         tRV = RV_sampling(RVsamples,period)
 
-    rvs = compute_eclipse(tRV,parm,modelfac=5.0,fitrvs=True,tref=0.0,
+    rvs = compute_eclipse(tRV,parm,modelfac=5,fitrvs=True,tref=0.0,
                           period=period,ooe1fit=None,ooe2fit=None,unsmooth=False)
     
     massratio = m2/m1
