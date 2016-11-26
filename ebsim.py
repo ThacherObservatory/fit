@@ -1159,11 +1159,14 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
         afout = "Mean acceptance fraction: {0:0.3f}"
         print afout.format(np.mean(sampler.acceptance_fraction))
     except:
-        print 'WARNING: Could not calculate the autocorrelation times!'
+        print 'WARNING: Could not calculate the autocorrelation times for burn-in!'
         pass
 
 # Save burn in stats
-    burn = np.append(Rs,sampler.acor)
+    try:
+        burn = np.append(Rs,sampler.acor)
+    except:
+        pass
     burn = np.append(burn,np.mean(sampler.acceptance_fraction))
     np.savetxt(directory+'burnstats.txt',burn)
 
@@ -1177,14 +1180,21 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
     Rs = GR_test(sampler.chain,variables=variables)
 
     # Autocorrelation times
-    for var in np.arange(ndim):
-        acout = "Autocorrelation time for "+variables[var]+" = {0:0.3f}"
-        print acout.format(sampler.acor[var])
+    try:
+        for var in np.arange(ndim):
+            acout = "Autocorrelation time for "+variables[var]+" = {0:0.3f}"
+            print acout.format(sampler.acor[var])
 
-    afout = "Final mean acceptance fraction: {0:0.3f}"
-    print afout.format(np.mean(sampler.acceptance_fraction))
-
-    stats = np.append(Rs,sampler.acor)
+        afout = "Final mean acceptance fraction: {0:0.3f}"
+        print afout.format(np.mean(sampler.acceptance_fraction))
+    except:
+        print 'WARNING: Could not calculate the autocorrelation times for final MCMC run!'
+        pass
+     
+    try:
+        stats = np.append(Rs,sampler.acor)
+    except:
+        pass
     stats = np.append(stats,np.mean(sampler.acceptance_fraction))
     np.savetxt(directory+'finalstats.txt',stats)
 
