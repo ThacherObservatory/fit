@@ -14,6 +14,9 @@ plot = False
 bellerophon = True
 debug = False
 threads = 30
+nw = 500
+bs = 2000
+mcs = 2000
 
 ######################################################################
 # Photometry data
@@ -336,7 +339,7 @@ datadict = col.OrderedDict(sorted(datadict.items()))
 
 ubands = ebs.uniquebands(datadict,quiet=True)
 
-fitinfo = ebs.fit_params(nwalkers=500,burnsteps=1000,mcmcsteps=1000,
+fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
                          clobber=True,fit_ooe1=[False,False,False,False],
                          network=network,outpath=outpath)
 
