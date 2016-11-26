@@ -301,9 +301,9 @@ if plot:
     
 RVdata = {'rv1':rv1,'rv2':rv2}
 
-datadict = {'RVdata':RVdata,'phot0':phot0,
-            'phot1':phot1,'phot2':phot2,
-            'phot3':phot3}
+datadict = {'RVdata':RVdata,'phot0':phot0}#,
+#            'phot1':phot1,'phot2':phot2,
+#            'phot3':phot3}
 
 ######################################################################
 
@@ -340,7 +340,7 @@ datadict = col.OrderedDict(sorted(datadict.items()))
 ubands = ebs.uniquebands(datadict,quiet=True)
 
 fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
-                         clobber=True,fit_ooe1=[False,False,False,False],
+                         clobber=True,fit_ooe1=[False],
                          network=network,outpath=outpath)
 
 ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads)
