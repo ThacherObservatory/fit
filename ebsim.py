@@ -1151,13 +1151,16 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
 # Calculate G-R scale factor for each variable
     Rs = GR_test(sampler.chain,variables=variables)
         
-    for var in np.arange(ndim):
-        acout = "Autocorrelation time for "+variables[var]+" = {0:0.3f}"
-        print acout.format(sampler.acor[var])
+    try:
+        for var in np.arange(ndim):
+            acout = "Autocorrelation time for "+variables[var]+" = {0:0.3f}"
+            print acout.format(sampler.acor[var])
 
-    afout = "Mean acceptance fraction: {0:0.3f}"
-    print afout.format(np.mean(sampler.acceptance_fraction))
-
+        afout = "Mean acceptance fraction: {0:0.3f}"
+        print afout.format(np.mean(sampler.acceptance_fraction))
+    except:
+        print 'WARNING: Could not calculate the autocorrelation times!'
+        pass
 
 # Save burn in stats
     burn = np.append(Rs,sampler.acor)
