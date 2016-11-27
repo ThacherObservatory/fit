@@ -52,8 +52,8 @@ data = kpdata[i,:].T
 data[0,:] += 2454833.0
 
 
-inds, = np.where((data[0,:] > 2455560) & (data[0,:] < 2455640))
-data = data[:,inds]
+#inds, = np.where((data[0,:] > 2455560) & (data[0,:] < 2455640))
+#data = data[:,inds]
 
 if plot:
     plt.ion()
