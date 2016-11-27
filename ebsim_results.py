@@ -232,6 +232,7 @@ def best_vals(path='./',chains=False,lp=False,bindiv=20.0,
     plt.clf()
     plotnum = 0
     for i in priminds:
+        i = np.int(i)
         print ''
         dist = chains[:,i]
         med,mode,interval,lo,hi = distparams(dist)

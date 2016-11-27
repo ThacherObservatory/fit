@@ -343,7 +343,7 @@ fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
                          clobber=True,fit_ooe1=[False],
                          network=network,outpath=outpath)
 
-ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads)
+#ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads)
 
 
 chains,lp = ebr.get_chains(path=outpath)
