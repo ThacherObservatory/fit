@@ -647,7 +647,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm)
 
             except:
-                print 'Out of eclipse calculation failed.'
+                print 'Out of eclipse variations not accounted for'
                 ooe1=None
                 ooe1e=None
 

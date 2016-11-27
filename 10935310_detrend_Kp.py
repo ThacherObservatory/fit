@@ -15,8 +15,8 @@ bellerophon = True
 debug = False
 threads = 30
 nw = 500
-bs = 1000
-mcs = 1000
+bs = 5000
+mcs = 5000
 
 ######################################################################
 # Photometry data
@@ -343,7 +343,7 @@ fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
                          clobber=True,fit_ooe1=[False],
                          network=network,outpath=outpath)
 
-#ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads)
+ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads)
 
 
 chains,lp = ebr.get_chains(path=outpath)
