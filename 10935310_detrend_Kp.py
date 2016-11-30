@@ -13,7 +13,7 @@ plot_params()
 plot = False
 bellerophon = True
 debug = False
-threads = 1
+threads = 32
 nw = 500
 bs = 5000
 mcs = 5000
