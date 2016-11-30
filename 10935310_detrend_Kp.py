@@ -10,8 +10,8 @@ import sys
 from plot_params import *
 plot_params()
 
-plot = True
-bellerophon = False
+plot = False
+bellerophon = True
 debug = False
 threads = 1
 nw = 500
