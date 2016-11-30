@@ -343,9 +343,11 @@ def best_vals(path='./',chains=False,lp=False,bindiv=20.0,
     for i in secinds:
         print ''
         if variables[i] == 't0':
-            dist   = (chains[:,i] - (ebpar["t01"] - ebpar['bjd']))*24.*3600.0
+            #dist   = (chains[:,i] - (ebpar["t01"] - ebpar['bjd']))*24.*3600.0
+            dist   = chains[:,i]*24.*3600.0
             t0val = bestvals[i]
-            bestvals[i] = (t0val -(ebpar["t01"] - ebpar['bjd']))*24.*3600.0
+            #bestvals[i] = (t0val -(ebpar["t01"] - ebpar['bjd']))*24.*3600.0
+            bestvals[i] = t0val*24.*3600.0
         elif variables[i] == 'Period':
             dist   = (chains[:,i] - ebpar["Period"])*24.*3600.0
             pval  =  bestvals[i]

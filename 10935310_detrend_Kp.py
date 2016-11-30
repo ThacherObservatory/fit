@@ -10,10 +10,10 @@ import sys
 from plot_params import *
 plot_params()
 
-plot = False
-bellerophon = True
+plot = True
+bellerophon = False
 debug = False
-threads = 30
+threads = 1
 nw = 500
 bs = 5000
 mcs = 5000
@@ -54,6 +54,9 @@ data[0,:] += 2454833.0
 
 #inds, = np.where((data[0,:] > 2455560) & (data[0,:] < 2455640))
 #data = data[:,inds]
+
+inds, = np.where(data[0,:] < 2455115.0)
+data = data[:,inds]
 
 if plot:
     plt.ion()

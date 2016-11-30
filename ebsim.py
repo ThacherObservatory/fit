@@ -1687,9 +1687,10 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
 
             ########################################
             # Eclipse timing can't be that far off
+            # t0 is stepped in days
             ########################################
             t0 = parm[eb.PAR_T0]
-            if np.abs(t0) > 1800:
+            if np.abs(t0) > (3600.0/(24.*3600.)):
                 print 'T0 out of range!!'
                 return -np.inf
  
