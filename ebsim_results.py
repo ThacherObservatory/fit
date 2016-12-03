@@ -214,7 +214,6 @@ def best_vals(path='./',chains=False,lp=False,bindiv=20.0,
         priminds, = np.where((np.array(variables) =='Rsum') ^ (np.array(variables) == 'Rratio') ^
                              (np.array(variables) == 'ecosw') ^ (np.array(variables) == 'esinw') ^
                              (np.array(variables) == 'cosi'))
-        priminds = []
         for i in range(length(variables)):
             var = variables[i]
             if var[0] == 'J':
@@ -858,30 +857,44 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             lf  += lfrv
 
             # Plot RVs
+            ms = 10
+            fs = 16
             plt.figure(104)
             plt.clf()
+            gs = gridspec.GridSpec(3, 1,wspace=0)
+            ax1 = plt.subplot(gs[0:2, 0])    
             phi1 = ebs.foldtime(rvdata1[0,:]-ebpar['t01'],t0=t0,period=period)/period
-            plt.errorbar(phi1,rvdata1[1,:],rvdata1[2,:],color='k',fmt='o',ms=ms)
+            ax1.errorbar(phi1,rvdata1[1,:],rvdata1[2,:],color='k',fmt='o',ms=ms)
             #plt.plot(phi1,rv1,'kx')
             tcomp = np.linspace(-0.5,0.5,10000)*period+t0
             rvmodel1 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
             k2 = ktot/(1+massratio)
             k1 = k2*massratio
             rvcomp1 = rvmodel1*k1 + vsys
-            plt.plot(np.linspace(-0.5,0.5,10000),rvcomp1,'b-')
+            ax1.plot(np.linspace(-0.5,0.5,10000),rvcomp1,'k--')
             chisq = -2*lfrv
-            plt.annotate(r'$\chi^2$ = %.2f' % chisq, xy=(0.1,0.88), ha='left',
+            ax1.annotate(r'$\chi^2$ = %.2f' % chisq, xy=(0.1,0.9), ha='left',
                          xycoords='axes fraction',fontsize='large')
             phi2 = ebs.foldtime(rvdata2[0,:]-ebpar['t01'],t0=t0,period=period)/period
-            plt.errorbar(phi2,rvdata2[1,:],rvdata2[2,:],color='r',fmt='o',ms=ms)
+
+            ax1.errorbar(phi2,rvdata2[1,:],rvdata2[2,:],color='r',fmt='o',ms=ms)
             #plt.plot(phi2,rv2,'rx')
             tcomp = np.linspace(-0.5,0.5,10000)*period+t0
             rvmodel2 = ebs.compute_eclipse(tcomp,parm,fitrvs=True)
             rvcomp2 = -1.0*rvmodel2*k2 + vsys
-            plt.plot(np.linspace(-0.5,0.5,10000),rvcomp2,'c-')
-            plt.xlim(-0.5,0.5)
-            plt.xlabel('Eclipse Phase',fontsize=18)
-            plt.ylabel('Radial Velocity (km/s)',fontsize=18)
+            ax1.plot(np.linspace(-0.5,0.5,10000),rvcomp2,'r--')
+            ax1.set_xticklabels(())
+            ax1.set_xlim(-0.5,0.5)
+            ax1.set_ylabel('Radial Velocity (km/s)',fontsize=fs)
+
+            ax2 = plt.subplot(gs[2, 0])
+            ax2.errorbar(phi1,rvdata1[1,:]-rv1,yerr=rvdata1[2,:],fmt='ko',linewidth=1.5,markersize=ms)
+            ax2.errorbar(phi2,rvdata2[1,:]-rv2,yerr=rvdata2[2,:],fmt='ro',linewidth=1.5,markersize=ms)
+            ax2.axhline(0,linestyle='--',color='k',lw=1.5)
+            ax2.set_ylabel('Residuals',fontsize=fs)
+            ax2.set_xlabel('Eclipse Phase',fontsize=fs)
+            ax2.set_xlim(-0.5,0.5)
+
             if write:
                 plt.savefig(outpath+'RV_plot.png',dpi=300)
             else:

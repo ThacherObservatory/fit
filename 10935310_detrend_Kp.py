@@ -11,9 +11,9 @@ from plot_params import *
 plot_params()
 
 plot = False
-bellerophon = True
+bellerophon = False
 debug = False
-threads = 32
+threads = 1
 nw = 500
 bs = 5000
 mcs = 5000
@@ -36,7 +36,7 @@ if bellerophon:
     outpath = '/home/administrator/Astronomy/EBs/KIC10935310/'
 else:
     dpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/Refine/'
-    outpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/MCMC/ebsim_fit/'
+    outpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/MCMC/30Nov2016/'
     
 #file1 = '10935310_1_norm.dat'
 #file2 = '10935310_2_norm.dat'
@@ -312,14 +312,14 @@ datadict = {'RVdata':RVdata,'phot0':phot0}#,
 
 # From Cakirli 2013 (updated)
 m1 = 0.680 * c.Msun ; r1 = 0.613 * c.Rsun
-m2 = 0.341 * c.Msun ; r2 = 0.40 * c.Rsun
+m2 = 0.341 * c.Msun ; r2 = 0.897 * c.Rsun
 ecc = 0.0 ; omega = 0.0
 period = 4.12879779 * 86400.0
 #t0 = 2454957.3221
 t0=t1
 sma = (period**2 * c.G * (m1 + m2) / (4 * np.pi**2))**(1.0/3.0)
-#impact = sma/r1 * np.cos(np.radians(83.84))
-impact = sma/r1 * np.cos(np.radians(88.0))
+impact = sma/r1 * np.cos(np.radians(83.84))
+#impact = sma/r1 * np.cos(np.radians(88.0))
 vsys=-4.764
 T1 = 4320.0
 l1 = 4*np.pi*r1**2*c.sb*T1**4
