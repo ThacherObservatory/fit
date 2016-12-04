@@ -1479,7 +1479,6 @@ def get_limb_qs(Mstar=0.5,Rstar=0.5,Tstar=3800.0,limb='quad',network=None):
 
 
 def get_qdists(sdata,sz=100,errfac=1):
-    from scipy.stats.kde import gaussian_kde
     global q1pdf_func
     global q2pdf_func
 
