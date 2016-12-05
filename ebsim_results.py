@@ -902,7 +902,337 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 pdb.set_trace()
 
     return
+
+
+
+def params_of_interest(chains=False,lp=False,sigrange=5,
+                       bindiv=10,network=None,write=False,outpath='./'):
+
+    data,fitinfo,ebpar = get_pickles(path=outpath)
         
+    nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
+
+    variables = fitinfo['variables']
+    
+    # Use supplied chains or read from disk
+    if not np.shape(chains):
+        chains,lp = get_chains(path=outpath)
+
+    if not np.shape(lp):
+        print 'lnprob.txt does not exist. Exiting'
+        return
+    
+    print "Deriving values for parameters of interest"
+
+    print "Converting posteriors into physical quantities"
+    ind, = np.where(np.array(variables) == 'Rsum')[0]
+    rsumdist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'Rratio')[0]
+    rratdist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'cosi')[0]
+    cosidist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'ecosw')[0]
+    ecoswdist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'esinw')[0]
+    esinwdist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'Mratio')[0]
+    mratdist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'Vsys')[0]
+    vsysdist = chains[:,ind]
+
+    try:
+        ind, = np.where(np.array(variables) == 'Period')[0]
+        pdist = chains[:,ind]
+    except:
+        pdist = ebpar['Period']
+
+    ind, = np.where(np.array(variables) == 'Ktot')[0]
+    ktotdist = chains[:,ind]
+
+
+    print "Determining maximum likelihood values"
+    bestvals = np.zeros(len(variables))
+    meds = np.zeros(len(variables))
+    modes = np.zeros(len(variables))
+    onesigs = np.zeros(len(variables))
+
+    maxlike = np.max(lp)
+    imax = np.array([i for i, j in enumerate(lp) if j == maxlike])
+#    if imax.size > 1:
+    imax = imax[0]
+    for i in np.arange(len(variables)):
+        bestvals[i] = chains[imax,i]
+
+    esq = ecoswdist * ecoswdist + esinwdist * esinwdist
+    roe = np.sqrt(1.0 - esq)
+    sini = np.sqrt(1.0 - cosidist*cosidist)
+    qpo = 1.0 + mratdist
+    # Corrects for doppler shift of period
+    omega = 2.0*np.pi*(1.0 + vsysdist*1000.0/eb.LIGHT) / (pdist*86400.0)
+    tmp = ktotdist*1000.0 * roe
+    sma = tmp / (eb.RSUN*omega*sini)
+    mtotdist = tmp*tmp*tmp / (eb.GMSUN*omega*sini)
+    m1dist = mtotdist / qpo
+    m2dist = mratdist * m1dist
+
+    r1dist = sma*rsumdist/(1+rratdist)
+    r2dist = rratdist*r1dist
+
+    edist  = np.sqrt(ecoswdist**2 + esinwdist**2)
+
+    wdist = np.degrees(np.arctan2(esinwdist,ecoswdist))
+
+    idist = np.degrees(np.arccos(cosidist))
+
+
+    m1val = m1dist[imax]
+    m2val = m2dist[imax]
+    r1val = r1dist[imax]
+    r2val = r2dist[imax]
+    cosival = cosidist[imax]
+    ecoswval = ecoswdist[imax]
+    esinwval = esinwdist[imax]
+    eval = np.sqrt(ecoswval**2 + esinwval**2)
+    wval = wdist[imax]
+    ival = idist[imax]
+
+    
+    
+    vals = []
+    meds = []
+    modes = []
+    onesig = []
+
+    ############################################################
+    # First plot of parameters of interest
+    plt.figure(5,figsize=(8.5,11),dpi=300)    
+    plt.clf()
+    print ''
+
+    # Mass 1
+    med,mode,interval,lo,hi = distparams(m1dist)
+    out = 'M1: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+    print out.format(m1val,med,mode,interval)
+    minval = np.min(m1dist)
+    maxval = np.max(m1dist)
+    sigval = rb.std(m1dist)
+    maxval = med + sigrange*np.abs(hi-med)
+    minval = med - sigrange*np.abs(med-lo)
+    nb = min(np.ceil((maxval-minval) / (interval/bindiv)),500)
+
+    plt.subplot(4,1,1)
+    pinds, = np.where((m1dist >= minval) & (m1dist <= maxval))
+    try:
+        plt.hist(m1dist[pinds],bins=nb,normed=True,edgecolor='none')
+    except:
+        plt.hist(m1dist,bins=nb,normed=True,edgecolor='none')
+
+    plt.axvline(x=m1val,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+    plt.xlabel(r'$M_1$')
+    plt.ylabel(r'$dP$')
+
+    vals   = np.append(vals,m1val)
+    meds   = np.append(meds,med)
+    modes  = np.append(modes,mode)
+    onesig = np.append(onesig,interval)
+
+    # Mass 2
+
+    med,mode,interval,lo,hi = distparams(m2dist)
+    out = 'M2: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+    print out.format(m2val,med,mode,interval)
+    minval = np.min(m2dist)
+    maxval = np.max(m2dist)
+    sigval = rb.std(m2dist)
+    maxval = med + sigrange*np.abs(hi-med)
+    minval = med - sigrange*np.abs(med-lo)
+    nb = min(np.ceil((maxval-minval) / (interval/bindiv)),500)
+
+    plt.subplot(4,1,2)
+    pinds, = np.where((m2dist >= minval) & (m2dist <= maxval))
+    try:
+        plt.hist(m2dist[pinds],bins=nb,normed=True,edgecolor='none')
+    except:
+        plt.hist(m2dist,bins=nb,normed=True,edgecolor='none')
+
+    plt.axvline(x=m2val,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+    plt.xlabel(r'$M_2$')
+    plt.ylabel(r'$dP$')
+    
+    vals   = np.append(vals,m2val)
+    meds   = np.append(meds,med)
+    modes  = np.append(modes,mode)
+    onesig = np.append(onesig,interval)
+
+    # Radius 1
+    med,mode,interval,lo,hi = distparams(r1dist)
+    out = 'R1: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+    print out.format(r1val,med,mode,interval)
+    minval = np.min(r1dist)
+    maxval = np.max(r1dist)
+    sigval = rb.std(r1dist)
+    maxval = med + sigrange*np.abs(hi-med)
+    minval = med - sigrange*np.abs(med-lo)
+    nb = min(np.ceil((maxval-minval) / (interval/bindiv)),500)
+
+    plt.subplot(4,1,3)
+    pinds, = np.where((r1dist >= minval) & (r1dist <= maxval))
+    try:
+        plt.hist(r1dist[pinds],bins=nb,normed=True,edgecolor='none')
+    except:
+        plt.hist(r1dist,bins=nb,normed=True,edgecolor='none')
+
+    plt.axvline(x=r1val,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+    plt.xlabel(r'$R_1$')
+    plt.ylabel(r'$dP$')
+
+    vals   = np.append(vals,r1val)
+    meds   = np.append(meds,med)
+    modes  = np.append(modes,mode)
+    onesig = np.append(onesig,interval)
+
+
+    med,mode,interval,lo,hi = distparams(r2dist)
+    out = 'R2: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+    print out.format(r2val,med,mode,interval)
+    minval = np.min(r2dist)
+    maxval = np.max(r2dist)
+    sigval = rb.std(r2dist)
+    maxval = med + sigrange*np.abs(hi-med)
+    minval = med - sigrange*np.abs(med-lo)
+    nb = min(np.ceil((maxval-minval) / (interval/bindiv)),500)
+
+    plt.subplot(4,1,4)
+    pinds, = np.where((r2dist >= minval) & (r2dist <= maxval))
+    try:
+        plt.hist(r2dist[pinds],bins=nb,normed=True,edgecolor='none')
+    except:
+        plt.hist(r2dist,bins=nb,normed=True,edgecolor='none')
+
+    plt.axvline(x=r2val,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+    plt.xlabel(r'$R_2$')
+    plt.ylabel(r'$dP$')
+    vals   = np.append(vals,r2val)
+    meds   = np.append(meds,med)
+    modes  = np.append(modes,mode)
+    onesig = np.append(onesig,interval)
+
+    plt.suptitle('Mass and Radius Distributions (derived)',fontsize=20)
+    plt.subplots_adjust(hspace=0.55)
+    plt.savefig(outpath+'MassRadius_params.png', dpi=300)
+    plt.clf()
+
+
+    
+    # Orbital parameters
+    plt.figure(5,figsize=(8.5,11),dpi=300)    
+    plt.clf()
+    print ''
+    med,mode,interval,lo,hi = distparams(edist)
+    out = 'eccentricity: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+    print out.format(eval,med,mode,interval)
+
+    minval = np.min(edist)
+    maxval = np.max(edist)
+    sigval = rb.std(edist)
+    maxval = med + sigrange*np.abs(hi-med)
+    minval = med - sigrange*np.abs(med-lo)
+    nb = min(np.ceil((maxval-minval) / (interval/bindiv)),500)
+
+    plt.subplot(3,1,1)
+    pinds, = np.where((edist >= minval) & (edist <= maxval))
+    try:
+        plt.hist(edist[pinds],bins=nb,normed=True,edgecolor='none')
+    except:
+        plt.hist(edist,bins=nb,normed=True,edgecolor='none')
+
+    plt.axvline(x=eval,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+    plt.xlabel(r'$e$')
+    plt.ylabel(r'$dP$')
+    
+    vals   = np.append(vals,eval)
+    meds   = np.append(meds,med)
+    modes  = np.append(modes,mode)
+    onesig = np.append(onesig,interval)
+
+
+
+    med,mode,interval,lo,hi = distparams(wdist)
+    out = 'omega: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+    print out.format(wval,med,mode,interval)
+    minval = np.min(wdist)
+    maxval = np.max(wdist)
+    sigval = rb.std(wdist)
+    maxval = med + sigrange*np.abs(hi-med)
+    minval = med - sigrange*np.abs(med-lo)
+    nb = min(np.ceil((maxval-minval) / (interval/bindiv)),500)
+
+    plt.subplot(3,1,2)
+    pinds, = np.where((wdist >= minval) & (wdist <= maxval))
+    try:
+        plt.hist(wdist[pinds],bins=nb,normed=True,edgecolor='none')
+    except:
+        plt.hist(wdist,bins=nb,normed=True,edgecolor='none')
+
+    plt.axvline(x=wval,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+    plt.xlabel(r'$\omega$')
+    plt.ylabel(r'$dP$')    
+
+    vals   = np.append(vals,wval)
+    meds   = np.append(meds,med)
+    modes  = np.append(modes,mode)
+    onesig = np.append(onesig,interval)
+
+    med,mode,interval,lo,hi = distparams(idist)
+    out = 'inclination: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
+    print out.format(eval,med,mode,interval)
+    minval = np.min(idist)
+    maxval = np.max(idist)
+    sigval = rb.std(idist)
+    maxval = med + sigrange*np.abs(hi-med)
+    minval = med - sigrange*np.abs(med-lo)
+    nb = min(np.ceil((maxval-minval) / (interval/bindiv)),500)
+
+    plt.subplot(3,1,3)
+    pinds, = np.where((idist >= minval) & (idist <= maxval))
+    try:
+        plt.hist(idist[pinds],bins=nb,normed=True,edgecolor='none')
+    except:
+        plt.hist(idist,bins=nb,normed=True,edgecolor='none')
+
+    plt.axvline(x=ival,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
+    plt.xlabel(r'$i$')
+    plt.ylabel(r'$dP$')
+    vals   = np.append(vals,ival)
+    meds   = np.append(meds,med)
+    modes  = np.append(modes,mode)
+    onesig = np.append(onesig,interval)
+
+    
+    plt.suptitle('Orbital Distributions (derived)',fontsize=20)
+    plt.subplots_adjust(hspace=0.55)
+    plt.savefig(outpath+'Orbital_params.png', dpi=300)
+    plt.clf()
+    
+    outstr = ' %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f' % (vals[0],meds[0],modes[0],onesig[0],vals[1],meds[1],modes[1],onesig[1],vals[2],meds[2],modes[2],onesig[2],vals[3],meds[3],modes[3],onesig[3],vals[4],meds[4],modes[4],onesig[4],vals[5],meds[5],modes[5],onesig[5],vals[6],meds[6],modes[6],onesig[6])
+
+    f = open(outpath+'interest_params.txt','w')
+    f.write(outstr+'\n')
+    f.close()
+
+    return 
+
+
+
+
+
 """            
 ######################################################################
 # This is where the routine started originally
@@ -1424,167 +1754,6 @@ def old_crap():
 
     return
 
-
-
-def params_of_interest(seq_num,chains=False,lp=False,network=None,cadence='short'):
-
-    path = reb.get_path(network=network)+cadence+'/'+str(seq_num)+'/'
-    ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
-    data    = pickle.load( open( path+'data.p', 'rb' ) )
-    fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
-    
-    run_num = seq_num
-    
-    nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
-
-    variables = fitinfo['variables']
-    
-    # Use supplied chains or read from disk
-    if not np.shape(chains):
-        for i in np.arange(len(variables)):
-            try:
-                print "Reading MCMC chains for "+variables[i]
-                tmp = np.loadtxt(path+variables[i]+'chain.txt')
-                if i == 0:
-                    chains = np.zeros((len(tmp),len(variables)))
-
-                chains[:,i] = tmp
-            except:
-                print variables[i]+'chain.txt does not exist on disk !'
-
-    if not np.shape(lp):
-        try:
-            print "Reading ln(prob) chain"
-            lp = np.loadtxt(path+'lnprob.txt')
-        except:
-            print 'lnprob.txt does not exist. Exiting'
-            return
-
-    variables = fitinfo['variables']
-    
-    print "Deriving values for parameters of interest"
-
-
-    print "Converting posteriors into physical quantities"
-    ind, = np.where(np.array(variables) == 'Rsum')[0]
-    rsumdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'Rratio')[0]
-    rratdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'cosi')[0]
-    cosidist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'ecosw')[0]
-    ecoswdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'esinw')[0]
-    esinwdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'massratio')[0]
-    mratdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'vsys')[0]
-    vsysdist = chains[:,ind]
-
-    try:
-        ind, = np.where(np.array(variables) == 'period')[0]
-        pdist = chains[:,ind]
-    except:
-        pdist = ebpar['Period']
-
-    ind, = np.where(np.array(variables) == 'ktot')[0]
-    ktotdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'J')[0]
-    jdist = chains[:,ind]
-
-
-    print "Determining maximum likelihood values"
-    tlike = time.time()
-    bestvals = np.zeros(len(variables))
-    meds = np.zeros(len(variables))
-    modes = np.zeros(len(variables))
-    onesigs = np.zeros(len(variables))
-
-    maxlike = np.max(lp)
-    imax = np.array([i for i, j in enumerate(lp) if j == maxlike])
-#    if imax.size > 1:
-    imax = imax[0]
-    for i in np.arange(len(variables)):
-        bestvals[i] = chains[imax,i]
-
-    esq = ecoswdist * ecoswdist + esinwdist * esinwdist
-    roe = np.sqrt(1.0 - esq)
-    sini = np.sqrt(1.0 - cosidist*cosidist)
-    qpo = 1.0 + mratdist
-    # Corrects for doppler shift of period
-    omega = 2.0*np.pi*(1.0 + vsysdist*1000.0/eb.LIGHT) / (pdist*86400.0)
-    tmp = ktotdist*1000.0 * roe
-    sma = tmp / (eb.RSUN*omega*sini)
-    mtotdist = tmp*tmp*tmp / (eb.GMSUN*omega*sini)
-    m1dist = mtotdist / qpo
-    m2dist = mratdist * m1dist
-
-    r1dist = sma*rsumdist/(1+rratdist)
-    r2dist = rratdist*r1dist
-
-    edist  = np.sqrt(ecoswdist**2 + esinwdist**2)
- 
-    m1val = m1dist[imax]
-    m2val = m2dist[imax]
-    r1val = r1dist[imax]
-    r2val = r2dist[imax]
-    jval = jdist[imax]
-    cosival = cosidist[imax]
-    ecoswval = ecoswdist[imax]
-    esinwval = esinwdist[imax]
-    eval = np.sqrt(ecoswval**2 + esinwval**2)
-
-    vals = []
-    meds = []
-    modes = []
-    onesig = []
-    med,mode,interval,lo,hi = distparams(m1dist)
-    out = 'M1: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-    print out.format(m1val,med,mode,interval)
-    vals   = np.append(vals,m1val)
-    meds   = np.append(meds,med)
-    modes  = np.append(modes,mode)
-    onesig = np.append(onesig,interval)
-    
-    med,mode,interval,lo,hi = distparams(m2dist)
-    out = 'M2: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-    print out.format(m2val,med,mode,interval)
-    vals   = np.append(vals,m2val)
-    meds   = np.append(meds,med)
-    modes  = np.append(modes,mode)
-    onesig = np.append(onesig,interval)
-
-    med,mode,interval,lo,hi = distparams(r1dist)
-    out = 'R1: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-    print out.format(r1val,med,mode,interval)
-    vals   = np.append(vals,r1val)
-    meds   = np.append(meds,med)
-    modes  = np.append(modes,mode)
-    onesig = np.append(onesig,interval)
-
-    med,mode,interval,lo,hi = distparams(r2dist)
-    out = 'R2: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-    print out.format(r2val,med,mode,interval)
-    vals   = np.append(vals,r2val)
-    meds   = np.append(meds,med)
-    modes  = np.append(modes,mode)
-    onesig = np.append(onesig,interval)
-
-    med,mode,interval,lo,hi = distparams(edist)
-    out = 'eccentricity: max = {0:.5f}, med = {1:.5f}, mode = {2:.5f}, 1 sig int = {3:.5f}'
-    print out.format(eval,med,mode,interval)
-    vals   = np.append(vals,eval)
-    meds   = np.append(meds,med)
-    modes  = np.append(modes,mode)
-    onesig = np.append(onesig,interval)
-    
-    outstr = 'Run'+str(seq_num)+ ' %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f  %.5f' % (vals[0],meds[0],modes[0],onesig[0],vals[1],meds[1],modes[1],onesig[1],vals[2],meds[2],modes[2],onesig[2],vals[3],meds[3],modes[3],onesig[3],vals[4],meds[4],modes[4],onesig[4])
-
-    f = open(path+'bestparams.txt','w')
-    f.write(outstr+'\n')
-    f.close()
-
-    return 
 
 
 

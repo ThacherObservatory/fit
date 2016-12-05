@@ -1,3 +1,4 @@
+
 # TO DO:
 #-------
 
@@ -2459,6 +2460,8 @@ def params_of_interest(eclipse,chains=False,lp=False):
     ecoswval = ecoswdist[imax]
     esinwval = esinwdist[imax]
     eval = np.sqrt(ecoswval**2 + esinwval**2)
+
+    wdist = np.degrees(np.arctan2(esinwdist,ecoswdist))
 
     vals = []
     meds = []
