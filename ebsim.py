@@ -939,9 +939,9 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1,over_disperse=False):
     print "... deriving starting values for chains"
 
     if over_disperse:
-        lowfrac = 0.1
-        hifrac =  2.0
-        dew = 0.5
+        lowfrac = 0.9
+        hifrac =  1.1
+        dew = 0.1
     else:
         lowfrac = 0.9999
         hifrac =  1.0001

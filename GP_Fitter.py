@@ -7,7 +7,6 @@ import time as tm
 from done_in import done_in
 
 tmaster = tm.time()
-
 time,flux,err = np.loadtxt("10935310_ooe_real.txt",unpack=True)
 
 s = np.argsort(time)

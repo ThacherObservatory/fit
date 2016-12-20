@@ -12,8 +12,9 @@ plot_params()
 
 plot = False
 bellerophon = True
-debug = False
+debug = True
 threads = 32
+over_disperse = False
 nw = 500
 bs = 5000
 mcs = 5000
@@ -343,11 +344,11 @@ datadict = col.OrderedDict(sorted(datadict.items()))
 ubands = ebs.uniquebands(datadict,quiet=True)
 
 fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
-                         data_dict=data_dict,
+                         data_dict=datadict,
                          clobber=True,fit_ooe1=[False],
                          network=network,outpath=outpath)
 
-ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads,over_disperse=True)
+ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads,over_disperse=over_disperse)
 
 chains,lp = ebr.get_chains(path=outpath)
 bestvals = ebr.best_vals(path=outpath,chains=chains,lp=lp)
