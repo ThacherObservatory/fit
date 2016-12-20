@@ -343,11 +343,11 @@ datadict = col.OrderedDict(sorted(datadict.items()))
 ubands = ebs.uniquebands(datadict,quiet=True)
 
 fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
+                         data_dict=data_dict,
                          clobber=True,fit_ooe1=[False],
                          network=network,outpath=outpath)
 
-ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads)
-
+ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads,over_disperse=True)
 
 chains,lp = ebr.get_chains(path=outpath)
 bestvals = ebr.best_vals(path=outpath,chains=chains,lp=lp)

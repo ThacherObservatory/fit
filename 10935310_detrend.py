@@ -339,7 +339,7 @@ datadict = col.OrderedDict(sorted(datadict.items()))
 
 ubands = ebs.uniquebands(datadict,quiet=True)
 
-fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
+fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,data_dict=data_dict,
                          clobber=True,fit_ooe1=[False,False,False,False],
                          network=network,outpath=outpath)
 

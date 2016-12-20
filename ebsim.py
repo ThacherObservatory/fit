@@ -828,6 +828,7 @@ def check_model(data_dict):
 ######################################################################
 
 def fit_params(nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
+               data_dict=None,
                fit_lighttravel=True,tie_LD=False,fit_gravdark=False,
                fit_reflection=False,fit_period=True,fit_limb=True,
                fit_rvs=True,fit_ooe1=False,fit_ooe2=False,fit_L3=False,
@@ -836,7 +837,15 @@ def fit_params(nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
     """ 
     Generate a dictionary that contains all the information about the fit
     """
-    
+
+    nbands = numbands(data_dict)
+    ubands = uniquebands(data_dict)
+
+    if tie_LD:
+        ld1,ld2,ld3,ld4 = get_limb_coeff(3000.0,5.0,filter='Kp',plot=False,
+                                         network=network,limb='quad',interp='linear',
+                                         passfuncs=True)
+        
     fitinfo = {'fit_period':fit_period, 'thin':thin, 'modelfac':modelfac,
                'fit_rvs':fit_rvs, 'fit_limb':fit_limb, 'tie_LD':tie_LD,
                'fit_ooe1':fit_ooe1,'fit_ooe2':fit_ooe2,'fit_ellipsoidal':fit_ellipsoidal,
@@ -889,7 +898,7 @@ def uniquebands(data_dict,quiet=False):
 # Fit photometry/RV data using emcee
 ######################################################################
 
-def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
+def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1,over_disperse=False):
 
     """
     Fit the simulated data using emcee with starting parameters based on the 
@@ -929,61 +938,62 @@ def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1):
     # Initial chain values
     print "... deriving starting values for chains"
 
+    if over_disperse:
+        lowfrac = 0.1
+        hifrac =  2.0
+        dew = 0.5
+    else:
+        lowfrac = 0.9999
+        hifrac =  1.0001
+        dew=0.01
+        
     # Fractional radius        
     variables = []
-    p0_init = [np.random.uniform(ebin['Rsum_a']*0.9999,ebin['Rsum_a']*1.0001, nw)]
+    p0_init = [np.random.uniform(ebin['Rsum_a']*lowfrac,ebin['Rsum_a']*hifrac, nw)]
     variables = np.append(variables,'Rsum')
 
     # Surface brightness ratio for each band
     for band in ubands:
         J = teff_to_j(ebin['Teff1'],ebin['Teff2'],band,network=fitinfo['network'])    
-        p0_init = np.append(p0_init,[np.random.uniform(J*0.9999,J*1.0001,nw)],axis=0) # surface brightness
+        p0_init = np.append(p0_init,[np.random.uniform(J*lowfrac,J*hifrac,nw)],axis=0) # surface brightness
         variables = np.append(variables,'J_'+band)
 
     # Radius ratio
-    p0_init = np.append(p0_init,[np.random.uniform(ebin['Rratio']*0.9999,
-                                                   ebin['Rratio']*1.0001, nw)],axis=0)
+    p0_init = np.append(p0_init,[np.random.uniform(ebin['Rratio']*lowfrac,
+                                                   ebin['Rratio']*hifrac, nw)],axis=0)
     variables = np.append(variables,'Rratio')
 
     # cos i
-    if ebin['cosi'] == 0:
-        p0_init = np.append(p0_init,[np.random.uniform(-.0001,.0001,nw)],axis=0)
-    else:
-        p0_init = np.append(p0_init,[np.random.uniform(ebin['cosi']*0.9999,
-                                                       ebin['cosi']*1.0001, nw)],axis=0)
+    p0_init = np.append(p0_init,[np.random.normal(ebin['cosi'],dew,nw)],axis=0)
     variables = np.append(variables,'cosi')
 
     # ecosw
-    if ebin['ecosw'] == 0:
-        p0_init = np.append(p0_init,[np.random.uniform(-.00001,.00001, nw)],axis=0)
-    else:
-        p0_init = np.append(p0_init,[np.random.uniform(ebin['ecosw']*0.9999,
-                                                       ebin['ecosw']*1.0001, nw)],axis=0)
+    p0_init = np.append(p0_init,[np.random.normal(ebin['ecosw'],dew,nw)],axis=0)
     variables = np.append(variables,'ecosw')
 
     # esinw
-    if ebin['esinw'] == 0:
-        p0_init = np.append(p0_init,[np.random.uniform(-.00001,.00001, nw)],axis=0)
-    else:
-        p0_init = np.append(p0_init,[np.random.uniform(ebin['esinw']*0.9999,
-                                                       ebin['esinw']*1.0001, nw)],axis=0)
+    p0_init = np.append(p0_init,[np.random.normal(ebin['esinw'],dew,nw)],axis=0)
     variables = np.append(variables,'esinw')
 
     
     # Epoch of inferior conjunction
-    # What should this value be!!??!?!? 0?!?!?
     val = 0.0 #ebin['t01'] - ebin['bjd']
-    p0_init = np.append(p0_init,[np.random.normal(val,onesec,nw)],axis=0)
+    if over_disperse:
+        p0_init = np.append(p0_init,[np.random.normal(val,twomin,nw)],axis=0)
+    else:
+        p0_init = np.append(p0_init,[np.random.normal(val,onesec,nw)],axis=0)
     variables = np.append(variables,'t0')
 
     
     # Period
-    p0_init = np.append(p0_init,[np.random.uniform(ebin['Period']-onesec,
-                                                   ebin['Period']+onesec,nw)],axis=0)
+    if over_disperse:
+        p0_init = np.append(p0_init,[np.random.normal(ebin['Period'],twomin,nw)],axis=0)
+    else:
+        p0_init = np.append(p0_init,[np.random.normal(ebin['Period'],onesec,nw)],axis=0)
     variables = np.append(variables,'Period')
 
     # Mass ratio
-    p0_init = np.append(p0_init,[np.random.normal(ebin['Mratio'],ebin['Mratio']*0.05,nw)],axis=0)
+    p0_init = np.append(p0_init,[np.random.uniform(ebin['Mratio']*lowfrac,ebin['Mratio']*hifrac,nw)],axis=0)
     variables = np.append(variables,'Mratio')
     
     
@@ -3020,15 +3030,18 @@ def ebsim_fit_orig(data,ebpar,fitinfo,debug=False):
 # Initial chain values
     print ""
     print "Deriving starting values for chains"
-    p0_0  = np.random.uniform(ebpar['J']*0.9999,ebpar['J']*1.0001,nw)             # surface brightness
-    p0_1  = np.random.uniform(ebpar['Rsum_a']*0.9999,ebpar['Rsum_a']*1.0001, nw)  # fractional radius
-    p0_2  = np.random.uniform(ebpar['Rratio']*0.9999,ebpar['Rratio']*1.0001, nw)  # radius ratio
-    if ebpar['cosi'] == 0:                                                        # cos i
+    p0_0  = np.random.uniform(ebpar['J']*lowfrac,ebpar['J']*hifrac,nw)             # surface brightness
+    p0_1  = np.random.uniform(ebpar['Rsum_a']*lowfrac,ebpar['Rsum_a']*hifrac, nw)  # fractional radius
+    p0_2  = np.random.uniform(ebpar['Rratio']*lowfrac,ebpar['Rratio']*hifrac, nw)  # radius ratio
+    if ebpar['cosi'] == 0:                                                         # cos i
         p0_3 = np.random.uniform(-.0001,.0001,nw)
     else:
-        p0_3  = np.random.uniform(ebpar['cosi']*0.9999,ebpar['cosi']*1.0001, nw)
-    p0_4  = np.random.uniform(-.00001,.00001, nw)                                 # ecosw
-    p0_5  = np.random.uniform(-.00001,.00001, nw)                                 # esinw
+        if over_disperse:
+            p0_3  = np.random.uniform(-0.17, 0.17, nw)
+        else:
+            p0_3  = np.random.uniform(ebpar['cosi']*lowfrac,ebpar['cosi']*hifrac, nw)
+    p0_4  = np.random.normal(ecosw0,dew,nw)                                       # ecosw
+    p0_5  = np.random.uniform(esinw0,dew,nw)                                      # esinw
     p0_6  = np.random.normal(ebpar['mag0'],0.1, nw)                               # mag zpt
     p0_7  = np.random.normal(ebpar['t01']-bjd,onesec,nw)                          # mid-eclipse time
     p0_8  = np.random.uniform(ebpar['Period']-onesec,ebpar['Period']+onesec,nw)   # period
@@ -3039,9 +3052,14 @@ def ebsim_fit_orig(data,ebpar,fitinfo,debug=False):
     p0_10 = np.random.uniform(q2a*.999,q2a*1.001,nw)                              # Limb darkening q2a
     p0_11 = np.random.uniform(q1b*.999,q1b*1.001,nw)                              # Limb darkening q1b
     p0_12 = np.random.uniform(q2b*.999,q2b*1.001,nw)                              # Limb darkening q2b
+    if over_disperse:
+        p0_9 = np.random.uniform(0,1,nw)
+        p0_10 = np.random.uniform(0,1,nw)
+        p0_11 = np.random.uniform(0,1,nw)
+        p0_12 = np.random.uniform(0,1,nw)
 
-    p0_13 = np.abs(np.random.uniform(ebpar['Mratio']*0.9999,                      # Mass ratio
-                                     ebpar['Mratio']*1.0001,nw))
+    p0_13 = np.abs(np.random.uniform(ebpar['Mratio']*lowfrac,                     # Mass ratio
+                                     ebpar['Mratio']*hifrac,nw))
     p0_14 = np.random.uniform(0,0.1,nw)                                           # Third Light
     
 
