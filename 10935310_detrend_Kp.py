@@ -6,18 +6,18 @@ import constants as c
 import matplotlib.pyplot as plt
 import collections as col
 from astropy.io.fits import open, getdata
-import sys
 from plot_params import *
+import sys
 plot_params()
 
 plot = False
 bellerophon = True
-debug = True
-threads = 32
+debug = False
+threads = 31
 over_disperse = False
 nw = 500
-bs = 5000
-mcs = 5000
+bs = 2000
+mcs = 2000
 
 ######################################################################
 # Photometry data
@@ -312,21 +312,22 @@ datadict = {'RVdata':RVdata,'phot0':phot0}#,
 ######################################################################
 
 # From Cakirli 2013 (updated)
-m1 = 0.680 * c.Msun ; r1 = 0.613 * c.Rsun
-m2 = 0.341 * c.Msun ; r2 = 0.897 * c.Rsun
+m1 = 0.680 * c.Msun ; r1 = 0.70 * c.Rsun
+m2 = 0.341 * c.Msun ; r2 = 0.40 * c.Rsun
 ecc = 0.0 ; omega = 0.0
 period = 4.12879779 * 86400.0
 #t0 = 2454957.3221
 t0=t1
 sma = (period**2 * c.G * (m1 + m2) / (4 * np.pi**2))**(1.0/3.0)
-impact = sma/r1 * np.cos(np.radians(83.84))
-#impact = sma/r1 * np.cos(np.radians(88.0))
+#impact = sma/r1 * np.cos(np.radians(83.84))
+impact = sma/r1 * np.cos(np.radians(88.0))
 vsys=-4.764
 T1 = 4320.0
 l1 = 4*np.pi*r1**2*c.sb*T1**4
 T2 = 2750.0
 l2 = 4*np.pi*r2**2*c.sb*T2**4
 J  = l2/l1
+
 
 if bellerophon:
     network = 'bellerophon'
@@ -345,17 +346,19 @@ ubands = ebs.uniquebands(datadict,quiet=True)
 
 fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
                          data_dict=datadict,
-                         clobber=True,fit_ooe1=[False],
+                         clobber=True,fit_ooe1=[False],fit_L3=[True],
                          network=network,outpath=outpath)
 
+
 ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads,over_disperse=over_disperse)
+
+sys.exit()
 
 chains,lp = ebr.get_chains(path=outpath)
 bestvals = ebr.best_vals(path=outpath,chains=chains,lp=lp)
 datadict,fitinfo,ebin = ebr.get_pickles(path=outpath)
 ebr.plot_model(bestvals,datadict,fitinfo,ebin,write=True,outpath=outpath)
 ebr.params_of_interest(chains=chains,lp=lp,outpath=outpath)
-sys.exit()
 
 
 plt.ion()

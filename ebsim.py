@@ -177,8 +177,13 @@ def ebinput(m1=None,m2=None,                        # Stellar masses
     ktot = (NewtonG*(Mstar1+Mstar2) * comega * sini)**(1.0/3.0)*roe / 1e5
 
 
+    L1 = l1/(l1+l2) ; L2 = l2/(l1+l2)
+
+    # L3 is a dilution factor. So, L1+L2 = 1 and L3 is a percentage of L1+L2
+    # see eb_model.c line 680
+    
     # Create initial ebpar dictionary
-    ebin = {'L1':l1, 'L2':l2, 'L3': L3,
+    ebin = {'L1':L1, 'L2':L2, 'L3': L3,
             'Rsum_a':(r1*c.Rsun + r2*c.Rsun)/sma, 'Rratio':r2/r1,
             'Mratio':massratio, 'ecosw':ecosw0, 'esinw':esinw0,
             'Period':period, 't01':t0, 't02':None, 'dt12':None,
