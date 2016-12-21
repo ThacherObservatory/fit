@@ -375,7 +375,7 @@ ubands = ebs.uniquebands(datadict,quiet=True)
 
 fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
                          data_dict=datadict,do_ooe=[True],
-                         clobber=True,fit_ooe1=[False],fit_L3=[False],
+                         clobber=True,fit_ooe1=[False],fit_L3=[True],
                          network=network,outpath=outpath,modelfac=modelfac)
 
 
