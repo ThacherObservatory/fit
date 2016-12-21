@@ -352,13 +352,13 @@ fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
 
 ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads,over_disperse=over_disperse)
 
-sys.exit()
 
 chains,lp = ebr.get_chains(path=outpath)
 bestvals = ebr.best_vals(path=outpath,chains=chains,lp=lp)
 datadict,fitinfo,ebin = ebr.get_pickles(path=outpath)
 ebr.plot_model(bestvals,datadict,fitinfo,ebin,write=True,outpath=outpath)
 ebr.params_of_interest(chains=chains,lp=lp,outpath=outpath)
+sys.exit()
 
 
 plt.ion()
