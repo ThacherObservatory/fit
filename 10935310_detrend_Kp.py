@@ -15,9 +15,9 @@ bellerophon = True
 debug = False
 threads = 31
 over_disperse = False
-nw = 500
-bs = 2000
-mcs = 2000
+nw = 200
+bs = 5000
+mcs = 5000
 
 ######################################################################
 # Photometry data

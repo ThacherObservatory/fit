@@ -846,11 +846,6 @@ def fit_params(nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
     nbands = numbands(data_dict)
     ubands = uniquebands(data_dict)
 
-    if tie_LD:
-        ld1,ld2,ld3,ld4 = get_limb_coeff(3000.0,5.0,filter='Kp',plot=False,
-                                         network=network,limb='quad',interp='linear',
-                                         passfuncs=True)
-        
     fitinfo = {'fit_period':fit_period, 'thin':thin, 'modelfac':modelfac,
                'fit_rvs':fit_rvs, 'fit_limb':fit_limb, 'tie_LD':tie_LD,
                'fit_ooe1':fit_ooe1,'fit_ooe2':fit_ooe2,'fit_ellipsoidal':fit_ellipsoidal,
@@ -859,6 +854,13 @@ def fit_params(nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
                'fit_tideang':fit_tideang,
                'nwalkers':nwalkers,'burnsteps':burnsteps,'mcmcsteps':mcmcsteps,
                'clobber':clobber,'write':write,'outpath': outpath,'network':network}
+
+    if tie_LD:
+        ld1,ld2,ld3,ld4 = get_limb_coeff(3000.0,5.0,filter='Kp',plot=False,
+                                         network=network,limb='quad',interp='linear',
+                                         passfuncs=True)
+        fitinfo['LD_func1'] = ld1
+        fitinfo['LD_func2'] = ld2
 
     return fitinfo
 
@@ -2072,7 +2074,7 @@ def GR_test(chains,variables=False):
        
        B = nsamples/(nwalkers-1.0)*np.sum((psichainmean - psimean)**2)
        
-       s2j = np.zeros(nwalkers)
+       s2j = np.zeros(np.int(nwalkers))
        for j in range(np.int(nwalkers)):
            s2j[j] = 1.0/(nsamples-1.0)*np.sum((psi[j,:] - psichainmean[j])**2)
            

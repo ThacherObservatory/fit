@@ -210,19 +210,15 @@ def best_vals(path='./',chains=False,lp=False,bindiv=20.0,
     # Primary Variables
     ##############################
     nbands = ebs.numbands(data)
+    priminds, = np.where((np.array(variables) =='Rsum') ^ (np.array(variables) == 'Rratio') ^
+                         (np.array(variables) == 'ecosw') ^ (np.array(variables) == 'esinw') ^
+                         (np.array(variables) == 'cosi'))
+    # If only one band, add surface brightness ratio here.
     if nbands == 1:
-        priminds, = np.where((np.array(variables) =='Rsum') ^ (np.array(variables) == 'Rratio') ^
-                             (np.array(variables) == 'ecosw') ^ (np.array(variables) == 'esinw') ^
-                             (np.array(variables) == 'cosi'))
         for i in range(length(variables)):
             var = variables[i]
             if var[0] == 'J':
                 priminds = np.append(priminds,i)
-
-    else:
-        priminds, = np.where((np.array(variables) =='Rsum') ^ (np.array(variables) == 'Rratio') ^
-                             (np.array(variables) == 'ecosw') ^ (np.array(variables) == 'esinw') ^
-                             (np.array(variables) == 'cosi'))
         
     priminds = np.sort(priminds)
     
@@ -335,6 +331,13 @@ def best_vals(path='./',chains=False,lp=False,bindiv=20.0,
     secinds, = np.where((np.array(variables) == 'Period') ^(np.array(variables) == 't0') ^
                         (np.array(variables) == 'Mratio') ^ (np.array(variables) == 'Ktot') ^
                         (np.array(variables) == 'Vsys'))
+
+    # If only one band, add surface brightness ratio here.
+    if nbands == 1:
+        for i in range(length(variables)):
+            var = variables[i]
+            if var[0:2] == 'L3':
+                secinds = np.append(secinds,i)
 
     plt.figure(5,figsize=(8.5,11),dpi=300)    
     plt.clf()
