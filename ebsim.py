@@ -1723,9 +1723,11 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             if not fitinfo['fit_L3']:
                 parm[eb.PAR_L3] = data['L3'] 
             if parm[eb.PAR_L3] > 1 or parm[eb.PAR_L3] < 0:
-                print 'L3 out of bounds!'
+#                print parm[eb.PAR_L3]
+#                print 'L3 out of bounds!'
                 return -np.inf
-
+#            print 'L3 ok!'
+#            print parm[eb.PAR_L3]
             ############################################################
             # No gravitational lensing or other exotic effects allowed.
             ############################################################
