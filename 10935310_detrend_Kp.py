@@ -1,3 +1,5 @@
+import george
+from george.kernels import ExpSine2Kernel, ExpSquaredKernel
 import ebsim as ebs
 import ebsim_results as ebr
 import numpy as np
@@ -14,10 +16,12 @@ plot = False
 bellerophon = True
 debug = False
 threads = 31
+do_ooe = True
 over_disperse = False
+modelfac = 5
 nw = 500
-bs = 2000
-mcs = 2000
+bs = 5000
+mcs = 5000
 
 ######################################################################
 # Photometry data
@@ -39,10 +43,12 @@ else:
     dpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/Refine/'
     outpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/MCMC/30Nov2016/'
     
-#file1 = '10935310_1_norm.dat'
-#file2 = '10935310_2_norm.dat'
-file1 = '10935310_1_clip.dat'
-file2 = '10935310_2_clip.dat'
+if do_ooe:
+    file1 = '10935310_1_norm.dat'
+    file2 = '10935310_2_norm.dat'
+else:
+    file1 = '10935310_1_clip.dat'
+    file2 = '10935310_2_clip.dat'
 
 data1 = np.loadtxt(dpath+file1)
 data2 = np.loadtxt(dpath+file2)
@@ -65,9 +71,6 @@ if plot:
     plt.figure(0)
     plt.clf()
     plt.plot(data[0,:],data[1,:],'.k')
-
-phot0 = {'light':data}
-
 
 # From: /Users/jonswift/Astronomy/EBs/outdata/10935310/Refine/10935310.out
 period = 4.128795073
@@ -95,13 +98,38 @@ if plot:
     plt.plot(ph1,data[1,:],'.k')
     plt.plot(ph1[ooei],data[1,ooei],'.r')
     plt.xlim(0,period)
-    
-phot0['ooe'] = data[:,ooei]
+
 
 int = 6.019802903270
 read = 0.518948526144
+integration = int*270.0 + read*269.0
 
-phot0['integration'] =  integration = int*270.0 + read*269.0
+phot0 = {'light':data}
+
+ooei = np.sort(ooei)
+ooedata =  data[:,ooei]
+if do_ooe:
+    # This was found by trial and error (see george_test.py)
+    k =  100**2 * ExpSquaredKernel(1) * ExpSine2Kernel(4,4)
+    tooe = ooedata[0,:]
+    fooe = ooedata[1,:]
+    gp = george.GP(k,mean=np.mean(fooe))
+    gp.compute(tooe,2,sort=True)
+    mu, cov = gp.predict(fooe, data[0,:])
+    plt.figure(99)
+    plt.clf()
+    plt.plot(tooe,fooe,'ko')
+    plt.plot(data[0,:],mu,'r.')
+    tdarr = ebs.get_time_stack(data[0,:],integration=integration,modelfac=modelfac)
+    ooe1_model = np.zeros_like(tdarr)
+    for i in range(np.shape(tdarr)[0]):
+        ooe1_model[i,:],cov = gp.predict(fooe,tdarr[i,:])
+    plt.plot(tdarr,ooe1_model)
+    phot0['ooe_predict'] = (tdarr,ooe1_model)
+
+phot0['ooe'] = ooedata
+
+phot0['integration'] =  integration
 
 phot0['L3'] = 0.02729
 
@@ -346,9 +374,9 @@ datadict = col.OrderedDict(sorted(datadict.items()))
 ubands = ebs.uniquebands(datadict,quiet=True)
 
 fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
-                         data_dict=datadict,
+                         data_dict=datadict,do_ooe=[True],
                          clobber=True,fit_ooe1=[False],fit_L3=[False],
-                         network=network,outpath=outpath)
+                         network=network,outpath=outpath,modelfac=modelfac)
 
 
 ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads,over_disperse=over_disperse)

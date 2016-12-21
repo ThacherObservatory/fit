@@ -72,9 +72,9 @@ else:
     
 # Use quasi-periodic kernel -- follow example
 f = (np.isfinite(times)) & (np.isfinite(fluxes)) & (np.isfinite(errs))
-i = np.where((times[f] > 726) & (times[f] < 760))
+#i = np.where((times[f] > 726) & (times[f] < 760))
 #i = np.where((times[f] > 726) & (times[f] < 807))
-#i = np.where(times[f] < 282)
+i = np.where(times[f] < 282)
 #i = np.where(times[f] < 760)
 #i = np.where((times[f] > 353) & (times[f] < 360))
 #i = np.where((times[f] > 292) & (times[f] < 300))

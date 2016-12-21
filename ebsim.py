@@ -833,7 +833,7 @@ def check_model(data_dict):
 ######################################################################
 
 def fit_params(nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
-               data_dict=None,
+               data_dict=None,do_ooe=False,
                fit_lighttravel=True,tie_LD=False,fit_gravdark=False,
                fit_reflection=False,fit_period=True,fit_limb=True,
                fit_rvs=True,fit_ooe1=False,fit_ooe2=False,fit_L3=False,
@@ -851,7 +851,7 @@ def fit_params(nwalkers=1000,burnsteps=1000,mcmcsteps=1000,clobber=False,
                'fit_ooe1':fit_ooe1,'fit_ooe2':fit_ooe2,'fit_ellipsoidal':fit_ellipsoidal,
                'fit_lighttravel':fit_lighttravel,'fit_L3':fit_L3,
                'fit_gravdark':fit_gravdark,'fit_reflection':fit_reflection,
-               'fit_tideang':fit_tideang,
+               'fit_tideang':fit_tideang,'do_ooe':do_ooe,
                'nwalkers':nwalkers,'burnsteps':burnsteps,'mcmcsteps':mcmcsteps,
                'clobber':clobber,'write':write,'outpath': outpath,'network':network}
 
@@ -1821,9 +1821,14 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
 
                 except:
                     ooe1 = None
+            elif fitinfo['do_ooe'][np.int(key[-1])]:
+                ooe1_model = data['ooe_predict'][1]
+                ooe1_raw = ooe1_model-1.0 # convert absolute to delta
+                ooe1 = ooe_to_flux(ooe1_raw,parm)
             else:
                 ooe1 = None
-                    
+
+                
             # Spots on secondary star
             try:
                 ooe2 = None
