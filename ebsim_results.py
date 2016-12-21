@@ -987,6 +987,14 @@ def params_of_interest(chains=False,lp=False,sigrange=5,
 
     idist = np.degrees(np.arccos(cosidist))
 
+    np.savetxt(outpath+'M1_chain.txt',m1dist)
+    np.savetxt(outpath+'M2_chain.txt',m2dist)
+    np.savetxt(outpath+'R1_chain.txt',r1dist)
+    np.savetxt(outpath+'R2_chain.txt',r2dist)
+    np.savetxt(outpath+'e_chain.txt',edist)
+    np.savetxt(outpath+'w_chain.txt',wdist)
+    np.savetxt(outpath+'i_chain.txt',idist)
+    
 
     m1val = m1dist[imax]
     m2val = m2dist[imax]
@@ -998,8 +1006,6 @@ def params_of_interest(chains=False,lp=False,sigrange=5,
     eval = np.sqrt(ecoswval**2 + esinwval**2)
     wval = wdist[imax]
     ival = idist[imax]
-
-    
     
     vals = []
     meds = []
@@ -1233,6 +1239,472 @@ def params_of_interest(chains=False,lp=False,sigrange=5,
     return 
 
 
+
+
+def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0,network=None,cadence='short'):
+    import matplotlib.gridspec as gridspec
+
+    tmaster = time.time()
+
+    mpl.rc('axes', linewidth=1)
+  
+    bindiv = 10
+    
+    path = reb.get_path(network=network)+cadence+'/'+str(seq_num)+'/'
+
+    ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
+    data    = pickle.load( open( path+'data.p', 'rb' ) )
+    fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
+
+    run_num = seq_num
+    
+    nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
+
+    variables = fitinfo['variables']
+    
+    # Use supplied chains or read from disk
+    if not np.shape(chains):
+        for i in np.arange(len(variables)):
+            try:
+                print "Reading MCMC chains for "+variables[i]
+                tmp = np.loadtxt(path+variables[i]+'chain.txt')
+                if i == 0:
+                    chains = np.zeros((len(tmp),len(variables)))
+
+                chains[:,i] = tmp
+            except:
+                print variables[i]+'chain.txt does not exist on disk !'
+
+    if not np.shape(lp):
+        try:
+            print "Reading ln(prob) chain"
+            lp = np.loadtxt(path+'lnprob.txt')
+        except:
+            print 'lnprob.txt does not exist. Exiting'
+            return
+
+    variables = fitinfo['variables']
+    
+
+    print "Converting posteriors into physical quantities"
+    ind, = np.where(np.array(variables) == 'Rsum')[0]
+    rsumdist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'Rratio')[0]
+    rratdist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'cosi')[0]
+    cosidist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'ecosw')[0]
+    ecoswdist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'esinw')[0]
+    esinwdist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'massratio')[0]
+    mratdist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'vsys')[0]
+    vsysdist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'ktot')[0]
+    ktotdist = chains[:,ind]
+    ind, = np.where(np.array(variables) == 'J')[0]
+    jdist = chains[:,ind]
+
+    try:
+        ind, = np.where(np.array(variables) == 'period')[0]
+        pdist = chains[:,ind]
+    except:
+        pdist = ebpar['Period']
+
+    esq = ecoswdist * ecoswdist + esinwdist * esinwdist
+    roe = np.sqrt(1.0 - esq)
+    sini = np.sqrt(1.0 - cosidist*cosidist)
+    qpo = 1.0 + mratdist
+    # Corrects for doppler shift of period
+    omega = 2.0*np.pi*(1.0 + vsysdist*1000.0/eb.LIGHT) / (pdist*86400.0)
+    tmp = ktotdist*1000.0 * roe
+    sma = tmp / (eb.RSUN*omega*sini)
+    mtotdist = tmp*tmp*tmp / (eb.GMSUN*omega*sini)
+    m1dist = mtotdist / qpo
+    m2dist = mratdist * m1dist
+
+    r1dist = sma*rsumdist/(1+rratdist)
+    r2dist = rratdist*r1dist
+
+    print "Determining maximum likelihood values"
+    tlike = time.time()
+    bestvals = np.zeros(len(variables))
+    meds = np.zeros(len(variables))
+    modes = np.zeros(len(variables))
+    onesigs = np.zeros(len(variables))
+
+    maxlike = np.max(lp)
+    imax = np.array([i for i, j in enumerate(lp) if j == maxlike])
+    if imax.size > 1:
+        imax = imax[0]
+    for i in np.arange(len(variables)):
+        bestvals[i] = chains[imax,i]
+
+
+    pmax = pdist[imax]
+    m1val = m1dist[imax]
+    m2val = m2dist[imax]
+    r1val = r1dist[imax]
+    r2val = r2dist[imax]
+    jval = jdist[imax]
+    cosival = cosidist[imax]
+    ecoswval = ecoswdist[imax]
+    esinwval = esinwdist[imax]
+
+
+    if thin:
+        print "Thinning chains by a factor of "+str(thin)
+        tthin = time.time()
+        pdist = pdist[0::thin]
+        m1dist = m1dist[0::thin]
+        m2dist = m2dist[0::thin]
+        r1dist = r1dist[0::thin]
+        r2dist = r2dist[0::thin]
+        jdist = jdist[0::thin]
+        cosidist = cosidist[0::thin]
+        ecoswdist = ecoswdist[0::thin]
+        esinwdist = esinwdist[0::thin]
+        lp = lp[0::thin]
+        nsamp /= thin
+
+
+    print " "
+    print "Starting grid of posteriors..."
+    plt.figure(66,figsize=(8.5,8.5),dpi=300)
+    plt.clf()
+    nx = 8
+    ny = 8
+
+    gs = gridspec.GridSpec(nx,ny,wspace=0.1,hspace=0.0)
+    print " "
+    print "... top plot of first column"
+    tcol = time.time()
+    top_plot(r1dist,gs[0,0],val=r1val,sigfac=sigfac)
+    print done_in(tcol)
+    t = time.time()
+    print "... first column 2D plot"
+    column_plot(r1dist,r2dist,gs[1,0],val1=r1val,val2=r2val,ylabel=r'$R_2$',sigfac=sigfac)
+    print done_in(t)
+    column_plot(r1dist,m1dist,gs[2,0],val1=r1val,val2=m1val,ylabel=r'$M_1$',sigfac=sigfac)
+    column_plot(r1dist,m2dist,gs[3,0],val1=r1val,val2=m2val,ylabel=r'$M_2$',sigfac=sigfac)
+    column_plot(r1dist,jdist,gs[4,0],val1=r1val,val2=jval,ylabel=r'$J$',sigfac=sigfac)
+    column_plot(r1dist,cosidist,gs[5,0],val1=r1val,val2=cosival,ylabel=r'$\cos\,i$',sigfac=sigfac)
+    column_plot(r1dist,ecoswdist,gs[6,0],val1=r1val,val2=ecoswval,ylabel=r'$e\cos\omega$',sigfac=sigfac)
+    corner_plot(r1dist,esinwdist,gs[7,0],val1=r1val,val2=esinwval,\
+                xlabel=r'$R_1$',ylabel=r'$e\sin\omega$',sigfac=sigfac)
+    print "... first column"
+    print done_in(tcol)
+
+    print "... second column"
+    t2 = time.time()
+    top_plot(r2dist,gs[1,1],val=r2val,sigfac=sigfac)    
+    middle_plot(r2dist,m1dist,gs[2,1],val1=r2val,val2=m1val,sigfac=sigfac)
+    middle_plot(r2dist,m2dist,gs[3,1],val1=r2val,val2=m2val,sigfac=sigfac)
+    middle_plot(r2dist,jdist,gs[4,1],val1=r2val,val2=jval,sigfac=sigfac)
+    middle_plot(r2dist,cosidist,gs[5,1],val1=r2val,val2=cosival,sigfac=sigfac)
+    middle_plot(r2dist,ecoswdist,gs[6,1],val1=r2val,val2=ecoswval,sigfac=sigfac)
+    row_plot(r2dist,esinwdist,gs[7,1],val1=r2val,val2=esinwval,xlabel=r'$R_2$',sigfac=sigfac)
+    print done_in(t2)
+
+    print "... third column"
+    t3 = time.time()
+    top_plot(m1dist,gs[2,2],val=m1val,sigfac=sigfac)    
+    middle_plot(m1dist,m2dist,gs[3,2],val1=m1val,val2=m2val,sigfac=sigfac)
+    middle_plot(m1dist,jdist,gs[4,2],val1=m1val,val2=jval,sigfac=sigfac)
+    middle_plot(m1dist,cosidist,gs[5,2],val1=m1val,val2=cosival,sigfac=sigfac)
+    middle_plot(m1dist,ecoswdist,gs[6,2],val1=m1val,val2=ecoswval,sigfac=sigfac)
+    row_plot(m1dist,esinwdist,gs[7,2],val1=m1val,val2=esinwval,xlabel=r'$M_1$',sigfac=sigfac)
+    print done_in(t3)
+
+    print "... fourth column"
+    t4 = time.time()
+    top_plot(m2dist,gs[3,3],val=m2val,sigfac=sigfac)    
+    middle_plot(m2dist,jdist,gs[4,3],val1=m2val,val2=jval,sigfac=sigfac)
+    middle_plot(m2dist,cosidist,gs[5,3],val1=m2val,val2=cosival,sigfac=sigfac)
+    middle_plot(m2dist,ecoswdist,gs[6,3],val1=m2val,val2=ecoswval,sigfac=sigfac)
+    row_plot(m2dist,esinwdist,gs[7,3],val1=m2val,val2=esinwval,xlabel=r'$M_2$',sigfac=sigfac)
+    print done_in(t4)
+
+
+    print "... fifth column"
+    t5 = time.time()
+    top_plot(jdist,gs[4,4],val=jval,sigfac=sigfac)    
+    middle_plot(jdist,cosidist,gs[5,4],val1=jval,val2=cosival,sigfac=sigfac)
+    middle_plot(jdist,ecoswdist,gs[6,4],val1=jval,val2=ecoswval,sigfac=sigfac)
+    row_plot(jdist,esinwdist,gs[7,4],val1=jval,val2=esinwval,xlabel=r'$J$',sigfac=sigfac)
+    print done_in(t5)
+
+    print "... sixth column"
+    t6 = time.time()
+    top_plot(cosidist,gs[5,5],val=cosival,sigfac=sigfac)    
+    middle_plot(cosidist,ecoswdist,gs[6,5],val1=cosival,val2=ecoswval,sigfac=sigfac)
+    row_plot(cosidist,esinwdist,gs[7,5],val1=cosival,val2=esinwval,xlabel=r'$\cos\,i$',sigfac=sigfac)
+    print done_in(t6)
+  
+
+    print "... seventh column"
+    t7 = time.time()
+    top_plot(ecoswdist,gs[6,6],val=ecoswval,sigfac=sigfac)    
+    row_plot(ecoswdist,esinwdist,gs[7,6],val1=ecoswval,val2=esinwval,xlabel=r'$e\cos\omega$',sigfac=sigfac)
+    print done_in(t7)
+
+    print "... last column"
+    t8 = time.time()
+    top_plot(esinwdist,gs[7,7],val=esinwval,xlabel=r'$e\sin\omega$',sigfac=sigfac)    
+    print done_in(t8)
+
+    plt.suptitle('2D posteriors for Run '+str(run_num))
+    
+    print "Saving output figures"
+    plt.savefig(path+'triangle1.png', dpi=300)
+    plt.savefig(path+'triangle1.eps', dpi=300)
+
+    print "Procedure finished!"
+    print done_in(tmaster)
+
+
+    return
+
+
+
+def top_plot(dist,position,val=False,sigfac=3.0,frac=0.001,bindiv=10,aspect=1,xlabel=False):
+
+#    pdb.set_trace()
+#    sz = len(dist)
+#    min = np.float(np.sort(dist)[np.round(frac*sz)])
+#    max = np.float(np.sort(dist)[np.round((1.-frac)*sz)])
+#    dists = np.linspace(np.min(dist)*0.5,np.max(dist)*1.5,1000)
+#    kde = gaussian_kde(dist)
+#    pdf = kde(dists)
+#    cumdist = np.cumsum(pdf)/np.sum(pdf)
+#    func = interp1d(cumdist,dists,kind='linear')
+#    lo = np.float(func(math.erfc(1./np.sqrt(2))))
+#    hi = np.float(func(math.erf(1./np.sqrt(2))))
+    med = np.median(dist)
+    sig = rb.std(dist)
+    min = med - sigfac*sig
+    max = med + sigfac*sig
+#    print "Top plot min: %.5f" % min
+#    print "Top plot max: %.5f" % max
+    nb = np.round((max-min) / (sig/bindiv))
+    ax = plt.subplot(position)
+    inds, = np.where((dist >= min) & (dist <= max))
+    plt.hist(dist[inds],bins=nb,normed=True,color='black',edgecolor='none')
+    if not xlabel: 
+        ax.set_xticklabels(())
+    ax.set_yticklabels(())
+    ax.set_xlim(min,max)
+    xlimits = ax.get_xlim()
+    ylimits = ax.get_ylim()
+    ax.set_aspect(abs((xlimits[1]-xlimits[0])/(ylimits[1]-ylimits[0]))/aspect)
+    if val:
+        pass
+#        plt.axvline(x=val,color='w',linestyle='--',linewidth=2)
+    if xlabel:
+        for tick in ax.xaxis.get_major_ticks():
+            tick.label.set_fontsize(8) 
+            tick.label.set_rotation('vertical')
+        ax.set_xlabel(xlabel,fontsize=12)
+ 
+    return
+
+
+
+def column_plot(dist1,dist2,position,val1=False,val2=False,sigfac=3.0,sigsamp=3.0,frac=0.001,ylabel=None):
+
+    sz1 = len(dist1)
+    med1 = np.median(dist1)
+    sig1 = rb.std(dist1)
+    min1 = med1 - sigfac*sig1
+    max1 = med1 + sigfac*sig1
+#    min1 = np.float(np.sort(dist1)[np.round(frac*sz1)])
+#    max1 = np.float(np.sort(dist1)[np.round((1.-frac)*sz1)])
+
+    sz2 = len(dist2)
+    med2 = np.median(dist2)
+    sig2 = rb.std(dist2)
+    min2 = med2 - sigfac*sig2
+    max2 = med2 + sigfac*sig2
+#    min2 = np.float(np.sort(dist2)[np.round(frac*sz2)])
+#    max2 = np.float(np.sort(dist2)[np.round((1.-frac)*sz2)])
+
+#    inds1, = np.where((dist1 >= min1) & (dist1 <= max1))
+#    inds2, = np.where((dist2 >= min2) & (dist2 <= max2))
+
+    aspect = (max1-min1)/(max2-min2)
+    X, Y = np.mgrid[min1:max1:100j, min2:max2:100j]
+    positions = np.vstack([X.ravel(), Y.ravel()])
+    values = np.vstack([dist1, dist2])
+
+    kernel = KDE(values,var_type='cc',bw=[sig1/sigsamp,sig2/sigsamp])
+    Z = np.reshape(kernel.pdf(positions).T, X.shape)
+
+    ax = plt.subplot(position)
+    ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,aspect=aspect,\
+              extent=[min1, max1, min2, max2],origin='upper')
+#    print "Column plot min1: %.5f" % min1
+#    print "Column plot max1: %.5f" % max1
+#    print "Column plot min2: %.5f" % min2
+#    print "Column plot max2: %.5f" % max2
+    clev = np.exp(np.log(np.max(Z))-0.5)
+    cset = ax.contour(X,Y,Z,[clev],colors='w',linewidth=5,linestyles='dotted')
+#    ax.plot(val1,val2, 'wx', markersize=3)
+#    ax.set_xlim(min1, max1)
+#    ax.set_ylim(min2, max2)
+    ax.set_xticklabels(())
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(8) 
+    ax.set_ylabel(ylabel,fontsize=12)
+
+    return
+
+
+
+def row_plot(dist1,dist2,position,val1=False,val2=False,sigfac=3.0,sigsamp=3.0,xlabel=None):
+
+
+    sz1 = len(dist1)
+    med1 = np.median(dist1)
+    sig1 = rb.std(dist1)
+    min1 = med1 - sigfac*sig1
+    max1 = med1 + sigfac*sig1
+#    min1 = np.float(np.sort(dist1)[np.round(frac*sz1)])
+#    max1 = np.float(np.sort(dist1)[np.round((1.-frac)*sz1)])
+    
+    sz2 = len(dist2)
+    med2 = np.median(dist2)
+    sig2 = rb.std(dist2)
+    min2 = med2 - sigfac*sig2
+    max2 = med2 + sigfac*sig2
+#    min2 = np.float(np.sort(dist2)[np.round(frac*sz2)])
+#    max2 = np.float(np.sort(dist2)[np.round((1.-frac)*sz2)])
+    
+    inds1, = np.where((dist1 >= min1) & (dist1 <= max1))
+    inds2, = np.where((dist2 >= min2) & (dist2 <= max2))
+
+    aspect = (max1-min1)/(max2-min2)
+    X, Y = np.mgrid[min1:max1:100j, min2:max2:100j]
+    positions = np.vstack([X.ravel(), Y.ravel()])
+    values = np.vstack([dist1, dist2])
+
+    kernel = KDE(values,var_type='cc',bw=[sig1/sigsamp,sig2/sigsamp])
+    Z = np.reshape(kernel.pdf(positions).T, X.shape)
+
+    ax = plt.subplot(position)
+    ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,aspect=aspect,\
+              extent=[min1, max1, min2, max2],origin='upper')
+#    print "Row plot min1: %.5f" % min1
+#    print "Row plot max1: %.5f" % max1
+#    print "Row plot min2: %.5f" % min2
+#    print "Row plot max2: %.5f" % max2
+    clev = np.exp(np.log(np.max(Z))-0.5)
+    cset = ax.contour(X,Y,Z,[clev],colors='w',linewidth=5,linestyles='dotted')
+#    ax.plot(val1,val2, 'wx', markersize=3)
+    ax.set_xlim(min1, max1)
+    ax.set_ylim(min2, max2)
+    ax.set_yticklabels(())
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(8) 
+        tick.label.set_rotation('vertical')
+    ax.set_xlabel(xlabel,fontsize=12)
+    return
+
+
+def middle_plot(dist1,dist2,position,val1=False,val2=False,sigfac=3.0,sigsamp=3.0):
+
+    sz1 = len(dist1)
+    med1 = np.median(dist1)
+    sig1 = rb.std(dist1)
+    min1 = med1 - sigfac*sig1
+    max1 = med1 + sigfac*sig1
+#    min1 = np.float(np.sort(dist1)[np.round(frac*sz1)])
+#    max1 = np.float(np.sort(dist1)[np.round((1.-frac)*sz1)])
+
+    sz2 = len(dist2)
+    med2 = np.median(dist2)
+    sig2 = rb.std(dist2)
+    min2 = med2 - sigfac*sig2
+    max2 = med2 + sigfac*sig2
+#    min2 = np.float(np.sort(dist2)[np.round(frac*sz2)])
+#    max2 = np.float(np.sort(dist2)[np.round((1.-frac)*sz2)])
+
+    inds1, = np.where((dist1 >= min1) & (dist1 <= max1))
+    inds2, = np.where((dist2 >= min2) & (dist2 <= max2))
+
+    aspect = (max1-min1)/(max2-min2)
+    X, Y = np.mgrid[min1:max1:100j, min2:max2:100j]
+    positions = np.vstack([X.ravel(), Y.ravel()])
+    values = np.vstack([dist1, dist2])
+
+    kernel = KDE(values,var_type='cc',bw=[sig1/sigsamp,sig2/sigsamp])
+    Z = np.reshape(kernel.pdf(positions).T, X.shape)
+
+    ax = plt.subplot(position)
+    ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,aspect=aspect,\
+              extent=[min1, max1, min2, max2],origin='upper')
+#    print "Middle plot min1: %.5f" % min1
+#    print "Middle plot max1: %.5f" % max1
+#    print "Middle plot min2: %.5f" % min2
+#    print "Middle plot max2: %.5f" % max2
+    clev = np.exp(np.log(np.max(Z))-0.5)
+    cset = ax.contour(X,Y,Z,[clev],colors='w',linewidth=5,linestyles='dotted')
+#    ax.plot(val1,val2, 'wx', markersize=3)
+    ax.set_xlim(min1, max1)
+    ax.set_ylim(min2, max2)
+    ax.set_xticklabels(())
+    ax.set_yticklabels(())
+    return
+
+
+
+def corner_plot(dist1,dist2,position,val1=False,val2=False,\
+                sigfac=3.0,sigsamp=3.0,xlabel=None,ylabel=None):
+
+    sz1 = len(dist1)
+    med1 = np.median(dist1)
+    sig1 = rb.std(dist1)
+    min1 = med1 - sigfac*sig1
+    max1 = med1 + sigfac*sig1
+#    min1 = np.float(np.sort(dist1)[np.round(frac*sz1)])
+#    max1 = np.float(np.sort(dist1)[np.round((1.-frac)*sz1)])
+
+    sz2 = len(dist2)
+    med2 = np.median(dist2)
+    sig2 = rb.std(dist2)
+    min2 = med2 - sigfac*sig2
+    max2 = med2 + sigfac*sig2
+#    min2 = np.float(np.sort(dist2)[np.round(frac*sz2)])
+#    max2 = np.float(np.sort(dist2)[np.round((1.-frac)*sz2)])
+
+    inds1, = np.where((dist1 >= min1) & (dist1 <= max1))
+    inds2, = np.where((dist2 >= min2) & (dist2 <= max2))
+
+    aspect = (max1-min1)/(max2-min2)
+    X, Y = np.mgrid[min1:max1:100j, min2:max2:100j]
+    positions = np.vstack([X.ravel(), Y.ravel()])
+    values = np.vstack([dist1, dist2])
+
+    kernel = KDE(values,var_type='cc',bw=[sig1/sigsamp,sig2/sigsamp])
+    Z = np.reshape(kernel.pdf(positions).T, X.shape)
+
+    ax = plt.subplot(position)
+    ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,aspect=aspect,\
+              extent=[min1, max1, min2, max2],origin='upper')
+    clev = np.exp(np.log(np.max(Z))-0.5)
+    cset = ax.contour(X,Y,Z,[clev],colors='w',linewidth=5,linestyles='dotted')
+#    ax.plot(val1,val2, 'wx', markersize=3)
+    ax.set_xlim(min1, max1)
+    ax.set_ylim(min2, max2)
+    for tick in ax.yaxis.get_major_ticks():
+        tick.label.set_fontsize(8) 
+    for tick in ax.xaxis.get_major_ticks():
+        tick.label.set_fontsize(8) 
+        tick.label.set_rotation('vertical')
+    ax.set_xlabel(xlabel,fontsize=12)
+    ax.set_ylabel(ylabel,fontsize=12)
+
+    return
 
 
 
@@ -1758,472 +2230,6 @@ def old_crap():
     return
 
 
-
-
-def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0,network=None,cadence='short'):
-    import matplotlib.gridspec as gridspec
-
-    tmaster = time.time()
-
-    mpl.rc('axes', linewidth=1)
-  
-    bindiv = 10
-    
-    path = reb.get_path(network=network)+cadence+'/'+str(seq_num)+'/'
-
-    ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
-    data    = pickle.load( open( path+'data.p', 'rb' ) )
-    fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
-
-    run_num = seq_num
-    
-    nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
-
-    variables = fitinfo['variables']
-    
-    # Use supplied chains or read from disk
-    if not np.shape(chains):
-        for i in np.arange(len(variables)):
-            try:
-                print "Reading MCMC chains for "+variables[i]
-                tmp = np.loadtxt(path+variables[i]+'chain.txt')
-                if i == 0:
-                    chains = np.zeros((len(tmp),len(variables)))
-
-                chains[:,i] = tmp
-            except:
-                print variables[i]+'chain.txt does not exist on disk !'
-
-    if not np.shape(lp):
-        try:
-            print "Reading ln(prob) chain"
-            lp = np.loadtxt(path+'lnprob.txt')
-        except:
-            print 'lnprob.txt does not exist. Exiting'
-            return
-
-    variables = fitinfo['variables']
-    
-
-    print "Converting posteriors into physical quantities"
-    ind, = np.where(np.array(variables) == 'Rsum')[0]
-    rsumdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'Rratio')[0]
-    rratdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'cosi')[0]
-    cosidist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'ecosw')[0]
-    ecoswdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'esinw')[0]
-    esinwdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'massratio')[0]
-    mratdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'vsys')[0]
-    vsysdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'ktot')[0]
-    ktotdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'J')[0]
-    jdist = chains[:,ind]
-
-    try:
-        ind, = np.where(np.array(variables) == 'period')[0]
-        pdist = chains[:,ind]
-    except:
-        pdist = ebpar['Period']
-
-    esq = ecoswdist * ecoswdist + esinwdist * esinwdist
-    roe = np.sqrt(1.0 - esq)
-    sini = np.sqrt(1.0 - cosidist*cosidist)
-    qpo = 1.0 + mratdist
-    # Corrects for doppler shift of period
-    omega = 2.0*np.pi*(1.0 + vsysdist*1000.0/eb.LIGHT) / (pdist*86400.0)
-    tmp = ktotdist*1000.0 * roe
-    sma = tmp / (eb.RSUN*omega*sini)
-    mtotdist = tmp*tmp*tmp / (eb.GMSUN*omega*sini)
-    m1dist = mtotdist / qpo
-    m2dist = mratdist * m1dist
-
-    r1dist = sma*rsumdist/(1+rratdist)
-    r2dist = rratdist*r1dist
-
-    print "Determining maximum likelihood values"
-    tlike = time.time()
-    bestvals = np.zeros(len(variables))
-    meds = np.zeros(len(variables))
-    modes = np.zeros(len(variables))
-    onesigs = np.zeros(len(variables))
-
-    maxlike = np.max(lp)
-    imax = np.array([i for i, j in enumerate(lp) if j == maxlike])
-    if imax.size > 1:
-        imax = imax[0]
-    for i in np.arange(len(variables)):
-        bestvals[i] = chains[imax,i]
-
-
-    pmax = pdist[imax]
-    m1val = m1dist[imax]
-    m2val = m2dist[imax]
-    r1val = r1dist[imax]
-    r2val = r2dist[imax]
-    jval = jdist[imax]
-    cosival = cosidist[imax]
-    ecoswval = ecoswdist[imax]
-    esinwval = esinwdist[imax]
-
-
-    if thin:
-        print "Thinning chains by a factor of "+str(thin)
-        tthin = time.time()
-        pdist = pdist[0::thin]
-        m1dist = m1dist[0::thin]
-        m2dist = m2dist[0::thin]
-        r1dist = r1dist[0::thin]
-        r2dist = r2dist[0::thin]
-        jdist = jdist[0::thin]
-        cosidist = cosidist[0::thin]
-        ecoswdist = ecoswdist[0::thin]
-        esinwdist = esinwdist[0::thin]
-        lp = lp[0::thin]
-        nsamp /= thin
-
-
-    print " "
-    print "Starting grid of posteriors..."
-    plt.figure(66,figsize=(8.5,8.5),dpi=300)
-    plt.clf()
-    nx = 8
-    ny = 8
-
-    gs = gridspec.GridSpec(nx,ny,wspace=0.1,hspace=0.0)
-    print " "
-    print "... top plot of first column"
-    tcol = time.time()
-    top_plot(r1dist,gs[0,0],val=r1val,sigfac=sigfac)
-    print done_in(tcol)
-    t = time.time()
-    print "... first column 2D plot"
-    column_plot(r1dist,r2dist,gs[1,0],val1=r1val,val2=r2val,ylabel=r'$R_2$',sigfac=sigfac)
-    print done_in(t)
-    column_plot(r1dist,m1dist,gs[2,0],val1=r1val,val2=m1val,ylabel=r'$M_1$',sigfac=sigfac)
-    column_plot(r1dist,m2dist,gs[3,0],val1=r1val,val2=m2val,ylabel=r'$M_2$',sigfac=sigfac)
-    column_plot(r1dist,jdist,gs[4,0],val1=r1val,val2=jval,ylabel=r'$J$',sigfac=sigfac)
-    column_plot(r1dist,cosidist,gs[5,0],val1=r1val,val2=cosival,ylabel=r'$\cos\,i$',sigfac=sigfac)
-    column_plot(r1dist,ecoswdist,gs[6,0],val1=r1val,val2=ecoswval,ylabel=r'$e\cos\omega$',sigfac=sigfac)
-    corner_plot(r1dist,esinwdist,gs[7,0],val1=r1val,val2=esinwval,\
-                xlabel=r'$R_1$',ylabel=r'$e\sin\omega$',sigfac=sigfac)
-    print "... first column"
-    print done_in(tcol)
-
-    print "... second column"
-    t2 = time.time()
-    top_plot(r2dist,gs[1,1],val=r2val,sigfac=sigfac)    
-    middle_plot(r2dist,m1dist,gs[2,1],val1=r2val,val2=m1val,sigfac=sigfac)
-    middle_plot(r2dist,m2dist,gs[3,1],val1=r2val,val2=m2val,sigfac=sigfac)
-    middle_plot(r2dist,jdist,gs[4,1],val1=r2val,val2=jval,sigfac=sigfac)
-    middle_plot(r2dist,cosidist,gs[5,1],val1=r2val,val2=cosival,sigfac=sigfac)
-    middle_plot(r2dist,ecoswdist,gs[6,1],val1=r2val,val2=ecoswval,sigfac=sigfac)
-    row_plot(r2dist,esinwdist,gs[7,1],val1=r2val,val2=esinwval,xlabel=r'$R_2$',sigfac=sigfac)
-    print done_in(t2)
-
-    print "... third column"
-    t3 = time.time()
-    top_plot(m1dist,gs[2,2],val=m1val,sigfac=sigfac)    
-    middle_plot(m1dist,m2dist,gs[3,2],val1=m1val,val2=m2val,sigfac=sigfac)
-    middle_plot(m1dist,jdist,gs[4,2],val1=m1val,val2=jval,sigfac=sigfac)
-    middle_plot(m1dist,cosidist,gs[5,2],val1=m1val,val2=cosival,sigfac=sigfac)
-    middle_plot(m1dist,ecoswdist,gs[6,2],val1=m1val,val2=ecoswval,sigfac=sigfac)
-    row_plot(m1dist,esinwdist,gs[7,2],val1=m1val,val2=esinwval,xlabel=r'$M_1$',sigfac=sigfac)
-    print done_in(t3)
-
-    print "... fourth column"
-    t4 = time.time()
-    top_plot(m2dist,gs[3,3],val=m2val,sigfac=sigfac)    
-    middle_plot(m2dist,jdist,gs[4,3],val1=m2val,val2=jval,sigfac=sigfac)
-    middle_plot(m2dist,cosidist,gs[5,3],val1=m2val,val2=cosival,sigfac=sigfac)
-    middle_plot(m2dist,ecoswdist,gs[6,3],val1=m2val,val2=ecoswval,sigfac=sigfac)
-    row_plot(m2dist,esinwdist,gs[7,3],val1=m2val,val2=esinwval,xlabel=r'$M_2$',sigfac=sigfac)
-    print done_in(t4)
-
-
-    print "... fifth column"
-    t5 = time.time()
-    top_plot(jdist,gs[4,4],val=jval,sigfac=sigfac)    
-    middle_plot(jdist,cosidist,gs[5,4],val1=jval,val2=cosival,sigfac=sigfac)
-    middle_plot(jdist,ecoswdist,gs[6,4],val1=jval,val2=ecoswval,sigfac=sigfac)
-    row_plot(jdist,esinwdist,gs[7,4],val1=jval,val2=esinwval,xlabel=r'$J$',sigfac=sigfac)
-    print done_in(t5)
-
-    print "... sixth column"
-    t6 = time.time()
-    top_plot(cosidist,gs[5,5],val=cosival,sigfac=sigfac)    
-    middle_plot(cosidist,ecoswdist,gs[6,5],val1=cosival,val2=ecoswval,sigfac=sigfac)
-    row_plot(cosidist,esinwdist,gs[7,5],val1=cosival,val2=esinwval,xlabel=r'$\cos\,i$',sigfac=sigfac)
-    print done_in(t6)
-  
-
-    print "... seventh column"
-    t7 = time.time()
-    top_plot(ecoswdist,gs[6,6],val=ecoswval,sigfac=sigfac)    
-    row_plot(ecoswdist,esinwdist,gs[7,6],val1=ecoswval,val2=esinwval,xlabel=r'$e\cos\omega$',sigfac=sigfac)
-    print done_in(t7)
-
-    print "... last column"
-    t8 = time.time()
-    top_plot(esinwdist,gs[7,7],val=esinwval,xlabel=r'$e\sin\omega$',sigfac=sigfac)    
-    print done_in(t8)
-
-    plt.suptitle('2D posteriors for Run '+str(run_num))
-    
-    print "Saving output figures"
-    plt.savefig(path+'triangle1.png', dpi=300)
-    plt.savefig(path+'triangle1.eps', dpi=300)
-
-    print "Procedure finished!"
-    print done_in(tmaster)
-
-
-    return
-
-
-
-def top_plot(dist,position,val=False,sigfac=3.0,frac=0.001,bindiv=10,aspect=1,xlabel=False):
-
-#    pdb.set_trace()
-#    sz = len(dist)
-#    min = np.float(np.sort(dist)[np.round(frac*sz)])
-#    max = np.float(np.sort(dist)[np.round((1.-frac)*sz)])
-#    dists = np.linspace(np.min(dist)*0.5,np.max(dist)*1.5,1000)
-#    kde = gaussian_kde(dist)
-#    pdf = kde(dists)
-#    cumdist = np.cumsum(pdf)/np.sum(pdf)
-#    func = interp1d(cumdist,dists,kind='linear')
-#    lo = np.float(func(math.erfc(1./np.sqrt(2))))
-#    hi = np.float(func(math.erf(1./np.sqrt(2))))
-    med = np.median(dist)
-    sig = rb.std(dist)
-    min = med - sigfac*sig
-    max = med + sigfac*sig
-#    print "Top plot min: %.5f" % min
-#    print "Top plot max: %.5f" % max
-    nb = np.round((max-min) / (sig/bindiv))
-    ax = plt.subplot(position)
-    inds, = np.where((dist >= min) & (dist <= max))
-    plt.hist(dist[inds],bins=nb,normed=True,color='black',edgecolor='none')
-    if not xlabel: 
-        ax.set_xticklabels(())
-    ax.set_yticklabels(())
-    ax.set_xlim(min,max)
-    xlimits = ax.get_xlim()
-    ylimits = ax.get_ylim()
-    ax.set_aspect(abs((xlimits[1]-xlimits[0])/(ylimits[1]-ylimits[0]))/aspect)
-    if val:
-        pass
-#        plt.axvline(x=val,color='w',linestyle='--',linewidth=2)
-    if xlabel:
-        for tick in ax.xaxis.get_major_ticks():
-            tick.label.set_fontsize(8) 
-            tick.label.set_rotation('vertical')
-        ax.set_xlabel(xlabel,fontsize=12)
- 
-    return
-
-
-
-def column_plot(dist1,dist2,position,val1=False,val2=False,sigfac=3.0,sigsamp=3.0,frac=0.001,ylabel=None):
-
-    sz1 = len(dist1)
-    med1 = np.median(dist1)
-    sig1 = rb.std(dist1)
-    min1 = med1 - sigfac*sig1
-    max1 = med1 + sigfac*sig1
-#    min1 = np.float(np.sort(dist1)[np.round(frac*sz1)])
-#    max1 = np.float(np.sort(dist1)[np.round((1.-frac)*sz1)])
-
-    sz2 = len(dist2)
-    med2 = np.median(dist2)
-    sig2 = rb.std(dist2)
-    min2 = med2 - sigfac*sig2
-    max2 = med2 + sigfac*sig2
-#    min2 = np.float(np.sort(dist2)[np.round(frac*sz2)])
-#    max2 = np.float(np.sort(dist2)[np.round((1.-frac)*sz2)])
-
-#    inds1, = np.where((dist1 >= min1) & (dist1 <= max1))
-#    inds2, = np.where((dist2 >= min2) & (dist2 <= max2))
-
-    aspect = (max1-min1)/(max2-min2)
-    X, Y = np.mgrid[min1:max1:100j, min2:max2:100j]
-    positions = np.vstack([X.ravel(), Y.ravel()])
-    values = np.vstack([dist1, dist2])
-
-    kernel = KDE(values,var_type='cc',bw=[sig1/sigsamp,sig2/sigsamp])
-    Z = np.reshape(kernel.pdf(positions).T, X.shape)
-
-    ax = plt.subplot(position)
-    ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,aspect=aspect,\
-              extent=[min1, max1, min2, max2],origin='upper')
-#    print "Column plot min1: %.5f" % min1
-#    print "Column plot max1: %.5f" % max1
-#    print "Column plot min2: %.5f" % min2
-#    print "Column plot max2: %.5f" % max2
-    clev = np.exp(np.log(np.max(Z))-0.5)
-    cset = ax.contour(X,Y,Z,[clev],colors='w',linewidth=5,linestyles='dotted')
-#    ax.plot(val1,val2, 'wx', markersize=3)
-#    ax.set_xlim(min1, max1)
-#    ax.set_ylim(min2, max2)
-    ax.set_xticklabels(())
-    for tick in ax.yaxis.get_major_ticks():
-        tick.label.set_fontsize(8) 
-    ax.set_ylabel(ylabel,fontsize=12)
-
-    return
-
-
-
-def row_plot(dist1,dist2,position,val1=False,val2=False,sigfac=3.0,sigsamp=3.0,xlabel=None):
-
-
-    sz1 = len(dist1)
-    med1 = np.median(dist1)
-    sig1 = rb.std(dist1)
-    min1 = med1 - sigfac*sig1
-    max1 = med1 + sigfac*sig1
-#    min1 = np.float(np.sort(dist1)[np.round(frac*sz1)])
-#    max1 = np.float(np.sort(dist1)[np.round((1.-frac)*sz1)])
-    
-    sz2 = len(dist2)
-    med2 = np.median(dist2)
-    sig2 = rb.std(dist2)
-    min2 = med2 - sigfac*sig2
-    max2 = med2 + sigfac*sig2
-#    min2 = np.float(np.sort(dist2)[np.round(frac*sz2)])
-#    max2 = np.float(np.sort(dist2)[np.round((1.-frac)*sz2)])
-    
-    inds1, = np.where((dist1 >= min1) & (dist1 <= max1))
-    inds2, = np.where((dist2 >= min2) & (dist2 <= max2))
-
-    aspect = (max1-min1)/(max2-min2)
-    X, Y = np.mgrid[min1:max1:100j, min2:max2:100j]
-    positions = np.vstack([X.ravel(), Y.ravel()])
-    values = np.vstack([dist1, dist2])
-
-    kernel = KDE(values,var_type='cc',bw=[sig1/sigsamp,sig2/sigsamp])
-    Z = np.reshape(kernel.pdf(positions).T, X.shape)
-
-    ax = plt.subplot(position)
-    ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,aspect=aspect,\
-              extent=[min1, max1, min2, max2],origin='upper')
-#    print "Row plot min1: %.5f" % min1
-#    print "Row plot max1: %.5f" % max1
-#    print "Row plot min2: %.5f" % min2
-#    print "Row plot max2: %.5f" % max2
-    clev = np.exp(np.log(np.max(Z))-0.5)
-    cset = ax.contour(X,Y,Z,[clev],colors='w',linewidth=5,linestyles='dotted')
-#    ax.plot(val1,val2, 'wx', markersize=3)
-    ax.set_xlim(min1, max1)
-    ax.set_ylim(min2, max2)
-    ax.set_yticklabels(())
-    for tick in ax.xaxis.get_major_ticks():
-        tick.label.set_fontsize(8) 
-        tick.label.set_rotation('vertical')
-    ax.set_xlabel(xlabel,fontsize=12)
-    return
-
-
-def middle_plot(dist1,dist2,position,val1=False,val2=False,sigfac=3.0,sigsamp=3.0):
-
-    sz1 = len(dist1)
-    med1 = np.median(dist1)
-    sig1 = rb.std(dist1)
-    min1 = med1 - sigfac*sig1
-    max1 = med1 + sigfac*sig1
-#    min1 = np.float(np.sort(dist1)[np.round(frac*sz1)])
-#    max1 = np.float(np.sort(dist1)[np.round((1.-frac)*sz1)])
-
-    sz2 = len(dist2)
-    med2 = np.median(dist2)
-    sig2 = rb.std(dist2)
-    min2 = med2 - sigfac*sig2
-    max2 = med2 + sigfac*sig2
-#    min2 = np.float(np.sort(dist2)[np.round(frac*sz2)])
-#    max2 = np.float(np.sort(dist2)[np.round((1.-frac)*sz2)])
-
-    inds1, = np.where((dist1 >= min1) & (dist1 <= max1))
-    inds2, = np.where((dist2 >= min2) & (dist2 <= max2))
-
-    aspect = (max1-min1)/(max2-min2)
-    X, Y = np.mgrid[min1:max1:100j, min2:max2:100j]
-    positions = np.vstack([X.ravel(), Y.ravel()])
-    values = np.vstack([dist1, dist2])
-
-    kernel = KDE(values,var_type='cc',bw=[sig1/sigsamp,sig2/sigsamp])
-    Z = np.reshape(kernel.pdf(positions).T, X.shape)
-
-    ax = plt.subplot(position)
-    ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,aspect=aspect,\
-              extent=[min1, max1, min2, max2],origin='upper')
-#    print "Middle plot min1: %.5f" % min1
-#    print "Middle plot max1: %.5f" % max1
-#    print "Middle plot min2: %.5f" % min2
-#    print "Middle plot max2: %.5f" % max2
-    clev = np.exp(np.log(np.max(Z))-0.5)
-    cset = ax.contour(X,Y,Z,[clev],colors='w',linewidth=5,linestyles='dotted')
-#    ax.plot(val1,val2, 'wx', markersize=3)
-    ax.set_xlim(min1, max1)
-    ax.set_ylim(min2, max2)
-    ax.set_xticklabels(())
-    ax.set_yticklabels(())
-    return
-
-
-
-def corner_plot(dist1,dist2,position,val1=False,val2=False,\
-                sigfac=3.0,sigsamp=3.0,xlabel=None,ylabel=None):
-
-    sz1 = len(dist1)
-    med1 = np.median(dist1)
-    sig1 = rb.std(dist1)
-    min1 = med1 - sigfac*sig1
-    max1 = med1 + sigfac*sig1
-#    min1 = np.float(np.sort(dist1)[np.round(frac*sz1)])
-#    max1 = np.float(np.sort(dist1)[np.round((1.-frac)*sz1)])
-
-    sz2 = len(dist2)
-    med2 = np.median(dist2)
-    sig2 = rb.std(dist2)
-    min2 = med2 - sigfac*sig2
-    max2 = med2 + sigfac*sig2
-#    min2 = np.float(np.sort(dist2)[np.round(frac*sz2)])
-#    max2 = np.float(np.sort(dist2)[np.round((1.-frac)*sz2)])
-
-    inds1, = np.where((dist1 >= min1) & (dist1 <= max1))
-    inds2, = np.where((dist2 >= min2) & (dist2 <= max2))
-
-    aspect = (max1-min1)/(max2-min2)
-    X, Y = np.mgrid[min1:max1:100j, min2:max2:100j]
-    positions = np.vstack([X.ravel(), Y.ravel()])
-    values = np.vstack([dist1, dist2])
-
-    kernel = KDE(values,var_type='cc',bw=[sig1/sigsamp,sig2/sigsamp])
-    Z = np.reshape(kernel.pdf(positions).T, X.shape)
-
-    ax = plt.subplot(position)
-    ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,aspect=aspect,\
-              extent=[min1, max1, min2, max2],origin='upper')
-    clev = np.exp(np.log(np.max(Z))-0.5)
-    cset = ax.contour(X,Y,Z,[clev],colors='w',linewidth=5,linestyles='dotted')
-#    ax.plot(val1,val2, 'wx', markersize=3)
-    ax.set_xlim(min1, max1)
-    ax.set_ylim(min2, max2)
-    for tick in ax.yaxis.get_major_ticks():
-        tick.label.set_fontsize(8) 
-    for tick in ax.xaxis.get_major_ticks():
-        tick.label.set_fontsize(8) 
-        tick.label.set_rotation('vertical')
-    ax.set_xlabel(xlabel,fontsize=12)
-    ax.set_ylabel(ylabel,fontsize=12)
-
-    return
 
 
 

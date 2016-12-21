@@ -1722,14 +1722,15 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             ##############################
             # Third light restrictions
             ##############################
-            if not fitinfo['fit_L3']:
+            if not fitinfo['fit_L3'][np.int(key[-1])]:
                 parm[eb.PAR_L3] = data['L3'] 
             if parm[eb.PAR_L3] > 1 or parm[eb.PAR_L3] < 0:
 #                print parm[eb.PAR_L3]
 #                print 'L3 out of bounds!'
                 return -np.inf
-#            print 'L3 ok!'
+#            print data['L3']
 #            print parm[eb.PAR_L3]
+
             ############################################################
             # No gravitational lensing or other exotic effects allowed.
             ############################################################

@@ -15,9 +15,9 @@ bellerophon = True
 debug = False
 threads = 31
 over_disperse = False
-nw = 200
-bs = 5000
-mcs = 5000
+nw = 500
+bs = 2000
+mcs = 2000
 
 ######################################################################
 # Photometry data
@@ -53,10 +53,11 @@ data = kpdata[i,:].T
 data[0,:] += 2454833.0
 
 
+# best fit from george_fit
+inds, = np.where((data[0,:] > 2455560) & (data[0,:] < 2455593))
 #inds, = np.where((data[0,:] > 2455560) & (data[0,:] < 2455640))
-#data = data[:,inds]
+#inds, = np.where(data[0,:] < 2455115.0)
 
-inds, = np.where(data[0,:] < 2455115.0)
 data = data[:,inds]
 
 if plot:
@@ -346,7 +347,7 @@ ubands = ebs.uniquebands(datadict,quiet=True)
 
 fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
                          data_dict=datadict,
-                         clobber=True,fit_ooe1=[False],fit_L3=[True],
+                         clobber=True,fit_ooe1=[False],fit_L3=[False],
                          network=network,outpath=outpath)
 
 

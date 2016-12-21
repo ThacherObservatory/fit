@@ -9,37 +9,73 @@ from plot_params import *
 
 debug = True
 
-client = kplr.API()
-
-star = client.star(10935310)
-#star = client.star(4175707)
-#star = client.star(11913210)
+fulldata = False
 
 t0 = 2454957.32211 - 2454833.0
 period =4.1287977964 
 
-print('Get LCs...')
-lcs = star.get_light_curves(fetch=True)
+if fulldata:
 
-times = []
-fluxes = []
-errs = []
+    client = kplr.API()
 
-print('Extract data...')
-for lc in lcs:
-    with lc.open() as f:
-        data = f[1].data
-        t = data['time']
-        f = data['PDCSAP_FLUX']
-        e = data['PDCSAP_FLUX_ERR']
+    star = client.star(10935310)
+    #star = client.star(4175707)
+    #star = client.star(11913210)
+
+    print('Get LCs...')
+    lcs = star.get_light_curves(fetch=True)
     
-    times = np.append(times,t)
-    fluxes = np.append(fluxes,f)
-    errs =  np.append(errs,e)
+    times = []
+    fluxes = []
+    errs = []
 
+    print('Extract data...')
+    for lc in lcs:
+        with lc.open() as f:
+            data = f[1].data
+            t = data['time']
+            f = data['PDCSAP_FLUX']
+            e = data['PDCSAP_FLUX_ERR']
+    
+        times = np.append(times,t)
+        fluxes = np.append(fluxes,f)
+        errs =  np.append(errs,e)
+
+else:
+    dpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/Refine/'
+    outpath = '/Users/jonswift/Astronomy/EBs/outdata/10935310/MCMC/30Nov2016/'
+    
+    file1 = '10935310_1_norm.dat'
+    file2 = '10935310_2_norm.dat'
+    #file1 = '10935310_1_clip.dat'
+    #file2 = '10935310_2_clip.dat'
+
+    data1 = np.loadtxt(dpath+file1)
+    data2 = np.loadtxt(dpath+file2)
+
+    kpdata = np.append(data1,data2,axis=0)
+    i = np.argsort(kpdata[:,0])
+    data = kpdata[i,:].T
+#    data[0,:] += 2454833.0
+
+
+    #inds, = np.where((data[0,:] > 2455560) & (data[0,:] < 2455640))
+    #data = data[:,inds]
+
+#    inds, = np.where(data[0,:] < 2455115.0)
+#    data = data[:,inds]
+
+    times = data[0,:]
+    fluxes = data[1,:]
+    errs = data [2,:]
+
+    
 # Use quasi-periodic kernel -- follow example
 f = (np.isfinite(times)) & (np.isfinite(fluxes)) & (np.isfinite(errs))
 i = np.where((times[f] > 726) & (times[f] < 760))
+#i = np.where((times[f] > 726) & (times[f] < 807))
+#i = np.where(times[f] < 282)
+#i = np.where(times[f] < 760)
 #i = np.where((times[f] > 353) & (times[f] < 360))
 #i = np.where((times[f] > 292) & (times[f] < 300))
 time = times[f][i] ; flux = fluxes[f][i] ; err = errs[f][i]
@@ -92,7 +128,7 @@ gp = george.GP(k,mean=np.mean(flux))
 
 if debug:
     gp.compute(time,2,sort=True)
-    x = np.linspace(np.min(time), np.max(time), 1000)
+    x = np.linspace(np.min(time), np.max(time), 5000)
     mu, cov = gp.predict(flux, x)
     ax1.plot(x,mu,'r-',lw=3,label='GP Model')
     flux_fit, cov_fit = gp.predict(flux,time)
@@ -109,7 +145,8 @@ if debug:
     plt.subplots_adjust(hspace=0.1,left=0.12,right=0.95,top=0.94)
     plt.suptitle('Out of Eclipse Modeling',fontsize=fs+2)
 #    plt.savefig('KIC10935310_oee.png',dpi=300)
-
+    plt.show()
+    sys.exit()
 
 def lnprob(theta,time,flux,err):
     #theta[0] = amplitude
