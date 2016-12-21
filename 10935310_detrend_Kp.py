@@ -54,9 +54,9 @@ data[0,:] += 2454833.0
 
 
 # best fit from george_fit
-inds, = np.where((data[0,:] > 2455560) & (data[0,:] < 2455593))
+#inds, = np.where((data[0,:] > 2455560) & (data[0,:] < 2455593))
 #inds, = np.where((data[0,:] > 2455560) & (data[0,:] < 2455640))
-#inds, = np.where(data[0,:] < 2455115.0)
+inds, = np.where(data[0,:] < 2455115.0)
 
 data = data[:,inds]
 
