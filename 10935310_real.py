@@ -10,10 +10,10 @@ import sys
 from plot_params import *
 plot_params()
 
-plot = False
-bellerophon = True
-debug = False
-threads = 30
+plot = True
+bellerophon = False
+debug = True
+threads = 1
 
 ######################################################################
 # Photometry data

@@ -15,7 +15,6 @@ from length import length
 from statsmodels.nonparametric.kernel_density import KDEMultivariate as KDE
 from stellar import rt_from_m, flux2mag, mag2flux
 from plot_params import plot_params, plot_defaults
-import run_ebsim as reb
 import ebsim as ebs
 from done_in import done_in
 import george
@@ -610,56 +609,81 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             # GP spot modeling 
             ##############################
             # Modeling parameters
-            mtime = np.linspace(np.min(time),np.max(time),length(time)*10)
+            mtime = np.linspace(np.min(time),np.max(time),length(time)*5)
             
             print 'Starting spot sequence'
             # Spots on primary star
-            try:
-                theta1 = np.exp(np.array([x[variables=='OOE_Amp1'+btag][0],x[variables=='OOE_SineAmp1'+btag][0], \
-                                          x[variables=='OOE_Per1'+btag][0],x[variables=='OOE_Decay1'+btag][0]]))
-                theta1 = np.exp(np.array([0.1,2,5,4]))
-                k1 =  theta1[0] * ExpSquaredKernel(theta1[1]) * ExpSine2Kernel(theta1[2],theta1[3])
-                gp1 = george.GP(k1,mean=np.mean(flux_ooe))
+            if fitinfo['fit_ooe1'][np.int(key[-1])]:
                 try:
-                    gp1.compute(time_ooe,yerr=err_ooe,sort=True)
-                    # For point to point comparison
-                    tdarre = ebs.get_time_stack(time,integration=int)
-                    ooe1_modele = np.zeros_like(tdarre)
-                    #plt.figure(137)
-                    #plt.clf()
-                    #plt.plot(time_ooe,flux_ooe,'ko',ms=8)
-                    for i in range(np.shape(tdarre)[0]):
-                        tvec = tdarre[i,:]
-                        output,cov = gp1.predict(flux_ooe,tvec)
-                        ooe1_modele[i,:] = output
-                        #plt.plot(tdarre[i,:],ooe1_modele[i,:],'.')
+                    theta1 = np.exp(np.array([x[variables=='OOE_Amp1'+btag][0],
+                                              x[variables=='OOE_SineAmp1'+btag][0], \
+                                              x[variables=='OOE_Per1'+btag][0],
+                                              x[variables=='OOE_Decay1'+btag][0]]))
+                    theta1 = np.exp(np.array([0.1,2,5,4]))
+                    k1 =  theta1[0] * ExpSquaredKernel(theta1[1]) * ExpSine2Kernel(theta1[2],theta1[3])
+                    gp1 = george.GP(k1,mean=np.mean(flux_ooe))
+                    try:
+                        gp1.compute(time_ooe,yerr=err_ooe,sort=True)
+                        # For point to point comparison
+                        tdarre = ebs.get_time_stack(time,integration=int)
+                        ooe1_modele = np.zeros_like(tdarre)
+                        #plt.figure(137)
+                        #plt.clf()
+                        #plt.plot(time_ooe,flux_ooe,'ko',ms=8)
+                        for i in range(np.shape(tdarre)[0]):
+                            tvec = tdarre[i,:]
+                            output,cov = gp1.predict(flux_ooe,tvec)
+                            ooe1_modele[i,:] = output
+                            #plt.plot(tdarre[i,:],ooe1_modele[i,:],'.')
                     
-                    # For high resolution model
-                    tdarr = ebs.get_time_stack(mtime,integration=int)
-                    ooe1_model = np.zeros_like(tdarr)
-                    pbar = tqdm(desc = 'Generating high resolution model', total = np.shape(ooe1_model)[0])
-                    for i in range(np.shape(tdarr)[0]):
-                        ooe1_model[i,:],cov = gp1.predict(flux_ooe,tdarr[i,:])
-                        pbar.update(1)
-                except (ValueError, np.linalg.LinAlgError):
-                    print 'WARNING: Could not invert GP matrix 1!'
-                    return -np.inf
+                        # For high resolution model
+                        tdarr = ebs.get_time_stack(mtime,integration=int)
+                        ooe1_model = np.zeros_like(tdarr)
+                        pbar = tqdm(desc = 'Generating high resolution model', total = np.shape(ooe1_model)[0])
+                        for i in range(np.shape(tdarr)[0]):
+                            ooe1_model[i,:],cov = gp1.predict(flux_ooe,tdarr[i,:])
+                            pbar.update(1)
+                    except (ValueError, np.linalg.LinAlgError):
+                        print 'WARNING: Could not invert GP matrix 1!'
+                        return -np.inf
+                    ooe1_raw = ooe1_model-1.0
+                    ooe1 = ebs.ooe_to_flux(ooe1_raw,parm)
+
+                    ooe1_rawe = ooe1_modele-1.0
+                    ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm)
+
+                except:
+                    print 'Out of eclipse variations not accounted for'
+                    ooe1=None
+                    ooe1e=None
+            elif fitinfo['do_ooe'][np.int(key[-1])]:
+                ooe1_modele = data['ooe_predict'][1]
+                ooe1_rawe = ooe1_modele-1.0 # convert absolute to delta
+                ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm)
+
+                k =  100**2 * ExpSquaredKernel(1) * ExpSine2Kernel(4,4)
+                gp = george.GP(k,mean=np.mean(flux))
+                gp.compute(time_ooe,yerr=err_ooe,sort=True)
+
+                tdarr = ebs.get_time_stack(mtime,integration=int)
+                ooe1_model = np.zeros_like(tdarr)
+                pbar = tqdm(desc = 'Generating high resolution model', total = np.shape(ooe1_model)[0])
+                for i in range(np.shape(tdarr)[0]):
+                    ooe1_model[i,:],cov = gp.predict(flux_ooe,tdarr[i,:])
+                    pbar.update(1)
                 ooe1_raw = ooe1_model-1.0
                 ooe1 = ebs.ooe_to_flux(ooe1_raw,parm)
 
-                ooe1_rawe = ooe1_modele-1.0
-                ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm)
-
-            except:
-                print 'Out of eclipse variations not accounted for'
-                ooe1=None
-                ooe1e=None
+            else:
+                ooe1 = None
+                ooe1e = None
 
             # Don't currently have a way for fitting for this...
             ooe2 = None
             
             # Plot out of eclipse fit
-            if length(ooe1) > 1:
+            if False:
+                #if length(ooe1) > 1:
                 plt.figure(99,figsize=(18,4))
                 plt.clf()
                 plt.plot(time,flux,'ko',label='raw',ms=10)
@@ -722,7 +746,10 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 fs = 18
                 gs = gridspec.GridSpec(div, 1,wspace=0)
                 ax1 = plt.subplot(gs[0:div-1, 0])    
-                offset = 0.05
+                if fitinfo['do_ooe'][np.int(key[-1])]:
+                    offset = 0.1
+                else:
+                    offset = 0.05
                 for n in range(neclipse):
                     # plot data
                     ax1.plot(tfold[priminds[ends[n]+1]:priminds[ends[n+1]]]*24.0,
@@ -735,7 +762,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 ax1.set_ylabel("Normalized Flux + offset",fontsize=fs)
                 ax1.set_xticklabels(())
                 ax1.set_xlim(-6,6)
-                ax1.set_ylim(0.82,1+((neclipse+1)*offset))
+                ax1.set_ylim(0.78,1+((neclipse+1)*offset))
                 ax1.axvline(x=0.0,linestyle='--',color='blue')
             
                 ax2 = plt.subplot(gs[div-1,0])
@@ -772,7 +799,10 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 fs = 18
                 gs = gridspec.GridSpec(div, 1,wspace=0)
                 ax1 = plt.subplot(gs[0:div-1, 0])    
-                offset = 0.01
+                if fitinfo['do_ooe'][np.int(key[-1])]:
+                    offset = 0.02
+                else:
+                    offset = 0.01
                 for n in range(neclipse):
                     # plot data
                     ax1.plot(tfold2[secinds[ends[n]+1]:secinds[ends[n+1]]]*24.0,
@@ -784,7 +814,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 ax1.set_ylabel("Normalized Flux + offset",fontsize=fs)
                 ax1.set_xticklabels(())
                 ax1.set_xlim(-6,6)
-                ax1.set_ylim(0.99,1+((neclipse)*offset))
+                ax1.set_ylim(0.95,1+((neclipse)*offset))
                 ax1.axvline(x=0.0,linestyle='--',color='blue')
             
                 ax2 = plt.subplot(gs[div-1,0])
@@ -1241,7 +1271,8 @@ def params_of_interest(chains=False,lp=False,sigrange=5,
 
 
 
-def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0,network=None,cadence='short'):
+def triangle_plot(chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0,network=None,outpath='./'):
+
     import matplotlib.gridspec as gridspec
 
     tmaster = time.time()
@@ -1250,14 +1281,12 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0
   
     bindiv = 10
     
-    path = reb.get_path(network=network)+cadence+'/'+str(seq_num)+'/'
+    path = outpath
 
     ebpar   = pickle.load( open( path+'ebpar.p', 'rb' ) )
     data    = pickle.load( open( path+'data.p', 'rb' ) )
     fitinfo = pickle.load( open( path+'fitinfo.p', 'rb' ) )
 
-    run_num = seq_num
-    
     nsamp = fitinfo['nwalkers']*fitinfo['mcmcsteps']
 
     variables = fitinfo['variables']
@@ -1297,17 +1326,17 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0
     ecoswdist = chains[:,ind]
     ind, = np.where(np.array(variables) == 'esinw')[0]
     esinwdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'massratio')[0]
+    ind, = np.where(np.array(variables) == 'Mratio')[0]
     mratdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'vsys')[0]
+    ind, = np.where(np.array(variables) == 'Vsys')[0]
     vsysdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'ktot')[0]
+    ind, = np.where(np.array(variables) == 'Ktot')[0]
     ktotdist = chains[:,ind]
-    ind, = np.where(np.array(variables) == 'J')[0]
+    ind, = np.where(np.array(variables) == 'J_Kp')[0]
     jdist = chains[:,ind]
 
     try:
-        ind, = np.where(np.array(variables) == 'period')[0]
+        ind, = np.where(np.array(variables) == 'Period')[0]
         pdist = chains[:,ind]
     except:
         pdist = ebpar['Period']
@@ -1366,7 +1395,6 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0
         ecoswdist = ecoswdist[0::thin]
         esinwdist = esinwdist[0::thin]
         lp = lp[0::thin]
-        nsamp /= thin
 
 
     print " "
@@ -1454,7 +1482,6 @@ def triangle_plot(seq_num,chains=False,lp=False,thin=False,frac=0.001,sigfac=4.0
     top_plot(esinwdist,gs[7,7],val=esinwval,xlabel=r'$e\sin\omega$',sigfac=sigfac)    
     print done_in(t8)
 
-    plt.suptitle('2D posteriors for Run '+str(run_num))
     
     print "Saving output figures"
     plt.savefig(path+'triangle1.png', dpi=300)

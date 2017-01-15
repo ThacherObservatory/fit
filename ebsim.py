@@ -1,7 +1,5 @@
 # Updates
 # -------
-# Made all band specific quantities iterable (grav dark, reflection, ooe)
-# Need to specify band even for a single photometric dataset
 
 # TO DO:
 # ------
@@ -41,6 +39,8 @@ def find_base(N):
     """
     Routine to interpolate the optimal geometric base for Eq. 5 from empirical data
     Saunders et al. (2006) Figure 16
+
+    Used in generating simulated RV data.
     """
     
     if N < 10:
@@ -65,7 +65,11 @@ def find_base(N):
 # RV Sampling
 ################################################################################
 def RV_sampling(N,T):
-    """Creates a group of RV samples according to Saunders et al. (2006) Eq. 5"""
+    """
+    Creates a group of RV samples according to Saunders et al. (2006) Eq. 5
+    
+    Used in generating simulated RV data.
+    """
     
     x = find_base(N)
     
@@ -79,8 +83,12 @@ def RV_sampling(N,T):
 ################################################################################
 
 def r_to_l(r):
-    """Converts radius to luminosity (solar units)
-    Boyajian et. al 2012 equation 7"""
+    """
+    Converts radius to luminosity (solar units)
+    Boyajian et. al 2012 equation 7
+    
+    Used for starting parameters
+    """
     
     if r < .1 or r > .9:
         return "Radius outside of suitable range"
@@ -91,8 +99,12 @@ def r_to_l(r):
 
 
 def r_to_m(r):
-    """Converts radius to mass (solar units)
-    Inverts Boyajian et. al 2012 equation 11"""
+    """
+    Converts radius to mass (solar units)
+    Inverts Boyajian et. al 2012 equation 11
+
+    Used for starting parameters
+    """
     
     if r < .1 or r > .9:
         return "Radius outside of suitable range"
@@ -300,9 +312,13 @@ def make_phot_data(ebin,
                    network=None,outpath='./',write=False): # Network info
     
     """ 
+    For simulating eclipse photometry data.
+
     Function to return light curve data for a given set of inputs and a physical model
     for an EB
+
     """
+
     # TESS or Kepler long or short keywords trump obsdur and int keywords
     if TESSshort:
         int = 120.0
@@ -552,11 +568,14 @@ def make_RV_data(ebin,
                  network=None,outpath='./',write=False): # Network info
     
     """ 
+    For simulating Radial Velocity data for an eclipsing binary
+
     Function to return RV data for a given set of inputs and a physical model for an EB.
 
     If no "tRV" vector is given, then RVs are sampled geometrically
 
     """
+
     period =  ebin['Period']
     
     mratio = ebin['Mstar2']/ebin['Mstar1']
@@ -784,6 +803,9 @@ def dict_to_params(ebpar):
 def check_model(data_dict):
     """
     Produces a quick look plot of the light curve and RV data
+
+    Should work for real data and simulated data.
+
     """
     plt.ion()
     
@@ -908,7 +930,7 @@ def uniquebands(data_dict,quiet=False):
 def ebsim_fit(data_dict,fitinfo,ebin,debug=False,threads=1,over_disperse=False):
 
     """
-    Fit the simulated data using emcee with starting parameters based on the 
+    Fit the data in data_dict using emcee with starting parameters based on the 
     ebin dictionary and according to the fitting parameters outlined in
     fitinfo
 
@@ -1625,7 +1647,17 @@ def compute_eclipse(t,parm,integration=None,modelfac=5,fitrvs=False,tref=None,
         else:
             return smoothmodel
 
+
+        
 def ooe_to_flux(ooe1_raw,parm):
+    """
+    Produce the out of eclipse light for one of the stellar components given
+    the total out of eclipse light.
+
+    Needs to be updated so that it can be solved for secondary or tertiary star
+    """
+
+    # Radius of the primary in units of sma
     rsq1 = parm[eb.PAR_RASUM]/(1+parm[eb.PAR_RR])
     rsq2 = rsq1*(parm[eb.PAR_RR])**2
     ldint1 = 1 - (1.0/3.0)*parm[eb.PAR_LDLIN1] - (1.0/6.0)*parm[eb.PAR_LDNON1]
@@ -1639,7 +1671,8 @@ def ooe_to_flux(ooe1_raw,parm):
     ooe1 = (((((ooe1_raw+1)-L3)/(1-L3))*(1/L1) - L2/L1)-1)
 
     return ooe1
-        
+
+
 
 def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
 

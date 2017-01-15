@@ -12,10 +12,10 @@ from plot_params import *
 import sys
 plot_params()
 
-plot = False
-bellerophon = True
-debug = False
-threads = 31
+plot = True
+bellerophon = False
+debug = True
+threads = 1
 do_ooe = True
 over_disperse = False
 modelfac = 5
@@ -339,6 +339,7 @@ datadict = {'RVdata':RVdata,'phot0':phot0}#,
 #            'phot3':phot3}
 
 ######################################################################
+
 
 # From Cakirli 2013 (updated)
 m1 = 0.680 * c.Msun ; r1 = 0.70 * c.Rsun
