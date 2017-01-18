@@ -483,7 +483,7 @@ def make_phot_data(ebin,
 
     parm, vder = dict_to_params(ebpar)
     
-    debug = False
+    #debug = False
     if debug:
         print "Model parameters:"
         for nm, vl, unt in zip(eb.parnames, parm, eb.parunits):
@@ -1658,7 +1658,12 @@ def ooe_to_flux(ooe1_raw,parm):
     """
 
     # Radius of the primary in units of sma
-    rsq1 = parm[eb.PAR_RASUM]/(1+parm[eb.PAR_RR])
+    rsq1_orig = parm[eb.PAR_RASUM]/(1+parm[eb.PAR_RR])
+
+#   Try this test which makes more sense (in some ways)
+    rp = parm[eb.PAR_RASUM]/(1+parm[eb.PAR_RR])
+    rsq1 = rp*rp
+
     rsq2 = rsq1*(parm[eb.PAR_RR])**2
     ldint1 = 1 - (1.0/3.0)*parm[eb.PAR_LDLIN1] - (1.0/6.0)*parm[eb.PAR_LDNON1]
     ldint2 = 1 - (1.0/3.0)*parm[eb.PAR_LDLIN2] - (1.0/6.0)*parm[eb.PAR_LDNON2]
@@ -1670,6 +1675,21 @@ def ooe_to_flux(ooe1_raw,parm):
     L3 = parm[eb.PAR_L3]
     ooe1 = (((((ooe1_raw+1)-L3)/(1-L3))*(1/L1) - L2/L1)-1)
 
+"""
+    L1_orig = rsq1_orig*ldint1
+    L2_orig = rsq2*ldint2 * parm[eb.PAR_J]
+    norm_orig =  1.0 / (L1_orig + L2_orig)
+    L1_orig *= norm_orig
+    L2_orig *= norm_orig
+    ooe1_orig = (((((ooe1_raw+1)-L3)/(1-L3))*(1/L1_orig) - L2_orig/L1_orig)-1)
+
+    tot = np.sum(ooe1 - ooe1_orig)
+
+    print rsq1, rsq1_orig
+    print 'Total = ',tot
+
+    pdb.set_trace()
+"""
     return ooe1
 
 

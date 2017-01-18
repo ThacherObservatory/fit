@@ -12,7 +12,7 @@ from plot_params import *
 import sys
 plot_params()
 
-plot = True
+plot = False
 bellerophon = False
 debug = True
 threads = 1
