@@ -1649,7 +1649,7 @@ def compute_eclipse(t,parm,integration=None,modelfac=5,fitrvs=False,tref=None,
 
 
         
-def ooe_to_flux(ooe1_raw,parm):
+def ooe_to_flux(ooe1_raw,parm,primary=True):
     """
     Produce the out of eclipse light for one of the stellar components given
     the total out of eclipse light.
@@ -1673,24 +1673,12 @@ def ooe_to_flux(ooe1_raw,parm):
     L1 *= norm
     L2 *= norm
     L3 = parm[eb.PAR_L3]
-    ooe1 = (((((ooe1_raw+1)-L3)/(1-L3))*(1/L1) - L2/L1)-1)
-
-"""
-    L1_orig = rsq1_orig*ldint1
-    L2_orig = rsq2*ldint2 * parm[eb.PAR_J]
-    norm_orig =  1.0 / (L1_orig + L2_orig)
-    L1_orig *= norm_orig
-    L2_orig *= norm_orig
-    ooe1_orig = (((((ooe1_raw+1)-L3)/(1-L3))*(1/L1_orig) - L2_orig/L1_orig)-1)
-
-    tot = np.sum(ooe1 - ooe1_orig)
-
-    print rsq1, rsq1_orig
-    print 'Total = ',tot
-
-    pdb.set_trace()
-"""
-    return ooe1
+    if primary:
+        ooe = (((((ooe1_raw+1)-L3)/(1-L3))*(1/L1) - L2/L1)-1)
+    else:
+        ooe = (((((ooe1_raw+1)-L3)/(1-L3))*(1/L2) - L1/L2)-1)
+        
+    return ooe
 
 
 
@@ -1870,25 +1858,31 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     # Correct ooe1 for the fact that variations are in total light
                     ooe1_raw = ooe1_model-1.0 # convert absolute to delta
 
-                    ooe1 = ooe_to_flux(ooe1_raw,parm)
+                    ooe1 = ooe_to_flux(ooe1_raw,parm,primary=True)
 
                 except:
                     ooe1 = None
-            elif fitinfo['do_ooe'][np.int(key[-1])]:
-                ooe1_model = data['ooe_predict'][1]
-                ooe1_raw = ooe1_model-1.0 # convert absolute to delta
-                ooe1 = ooe_to_flux(ooe1_raw,parm)
             else:
                 ooe1 = None
 
-                
+
+            if fitinfo['do_ooe'][np.int(key[-1])] == 1:
+                ooe1_model = data['ooe_predict'][1]
+                ooe1_raw = ooe1_model-1.0 # convert absolute to delta
+                ooe1 = ooe_to_flux(ooe1_raw,parm,primary=True)
+            
+
             # Spots on secondary star
             try:
                 ooe2 = None
             except:
                 ooe2 = None
 
-                
+            if fitinfo['do_ooe'][np.int(key[-1])] == 2:
+                ooe2_model = data['ooe_predict'][1]
+                ooe2_raw = ooe2_model-1.0 # convert absolute to delta
+                ooe2 = ooe_to_flux(ooe2_raw,parm,primary=False)
+
             # Compute model!
             sm = compute_eclipse(time,parm,integration=int,fitrvs=False,
                                   ooe1=ooe1,ooe2=ooe2)

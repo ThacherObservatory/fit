@@ -13,9 +13,9 @@ import sys
 plot_params()
 
 plot = False
-bellerophon = False
-debug = True
-threads = 1
+bellerophon = True
+debug = False
+threads = 31
 do_ooe = True
 over_disperse = False
 modelfac = 5
@@ -375,7 +375,7 @@ datadict = col.OrderedDict(sorted(datadict.items()))
 ubands = ebs.uniquebands(datadict,quiet=True)
 
 fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
-                         data_dict=datadict,do_ooe=[True],
+                         data_dict=datadict,do_ooe=[2],
                          clobber=True,fit_ooe1=[False],fit_L3=[True],
                          network=network,outpath=outpath,modelfac=modelfac)
 
