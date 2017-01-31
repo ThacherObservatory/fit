@@ -647,10 +647,10 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                         print 'WARNING: Could not invert GP matrix 1!'
                         return -np.inf
                     ooe1_raw = ooe1_model-1.0
-                    ooe1 = ebs.ooe_to_flux(ooe1_raw,parm)
+                    ooe1 = ebs.ooe_to_flux(ooe1_raw,parm,primary=True)
 
                     ooe1_rawe = ooe1_modele-1.0
-                    ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm)
+                    ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm,primary=True)
 
                 except:
                     print 'Out of eclipse variations not accounted for'
@@ -661,7 +661,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             if fitinfo['do_ooe'][np.int(key[-1])] == 1:
                 ooe1_modele = data['ooe_predict'][1]
                 ooe1_rawe = ooe1_modele-1.0 # convert absolute to delta
-                ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm)
+                ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm,primary=True)
 
                 k =  100**2 * ExpSquaredKernel(1) * ExpSine2Kernel(4,4)
                 gp = george.GP(k,mean=np.mean(flux))
@@ -674,7 +674,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                     ooe1_model[i,:],cov = gp.predict(flux_ooe,tdarr[i,:])
                     pbar.update(1)
                 ooe1_raw = ooe1_model-1.0
-                ooe1 = ebs.ooe_to_flux(ooe1_raw,parm)
+                ooe1 = ebs.ooe_to_flux(ooe1_raw,parm,primary=True)
 
             else:
                 ooe1 = None
@@ -683,7 +683,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             if fitinfo['do_ooe'][np.int(key[-1])] == 2:
                 ooe2_modele = data['ooe_predict'][1]
                 ooe2_rawe = ooe2_modele-1.0 # convert absolute to delta
-                ooe2e = ebs.ooe_to_flux(ooe2_rawe,parm)
+                ooe2e = ebs.ooe_to_flux(ooe2_rawe,parm,primary=False)
 
                 k =  100**2 * ExpSquaredKernel(1) * ExpSine2Kernel(4,4)
                 gp = george.GP(k,mean=np.mean(flux))
@@ -696,8 +696,10 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                     ooe2_model[i,:],cov = gp.predict(flux_ooe,tdarr[i,:])
                     pbar.update(1)
                 ooe2_raw = ooe2_model-1.0
-                ooe2 = ebs.ooe_to_flux(ooe2_raw,parm)
+                ooe2 = ebs.ooe_to_flux(ooe2_raw,parm,primary=False)
+                print 'Assigning OOE variations to the secondary star'
             else:
+                print 'Whoops'
                 ooe2 = None
                 ooe2e = None
                 
@@ -1029,7 +1031,7 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
             # GP spot modeling 
             ##############################
             # Modeling parameters
-            mtime = np.linspace(np.min(time),np.max(time),length(time)*5)
+            mtime = np.linspace(np.min(time),np.max(time),length(time)*20)
             
             print 'Starting spot sequence'
             # Spots on primary star
@@ -1067,10 +1069,10 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
                         print 'WARNING: Could not invert GP matrix 1!'
                         return -np.inf
                     ooe1_raw = ooe1_model-1.0
-                    ooe1 = ebs.ooe_to_flux(ooe1_raw,parm)
+                    ooe1 = ebs.ooe_to_flux(ooe1_raw,parm,primary=True)
 
                     ooe1_rawe = ooe1_modele-1.0
-                    ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm)
+                    ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm,primary=True)
 
                 except:
                     print 'Out of eclipse variations not accounted for'
@@ -1081,7 +1083,7 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
             if fitinfo['do_ooe'][np.int(key[-1])] == 1:
                 ooe1_modele = data['ooe_predict'][1]
                 ooe1_rawe = ooe1_modele-1.0 # convert absolute to delta
-                ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm)
+                ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm,primary=True)
 
                 k =  100**2 * ExpSquaredKernel(1) * ExpSine2Kernel(4,4)
                 gp = george.GP(k,mean=np.mean(flux))
@@ -1094,7 +1096,7 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
                     ooe1_model[i,:],cov = gp.predict(flux_ooe,tdarr[i,:])
                     pbar.update(1)
                 ooe1_raw = ooe1_model-1.0
-                ooe1 = ebs.ooe_to_flux(ooe1_raw,parm)
+                ooe1 = ebs.ooe_to_flux(ooe1_raw,parm,primary=True)
 
             else:
                 ooe1 = None
@@ -1103,7 +1105,7 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
             if fitinfo['do_ooe'][np.int(key[-1])] == 2:
                 ooe2_modele = data['ooe_predict'][1]
                 ooe2_rawe = ooe2_modele-1.0 # convert absolute to delta
-                ooe2e = ebs.ooe_to_flux(ooe2_rawe,parm)
+                ooe2e = ebs.ooe_to_flux(ooe2_rawe,parm,primary=False)
 
                 k =  100**2 * ExpSquaredKernel(1) * ExpSine2Kernel(4,4)
                 gp = george.GP(k,mean=np.mean(flux))
@@ -1116,7 +1118,7 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
                     ooe2_model[i,:],cov = gp.predict(flux_ooe,tdarr[i,:])
                     pbar.update(1)
                 ooe2_raw = ooe2_model-1.0
-                ooe2 = ebs.ooe_to_flux(ooe2_raw,parm)
+                ooe2 = ebs.ooe_to_flux(ooe2_raw,parm,primary=False)
             else:
                 ooe2 = None
                 ooe2e = None
@@ -1180,45 +1182,41 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
             # Plot primary eclipses #
             #########################
             if neclipse > 1:
-                plt.figure(100,figsize=(5,10))
-                plt.clf()
-                div = 8
+                div = 2
                 fs = 18
                 gs = gridspec.GridSpec(div, 1,wspace=0)
-                ax1 = plt.subplot(gs[0:div-1, 0])    
-                if fitinfo['do_ooe'][np.int(key[-1])]:
-                    offset = 0.1
-                else:
-                    offset = 0.05
                 for n in range(neclipse):
                     # plot data
+                    plt.figure(100,figsize=(8.5,11))
+                    plt.clf()
+                    ax1 = plt.subplot(gs[0, 0])    
                     ax1.plot(tfold[priminds[ends[n]+1]:priminds[ends[n+1]]]*24.0,
-                             flux[priminds[ends[n]+1]:priminds[ends[n+1]]]+np.float(n)*offset,
+                             flux[priminds[ends[n]+1]:priminds[ends[n+1]]],
                              'ko')
                     minds, = np.where((mtime >= time[priminds[ends[n]+1]]) &
                                       (mtime <= time[priminds[ends[n+1]]]))
 
-                    ax1.plot(mfold[minds]*24.0,sm[minds]+np.float(n)*offset,'r')
-                ax1.set_ylabel("Normalized Flux + offset",fontsize=fs)
-                ax1.set_xticklabels(())
-                ax1.set_xlim(-6,6)
-                ax1.set_ylim(0.78,1+((neclipse+1)*offset))
-                ax1.axvline(x=0.0,linestyle='--',color='blue')
+                    ax1.plot(mfold[minds]*24.0,sm[minds],'r')
+                    ax1.set_ylabel("Normalized Flux",fontsize=fs)
+                    ax1.set_xticklabels(())
+                    ax1.set_xlim(-6,6)
+                    ax1.set_ylim(0.8,1.1)
+                    ax1.axvline(x=0.0,linestyle='--',color='blue')
             
-                ax2 = plt.subplot(gs[div-1,0])
-                ax2.plot(tfold[priminds]*24.0,(flux-sme)[priminds]*1e3,'ko')
-                ax2.set_xlim(-6,6)
-                ax2.set_xlabel('Time from Mid-Eclipse (h)',fontsize=fs)
-                ax2.set_ylabel('Residuals (x 1000)',fontsize=fs)
-                ax1.set_title('Primary Eclipses: '+band+' Band',fontsize=fs+2)
-                plt.subplots_adjust(hspace=0.1,left=0.18,right=0.98,top=0.95)
+                    ax2 = plt.subplot(gs[1,0])
+                    ax2.plot(tfold[priminds[ends[n]+1]:priminds[ends[n+1]]]*24.0,
+                             (flux-sme)[priminds[ends[n]+1]:priminds[ends[n+1]]]*1e3,'ko')
+                    ax2.set_xlim(-6,6)
+                    ax2.set_xlabel('Time from Mid-Eclipse (h)',fontsize=fs)
+                    ax2.set_ylabel('Residuals (x 1000)',fontsize=fs)
+                    ax1.set_title('Primary Eclipses: '+band+' Band',fontsize=fs+2)
+                    plt.subplots_adjust(hspace=0.1,left=0.18,right=0.98,top=0.95)
                 
-                if write:
-                    plt.savefig(outpath+'Primary_Eclipses_'+band+'.png',dpi=300)
-                else:
-                    plt.show()
-                    pdb.set_trace()
-
+                    if write:
+                        plt.savefig(outpath+'Primary_Eclipse_'+str(n)+'_'+band+'.png',dpi=300)
+                    else:
+                        plt.show()
+                        pdb.set_trace()
 
 
                 ###########################
@@ -1233,42 +1231,40 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
                 ends = np.append(-1,ends)
                 ends = np.append(ends,len(secinds))
 
-                plt.figure(101,figsize=(5,10))
-                plt.clf()
-                div = 8
+                div = 2
                 fs = 18
                 gs = gridspec.GridSpec(div, 1,wspace=0)
-                ax1 = plt.subplot(gs[0:div-1, 0])    
-                if fitinfo['do_ooe'][np.int(key[-1])]:
-                    offset = 0.02
-                else:
-                    offset = 0.01
                 for n in range(neclipse):
                     # plot data
+                    plt.figure(101,figsize=(5,10))
+                    plt.clf()
+                    ax1 = plt.subplot(gs[0, 0])    
                     ax1.plot(tfold2[secinds[ends[n]+1]:secinds[ends[n+1]]]*24.0,
-                             flux[secinds[ends[n]+1]:secinds[ends[n+1]]]+np.float(n)*offset,
+                             flux[secinds[ends[n]+1]:secinds[ends[n+1]]],
                              'ko')
                     minds, = np.where((mtime >= time[secinds[ends[n]+1]]) &
                                       (mtime <= time[secinds[ends[n+1]]]))
-                    ax1.plot(mfold2[minds]*24.0,sm[minds]+np.float(n)*offset,'r-')
-                ax1.set_ylabel("Normalized Flux + offset",fontsize=fs)
-                ax1.set_xticklabels(())
-                ax1.set_xlim(-6,6)
-                ax1.set_ylim(0.95,1+((neclipse)*offset))
-                ax1.axvline(x=0.0,linestyle='--',color='blue')
+                    ax1.plot(mfold2[minds]*24.0,sm[minds],'r-')
+                    ax1.set_ylabel("Normalized Flux",fontsize=fs)
+                    ax1.set_xticklabels(())
+                    ax1.set_xlim(-6,6)
+                    ax1.set_ylim(0.97,1.02)
+                    ax1.axvline(x=0.0,linestyle='--',color='blue')
             
-                ax2 = plt.subplot(gs[div-1,0])
-                ax2.plot(tfold2[secinds]*24.0,(flux-sme)[secinds]*1e3,'ko')
-                ax2.set_xlim(-6,6)
-                ax2.set_xlabel('Time from Mid-Eclipse (h)',fontsize=fs)
-                ax2.set_ylabel('Residuals (x 1000)',fontsize=fs)
-                ax1.set_title('Secondary Eclipses: '+band+' Band',fontsize=fs+2)
-                plt.subplots_adjust(hspace=0.1,left=0.18,right=0.98,top=0.95)
-                if write:
-                    plt.savefig(outpath+'Secondary_Eclipses_'+band+'.png',dpi=300)
-                else:
-                    plt.show()
-                    pdb.set_trace()
+                    ax2 = plt.subplot(gs[1,0])
+                    ax2.plot(tfold2[secinds[ends[n]+1]:secinds[ends[n+1]]]*24.0,
+                             (flux-sme)[secinds[ends[n]+1]:secinds[ends[n+1]]]*1e3,'ko')
+                    ax2.set_xlim(-6,6)
+                    ax2.axhline(y=0.0,ls='-',color='red',lw=1.5)
+                    ax2.set_xlabel('Time from Mid-Eclipse (h)',fontsize=fs)
+                    ax2.set_ylabel('Residuals (x 1000)',fontsize=fs)
+                    ax1.set_title('Secondary Eclipses: '+band+' Band',fontsize=fs+2)
+                    plt.subplots_adjust(hspace=0.1,left=0.18,right=0.98,top=0.95)
+                    if write:
+                        plt.savefig(outpath+'Secondary_Eclipse_'+str(n)+'_'+band+'.png',dpi=300)
+                    else:
+                        plt.show()
+                        pdb.set_trace()
     
             elif neclipse <= 1 :
                 plt.figure(102,figsize=(10,8))
