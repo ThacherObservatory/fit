@@ -1206,6 +1206,7 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
                     ax2 = plt.subplot(gs[1,0])
                     ax2.plot(tfold[priminds[ends[n]+1]:priminds[ends[n+1]]]*24.0,
                              (flux-sme)[priminds[ends[n]+1]:priminds[ends[n+1]]]*1e3,'ko')
+                    ax2.axvline(x=0.0,linestyle='--',color='blue')
                     ax2.set_xlim(-6,6)
                     ax2.set_xlabel('Time from Mid-Eclipse (h)',fontsize=fs)
                     ax2.set_ylabel('Residuals (x 1000)',fontsize=fs)
@@ -1236,7 +1237,7 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
                 gs = gridspec.GridSpec(div, 1,wspace=0)
                 for n in range(neclipse):
                     # plot data
-                    plt.figure(101,figsize=(5,10))
+                    plt.figure(101,figsize=(8.5,11))
                     plt.clf()
                     ax1 = plt.subplot(gs[0, 0])    
                     ax1.plot(tfold2[secinds[ends[n]+1]:secinds[ends[n+1]]]*24.0,
@@ -1256,6 +1257,7 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
                              (flux-sme)[secinds[ends[n]+1]:secinds[ends[n+1]]]*1e3,'ko')
                     ax2.set_xlim(-6,6)
                     ax2.axhline(y=0.0,ls='-',color='red',lw=1.5)
+                    ax2.axvline(x=0.0,linestyle='--',color='blue')
                     ax2.set_xlabel('Time from Mid-Eclipse (h)',fontsize=fs)
                     ax2.set_ylabel('Residuals (x 1000)',fontsize=fs)
                     ax1.set_title('Secondary Eclipses: '+band+' Band',fontsize=fs+2)
