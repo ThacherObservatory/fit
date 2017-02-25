@@ -232,7 +232,10 @@ plt.title('Final OOE Prediction')
 ooedata = np.append([ooetimes],[ooefluxes],axis=0)
 ooedata = np.append(ooedata,[ooeerrs],axis=0)
 
-GP_dict = {'ooe':ooedata,'ooe_predict':(tdarr,ooe1_model)}
+data = np.append([times],[fluxes],axis=0)
+data = np.append(data,[errs],axis=0)
 
-pickle.dump( GP_dict, open( "9821078_GP.p", mode="wb" ) )
+phot_dict = {'light':data, 'ooe':ooedata, 'ooe_predict':(tdarr,ooe1_model)}
+
+pickle.dump( phot_dict, open("9821078_GP.p", mode="wb") )
 
