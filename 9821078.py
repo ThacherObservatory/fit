@@ -10,10 +10,10 @@ import collections as col
 from astropy.io.fits import getdata
 from plot_params import *
 
-plot = True
-bellerophon = False
-debug = True
-threads = 1
+plot = False
+bellerophon = True
+debug = False
+threads = 31
 do_ooe = True
 over_disperse = False
 nw = 500
@@ -141,7 +141,7 @@ datadict = col.OrderedDict(sorted(datadict.items()))
 ubands = ebs.uniquebands(datadict,quiet=True)
 
 fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
-                         data_dict=datadict,do_ooe=[2],
+                         data_dict=datadict,do_ooe=[1],
                          clobber=True,fit_ooe1=[False],fit_L3=[True],
                          network=network,outpath=outpath,modelfac=modelfac)
 
