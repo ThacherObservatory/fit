@@ -135,6 +135,9 @@ print 'Median of reported errors = %.2f ppm' % (np.median(allerrs)/med*1e6)
 # Now select out data within 2.5 durations of each eclipse.
 
 finaltimes = alltimes[inds] ; finalfluxes = allfluxes[inds]/med ; finalerrs = allerrs[inds]/med
+sinds = np.argsort(finaltimes)
+finaltimes = finaltimes[sinds] ; finalfluxes = finalfluxes[sinds] ; finalerrs = finalerrs[sinds]
+
 plt.figure(7)
 plt.clf()
 plt.plot(finaltimes,finalfluxes,'ko',label='Selected Data')

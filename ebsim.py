@@ -1894,7 +1894,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             if debug:
                 (ps,pe,ss,se) = eb.phicont(parm)
                 period = parm[eb.PAR_P]
-                durfac = 10
+                keepfac = 5
             
                 tdur1 = (pe+1 - ps)*period*24.0
                 tdur2 = (se - ss)*period*24.0
@@ -1904,24 +1904,25 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                 tfold = foldtime(time,period=period,t0=t01)
                 phase1 = tfold/period
             
-                priminds, = np.where((tfold >= -tdur1*durfac/24.) & (tfold <= tdur1*durfac/24.))
+                priminds, = np.where((tfold >= -tdur1*keepfac/24./2.) & (tfold <= tdur1*keepfac/24./2.))
                 
                 ends, = np.where(np.diff(tfold[priminds]) < 0)
-                neclipse = length(ends)
+                neclipse = length(ends)+1
                 ends = np.append(-1,ends)
-                ends = np.append(ends,len(priminds))
-
+                ends = np.append(ends,len(priminds)-1)
+                print "start debugging"
+                
                 #########################
                 # Plot primary eclipses #
                 #########################
                 if neclipse > 1:
-                    plt.figure(103,figsize=(5,10))
+                    plt.figure(103,figsize=(5,8))
                     plt.clf()
                     div = 8
                     fs = 18
                     gs = gridspec.GridSpec(div, 1,wspace=0)
                     ax1 = plt.subplot(gs[0:div-1, 0])    
-                    offset = 0.05
+                    offset = 0.1
                     for n in range(neclipse):
                         # plot data
                         ax1.plot(tfold[priminds[ends[n]+1]:priminds[ends[n+1]]]*24.0,
@@ -1942,27 +1943,27 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     ax1.set_title('Primary Eclipses: '+band+' Band',fontsize=fs+2)
                     plt.subplots_adjust(hspace=0.1,left=0.18,right=0.98,top=0.95)
                     plt.show()
+                    print "Primary Eclipse"
                     pdb.set_trace()
-
 
                     ###########################
                     # Plot secondary eclipses #
                     ###########################
                     tfold2 = foldtime(time,period=period,t0=t02)
-                    secinds, = np.where((tfold2 >= -tdur2*durfac/24.) & (tfold2 <= tdur2*durfac/24.))
+                    secinds, = np.where((tfold2 >= -tdur2*keepfac/24./2.0) & (tfold2 <= tdur2*keepfac/24./2.0))
 
                     ends, = np.where(np.diff(tfold2[secinds]) < 0)
-                    neclipse = length(ends)
+                    neclipse = length(ends)+1
                     ends = np.append(-1,ends)
-                    ends = np.append(ends,len(secinds))
+                    ends = np.append(ends,len(secinds)-1)
                     
-                    plt.figure(104,figsize=(5,10))
+                    plt.figure(104,figsize=(5,8))
                     plt.clf()
                     div = 8
                     fs = 18
                     gs = gridspec.GridSpec(div, 1,wspace=0)
                     ax1 = plt.subplot(gs[0:div-1, 0])    
-                    offset = 0.01
+                    offset = 0.1
                     for n in range(neclipse):
                         # plot data
                         ax1.plot(tfold2[secinds[ends[n]+1]:secinds[ends[n+1]]]*24.0,
@@ -1974,7 +1975,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     ax1.set_ylabel("Normalized Flux + offset",fontsize=fs)
                     ax1.set_xticklabels(())
                     #ax1.set_xlim(-6,6)
-                    ax1.set_ylim(0.99,1+((neclipse)*offset))
+                    #ax1.set_ylim(0.5,1+((neclipse)*offset))
                     ax1.axvline(x=0.0,linestyle='--',color='blue')
                     
                     ax2 = plt.subplot(gs[div-1,0])
@@ -1984,6 +1985,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     ax2.set_ylabel('Residuals (x 1000)',fontsize=fs)
                     ax1.set_title('Secondary Eclipses: '+band+' Band',fontsize=fs+2)
                     plt.subplots_adjust(hspace=0.1,left=0.18,right=0.98,top=0.95)
+                    print "Secondary Eclipse"
                     pdb.set_trace()
 
                 elif neclipse <= 1 :
@@ -2009,8 +2011,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     ax2.set_ylabel('Residuals (x 1000)',fontsize=fs)
                     ax1.set_title('Primary Eclipse: '+band+' Band',fontsize=fs+2)
                     plt.subplots_adjust(hspace=0.1,left=0.12,right=0.95,top=0.92,bottom=0.12)
-                    pdb.set_trace()
-                elif neclipse <= 1 :
+                
                     plt.figure(102,figsize=(10,8))
                     plt.clf()
                     div = 4
@@ -2094,7 +2095,8 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
                     rvcomp2 = -1.0*rvmodel2*k2 + vsys
                     plt.plot(np.linspace(-0.5,0.5,10000),rvcomp2,'r--')
                     plt.xlim(-0.5,0.5)
-
+                    print "RV plot"
+                    pdb.set_trace()
     if debug:
         print 'lnProb = %.f2' % lf
         

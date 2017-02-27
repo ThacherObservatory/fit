@@ -13,7 +13,7 @@ from plot_params import *
 plot = False
 bellerophon = True
 debug = False
-threads = 31
+threads = 32
 do_ooe = True
 over_disperse = False
 nw = 500
@@ -88,6 +88,13 @@ file2 = '9821078_comp2.dat'
 
 rv1 = np.loadtxt(dpath+file1,usecols=[0,1,2]).T
 rv2 = np.loadtxt(dpath+file2,usecols=[0,1,2]).T
+
+# If errors are nan, replace with largest error.
+if np.sum(np.isnan(rv2[2,:])) >= 1:
+    rv2[2,np.isnan(rv2[2,:])] =  np.nanmax(rv2[2,:])
+
+if np.sum(np.isnan(rv1[2,:])) >= 1:
+    rv1[2,np.isnan(rv1[2,:])] =  np.nanmax(rv1[2,:])
 
 phrv1 = (rv1[0,:]-t1)%period
 phrv2 = (rv2[0,:]-t1)%period
