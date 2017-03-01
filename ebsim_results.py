@@ -258,7 +258,7 @@ def best_vals(path='./',chains=False,lp=False,bindiv=20.0,
             plt.hist(dist,bins=nb,normed=True,edgecolor='none')
             
         #    plt.xlim([minval,maxval])
-        plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
+        plt.axvline(x=bestvals[i],color='b',linestyle='--',linewidth=2)
         plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
 #        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
         plt.xlabel(varnames[i])
@@ -313,7 +313,7 @@ def best_vals(path='./',chains=False,lp=False,bindiv=20.0,
                 plt.hist(dist,bins=nb,normed=True,edgecolor='none')
             
             #    plt.xlim([minval,maxval])
-            plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
+            plt.axvline(x=bestvals[i],color='b',linestyle='--',linewidth=2)
             plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
             #        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
             plt.xlabel(varnames[i])
@@ -388,7 +388,7 @@ def best_vals(path='./',chains=False,lp=False,bindiv=20.0,
         except:
             plt.hist(dist,bins=nb,normed=True,edgecolor='none')
         plt.xlim([minval,maxval])
-        plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
+        plt.axvline(x=bestvals[i],color='b',linestyle='--',linewidth=2)
         plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
 #        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
         plt.xlabel(varnames[i])
@@ -452,7 +452,7 @@ def best_vals(path='./',chains=False,lp=False,bindiv=20.0,
                 plt.hist(dist,bins=nb,normed=True,edgecolor='none')
             
             #    plt.xlim([minval,maxval])
-            plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
+            plt.axvline(x=bestvals[i],color='b',linestyle='--',linewidth=2)
             plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
             #        plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
             plt.xlabel(varnames[i])
@@ -506,7 +506,7 @@ def best_vals(path='./',chains=False,lp=False,bindiv=20.0,
             except:
                 plt.hist(dist,bins=nb,normed=True,edgecolor='none')
             plt.xlim([minval,maxval])
-            plt.axvline(x=bestvals[i],color='g',linestyle='--',linewidth=2)
+            plt.axvline(x=bestvals[i],color='b',linestyle='--',linewidth=2)
             plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
 #            plt.axvline(x=val,color='r',linestyle='--',linewidth=2)
             plt.xlabel(varnames[i])
@@ -597,7 +597,8 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             time   = data['light'][0,:]-ebpar['t01']
             flux   = data['light'][1,:]
             err    = data['light'][2,:]
-
+            k = data['kernel']
+            
             ############################################################
             # Mass ratio should be zero unless ellipsoidal or grav dark
             ############################################################
@@ -663,7 +664,6 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 ooe1_rawe = ooe1_modele-1.0 # convert absolute to delta
                 ooe1e = ebs.ooe_to_flux(ooe1_rawe,parm,primary=True)
 
-                k =  100**2 * ExpSquaredKernel(1) * ExpSine2Kernel(4,4)
                 gp = george.GP(k,mean=np.mean(flux))
                 gp.compute(time_ooe,yerr=err_ooe,sort=True)
 
@@ -685,7 +685,6 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 ooe2_rawe = ooe2_modele-1.0 # convert absolute to delta
                 ooe2e = ebs.ooe_to_flux(ooe2_rawe,parm,primary=False)
 
-                k =  100**2 * ExpSquaredKernel(1) * ExpSine2Kernel(4,4)
                 gp = george.GP(k,mean=np.mean(flux))
                 gp.compute(time_ooe,yerr=err_ooe,sort=True)
 
@@ -699,7 +698,6 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 ooe2 = ebs.ooe_to_flux(ooe2_raw,parm,primary=False)
                 print 'Assigning OOE variations to the secondary star'
             else:
-                print 'Whoops'
                 ooe2 = None
                 ooe2e = None
                 
@@ -754,9 +752,9 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             priminds, = np.where((tfold >= -tdur1*durfac/24.) & (tfold <= tdur1*durfac/24.))
 
             ends, = np.where(np.diff(tfold[priminds]) < 0)
-            neclipse = length(ends)
+            neclipse = length(ends)+1
             ends = np.append(-1,ends)
-            ends = np.append(ends,len(priminds))
+            ends = np.append(ends,len(priminds)-1)
 
             #########################
             # Plot primary eclipses #
@@ -784,7 +782,8 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 ax1.set_ylabel("Normalized Flux + offset",fontsize=fs)
                 ax1.set_xticklabels(())
                 ax1.set_xlim(-6,6)
-                ax1.set_ylim(0.78,1+((neclipse+1)*offset))
+                yminval = np.nanmin(sm[minds])-offset*0.25
+                ax1.set_ylim(yminval,1+(neclipse*offset*1.25))
                 ax1.axvline(x=0.0,linestyle='--',color='blue')
             
                 ax2 = plt.subplot(gs[div-1,0])
@@ -794,7 +793,6 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 ax2.set_ylabel('Residuals (x 1000)',fontsize=fs)
                 ax1.set_title('Primary Eclipses: '+band+' Band',fontsize=fs+2)
                 plt.subplots_adjust(hspace=0.1,left=0.18,right=0.98,top=0.95)
-                
                 if write:
                     plt.savefig(outpath+'Primary_Eclipses_'+band+'.png',dpi=300)
                 else:
@@ -811,9 +809,9 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 secinds, = np.where((tfold2 >= -tdur2*durfac/24.) & (tfold2 <= tdur2*durfac/24.))
 
                 ends, = np.where(np.diff(tfold2[secinds]) < 0)
-                neclipse = length(ends)
+                neclipse = length(ends)+1
                 ends = np.append(-1,ends)
-                ends = np.append(ends,len(secinds))
+                ends = np.append(ends,len(secinds)-1)
 
                 plt.figure(101,figsize=(5,10))
                 plt.clf()
@@ -836,7 +834,9 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 ax1.set_ylabel("Normalized Flux + offset",fontsize=fs)
                 ax1.set_xticklabels(())
                 ax1.set_xlim(-6,6)
-                ax1.set_ylim(0.95,1+((neclipse)*offset))
+                yminval = np.nanmin(sm[minds])-offset*0.25
+                ax1.set_ylim(yminval,1+(neclipse*offset*1.25))
+                ax1.set_ylim(0.8,1+(neclipse*offset*1.5))
                 ax1.axvline(x=0.0,linestyle='--',color='blue')
             
                 ax2 = plt.subplot(gs[div-1,0])
@@ -851,8 +851,9 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 else:
                     plt.show()
                     pdb.set_trace()
-    
+
             elif neclipse <= 1 :
+                pdb.set_trace()
                 plt.figure(102,figsize=(10,8))
                 plt.clf()
                 div = 4
@@ -877,7 +878,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 plt.subplots_adjust(hspace=0.1,left=0.12,right=0.95,top=0.92,bottom=0.12)
                 
                 if write:
-                    plt.savefig(outpath+'Primary_Eclipse_'+band+'.png',dpi=300)
+                    plt.savefig(outpath+'Primary_Eclipses_'+band+'.png',dpi=300)
                 else:
                     plt.show()
                     pdb.set_trace()
@@ -912,9 +913,9 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             lf  += lfrv
 
             # Plot RVs
-            ms = 10
+            ms = 8
             fs = 16
-            plt.figure(104)
+            plt.figure(104,figsize=(10,7))
             plt.clf()
             gs = gridspec.GridSpec(3, 1,wspace=0)
             ax1 = plt.subplot(gs[0:2, 0])    
@@ -1174,9 +1175,9 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
             priminds, = np.where((tfold >= -tdur1*durfac/24.) & (tfold <= tdur1*durfac/24.))
 
             ends, = np.where(np.diff(tfold[priminds]) < 0)
-            neclipse = length(ends)
+            neclipse = length(ends)+1
             ends = np.append(-1,ends)
-            ends = np.append(ends,len(priminds))
+            ends = np.append(ends,len(priminds)-1)
 
             #########################
             # Plot primary eclipses #
@@ -1228,9 +1229,9 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
                 secinds, = np.where((tfold2 >= -tdur2*durfac/24.) & (tfold2 <= tdur2*durfac/24.))
 
                 ends, = np.where(np.diff(tfold2[secinds]) < 0)
-                neclipse = length(ends)
+                neclipse = length(ends)+1
                 ends = np.append(-1,ends)
-                ends = np.append(ends,len(secinds))
+                ends = np.append(ends,len(secinds)-1)
 
                 div = 2
                 fs = 18
@@ -1328,9 +1329,9 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
             lf  += lfrv
 
             # Plot RVs
-            ms = 10
-            fs = 16
-            plt.figure(104)
+            ms = 8
+            fs = 14
+            plt.figure(204)
             plt.clf()
             gs = gridspec.GridSpec(3, 1,wspace=0)
             ax1 = plt.subplot(gs[0:2, 0])    
@@ -1377,7 +1378,7 @@ def plot_model_compare(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False
 
 
 def params_of_interest(chains=False,lp=False,sigrange=5,
-                       bindiv=10,network=None,write=False,outpath='./'):
+                       bindiv=20.0,network=None,write=False,outpath='./'):
 
     data,fitinfo,ebpar = get_pickles(path=outpath)
         
@@ -1504,7 +1505,7 @@ def params_of_interest(chains=False,lp=False,sigrange=5,
     except:
         plt.hist(m1dist,bins=nb,normed=True,edgecolor='none')
 
-    plt.axvline(x=m1val,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=m1val,color='b',linestyle='--',linewidth=2)
     plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
     plt.xlabel(r'$M_1$')
     plt.ylabel(r'$dP$')
@@ -1533,7 +1534,7 @@ def params_of_interest(chains=False,lp=False,sigrange=5,
     except:
         plt.hist(m2dist,bins=nb,normed=True,edgecolor='none')
 
-    plt.axvline(x=m2val,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=m2val,color='b',linestyle='--',linewidth=2)
     plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
     plt.xlabel(r'$M_2$')
     plt.ylabel(r'$dP$')
@@ -1561,7 +1562,7 @@ def params_of_interest(chains=False,lp=False,sigrange=5,
     except:
         plt.hist(r1dist,bins=nb,normed=True,edgecolor='none')
 
-    plt.axvline(x=r1val,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=r1val,color='b',linestyle='--',linewidth=2)
     plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
     plt.xlabel(r'$R_1$')
     plt.ylabel(r'$dP$')
@@ -1589,7 +1590,7 @@ def params_of_interest(chains=False,lp=False,sigrange=5,
     except:
         plt.hist(r2dist,bins=nb,normed=True,edgecolor='none')
 
-    plt.axvline(x=r2val,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=r2val,color='b',linestyle='--',linewidth=2)
     plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
     plt.xlabel(r'$R_2$')
     plt.ylabel(r'$dP$')
@@ -1627,7 +1628,7 @@ def params_of_interest(chains=False,lp=False,sigrange=5,
     except:
         plt.hist(edist,bins=nb,normed=True,edgecolor='none')
 
-    plt.axvline(x=eval,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=eval,color='b',linestyle='--',linewidth=2)
     plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
     plt.xlabel(r'$e$')
     plt.ylabel(r'$dP$')
@@ -1656,7 +1657,7 @@ def params_of_interest(chains=False,lp=False,sigrange=5,
     except:
         plt.hist(wdist,bins=nb,normed=True,edgecolor='none')
 
-    plt.axvline(x=wval,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=wval,color='b',linestyle='--',linewidth=2)
     plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
     plt.xlabel(r'$\omega$')
     plt.ylabel(r'$dP$')    
@@ -1683,7 +1684,7 @@ def params_of_interest(chains=False,lp=False,sigrange=5,
     except:
         plt.hist(idist,bins=nb,normed=True,edgecolor='none')
 
-    plt.axvline(x=ival,color='g',linestyle='--',linewidth=2)
+    plt.axvline(x=ival,color='b',linestyle='--',linewidth=2)
     plt.axvline(x=med,color='c',linestyle='--',linewidth=2)
     plt.xlabel(r'$i$')
     plt.ylabel(r'$dP$')

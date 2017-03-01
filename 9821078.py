@@ -16,6 +16,7 @@ debug = False
 threads = 32
 do_ooe = True
 over_disperse = False
+clobber = False
 nw = 500
 bs = 5000
 mcs = 5000
@@ -31,10 +32,14 @@ keepfac = 5.0
 durfac = 1.3
 
 # From: /Users/jonswift/Astronomy/EBs/outdata/9821078/Refine/9821078_short.out
-period = 8.429434002
-t1 = 2454838.85109817
+# Refined from 2017Feb26 run
+#period = 8.429434002
+period = 8.428971039
+#t1 = 2454838.85109817
+t1 = 2454838.89275878
 dur1 = 3.46998 / 24.0
-t2 = 2454843.06965465
+#t2 = 2454843.06965465
+t2 = 2454843.084555870
 dur2 = 3.41664 / 24.0
 
 # Rotation period from 9821078_rot.png
@@ -58,7 +63,7 @@ if bellerophon:
     outpath = '/home/administrator/Astronomy/EBs/KIC9821078/'
 else:
     dpath = '/Users/jonswift/Astronomy/EBs/outdata/9821078/Refine/'
-    outpath = '/Users/jonswift/Astronomy/EBs/outdata/9821078/MCMC/new/'
+    outpath = '/Users/jonswift/Astronomy/EBs/outdata/9821078/MCMC/2017Mar01_short/'
 
 phot0 = pickle.load( open( "9821078_GP.p", "rb" ) )
 
@@ -149,16 +154,15 @@ ubands = ebs.uniquebands(datadict,quiet=True)
 
 fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
                          data_dict=datadict,do_ooe=[1],
-                         clobber=True,fit_ooe1=[False],fit_L3=[True],
+                         clobber=clobber,fit_ooe1=[False],fit_L3=[True],
                          network=network,outpath=outpath,modelfac=modelfac)
-
 
 ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads,over_disperse=over_disperse)
 
 chains,lp = ebr.get_chains(path=outpath)
 bestvals = ebr.best_vals(path=outpath,chains=chains,lp=lp)
 datadict,fitinfo,ebin = ebr.get_pickles(path=outpath)
-ebr.plot_model_compare(bestvals,datadict,fitinfo,ebin,write=True,outpath=outpath)
+#ebr.plot_model_compare(bestvals,datadict,fitinfo,ebin,write=True,outpath=outpath)
 ebr.plot_model(bestvals,datadict,fitinfo,ebin,write=True,outpath=outpath)
 ebr.params_of_interest(chains=chains,lp=lp,outpath=outpath)
 sys.exit()

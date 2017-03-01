@@ -238,7 +238,7 @@ ooedata = np.append(ooedata,[ooeerrs],axis=0)
 data = np.append([times],[fluxes],axis=0)
 data = np.append(data,[errs],axis=0)
 
-phot_dict = {'light':data, 'ooe':ooedata, 'ooe_predict':(tdarr,ooe1_model)}
+phot_dict = {'light':data, 'ooe':ooedata, 'ooe_predict':(tdarr,ooe1_model), 'kernel':k}
 
 pickle.dump( phot_dict, open("9821078_GP.p", mode="wb") )
 

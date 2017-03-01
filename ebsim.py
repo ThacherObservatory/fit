@@ -1748,8 +1748,17 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             # t0 is stepped in days
             ########################################
             t0 = parm[eb.PAR_T0]
-            if np.abs(t0) > (3600.0/(24.*3600.)):
+            if np.abs(t0) > (300.0/(24.*3600.)):
                 print 'T0 out of range!!'
+                return -np.inf
+ 
+            ########################################
+            # Eclipse period can't be that far off
+            # P is stepped in days
+            ########################################
+            P = parm[eb.PAR_P] - ebin['Period']
+            if np.abs(P) > (120.0/(24.*3600.)):
+                print 'Period out of range!!'
                 return -np.inf
  
             ###################################################################
