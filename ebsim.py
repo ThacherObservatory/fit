@@ -1748,7 +1748,7 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             # t0 is stepped in days
             ########################################
             t0 = parm[eb.PAR_T0]
-            if np.abs(t0) > (300.0/(24.*3600.)):
+            if np.abs(t0) > (1800.0/(24.*3600.)):
                 print 'T0 out of range!!'
                 return -np.inf
  
