@@ -33,8 +33,7 @@ durfac = 1.3
 
 # From: /Users/jonswift/Astronomy/EBs/outdata/9821078/Refine/9821078_short.out
 # Refined from 2017Feb26 run
-#period = 8.429434002
-period = 8.428971039
+period = 8.4294380
 #t1 = 2454838.85109817
 t1 = 2454838.89275878
 dur1 = 3.46998 / 24.0
@@ -152,7 +151,7 @@ datadict = col.OrderedDict(sorted(datadict.items()))
 
 ubands = ebs.uniquebands(datadict,quiet=True)
 
-fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,
+fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,fit_period=False
                          data_dict=datadict,do_ooe=[1],
                          clobber=clobber,fit_ooe1=[False],fit_L3=[True],
                          network=network,outpath=outpath,modelfac=modelfac)
