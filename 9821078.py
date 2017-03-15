@@ -17,7 +17,7 @@ threads = 32
 do_ooe = True
 over_disperse = False
 clobber = False
-nw = 500
+nw = 200
 bs = 10000
 mcs = 10000
 
