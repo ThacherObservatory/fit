@@ -10,7 +10,7 @@ import collections as col
 from astropy.io.fits import getdata
 from plot_params import *
 import sys
-import sigmaRejection as sr
+#import sigmaRejection as sr
 
 # From: /Users/jonswift/Astronomy/EBs/outdata/9821078/Refine/9821078_short.out
 period = 8.429434002
@@ -57,7 +57,8 @@ alltimes = alltimes[real] ; allfluxes = allfluxes[real] ; allerrs = allerrs[real
 # Some SC data have long term trends likely due to the target moving across the CCD,
 # There are otherwise some gaps and jumps sprinkled throughout the SC dataset.
 # For now, choose relatively clean region of 2 eclipse pairs and work from there. 
-inds, = np.where((alltimes >  2455570.0) & (alltimes < 2455586.0))
+#inds, = np.where((alltimes >  2455570.0) & (alltimes < 2455586.0))
+inds, = np.where((alltimes >  2455463.0) & (alltimes < 2455560.0))
 
 times = alltimes[inds][::30] ; fluxes = allfluxes[inds][::30] ; errs = allerrs[inds][::30]
 
@@ -89,8 +90,6 @@ allooei = np.append(allooei1,allooei2)
 
 plt.plot(ph1[allooei],fluxes[allooei],'bo',alpha=0.05,label='OOE')
 plt.legend(loc='best',numpoints=1)
-
-
 
 med = np.median(fluxes[allooei])
 plt.figure(3)
@@ -240,5 +239,6 @@ data = np.append(data,[errs],axis=0)
 
 phot_dict = {'light':data, 'ooe':ooedata, 'ooe_predict':(tdarr,ooe1_model), 'kernel':k}
 
+sys.exit()
 pickle.dump( phot_dict, open("9821078_GP.p", mode="wb") )
 
