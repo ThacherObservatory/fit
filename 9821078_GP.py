@@ -58,7 +58,7 @@ alltimes = alltimes[real] ; allfluxes = allfluxes[real] ; allerrs = allerrs[real
 # There are otherwise some gaps and jumps sprinkled throughout the SC dataset.
 # For now, choose relatively clean region of 2 eclipse pairs and work from there. 
 #inds, = np.where((alltimes >  2455570.0) & (alltimes < 2455586.0))
-inds, = np.where((alltimes >  2455463.0) & (alltimes < 2455560.0))
+inds, = np.where((alltimes >  2455466.6) & (alltimes < 2455560.0))
 
 times = alltimes[inds][::30] ; fluxes = allfluxes[inds][::30] ; errs = allerrs[inds][::30]
 
@@ -239,6 +239,5 @@ data = np.append(data,[errs],axis=0)
 
 phot_dict = {'light':data, 'ooe':ooedata, 'ooe_predict':(tdarr,ooe1_model), 'kernel':k}
 
-sys.exit()
 pickle.dump( phot_dict, open("9821078_GP.p", mode="wb") )
 
