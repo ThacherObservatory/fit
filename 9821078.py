@@ -17,9 +17,9 @@ threads = 32
 do_ooe = True
 over_disperse = False
 clobber = False
-nw = 200
-bs = 10000
-mcs = 10000
+nw = 1000
+bs = 5000
+mcs = 5000
 
 # Create vector of times that correspond to the proper time sampling
 # used by compute_eclipse
