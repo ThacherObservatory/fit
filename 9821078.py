@@ -11,15 +11,16 @@ from astropy.io.fits import getdata
 from plot_params import *
 
 plot = False
-bellerophon = True
+bellerophon = False
 debug = False
-threads = 32
+threads = 1
 do_ooe = True
 over_disperse = False
 clobber = False
 nw = 1000
 bs = 5000
 mcs = 5000
+thin = 100
 
 # Create vector of times that correspond to the proper time sampling
 # used by compute_eclipse
@@ -62,7 +63,7 @@ if bellerophon:
     outpath = '/home/administrator/Astronomy/EBs/KIC9821078/'
 else:
     dpath = '/Users/jonswift/Astronomy/EBs/outdata/9821078/Refine/'
-    outpath = '/Users/jonswift/Astronomy/EBs/outdata/9821078/MCMC/2017Mar01_short/'
+    outpath = '/Users/jonswift/Astronomy/EBs/outdata/9821078/MCMC/2017Mar16_2_short/'
 
 phot0 = pickle.load( open( "9821078_GP.p", "rb" ) )
 
@@ -159,8 +160,39 @@ fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,fit_period=True,
 ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads,over_disperse=over_disperse)
 
 chains,lp = ebr.get_chains(path=outpath)
+chains = chains[0::thin,:]
+newchains = np.reshape(chains,(nw,mcs/thin,16))
+lp = lp[0::thin]
+newlp = np.reshape(lp,(nw,mcs/thin))
 bestvals = ebr.best_vals(path=outpath,chains=chains,lp=lp)
 datadict,fitinfo,ebin = ebr.get_pickles(path=outpath)
+sys.exit()
+
+plt.ion()
+flag = np.ones(nw)
+for j in range(16):
+    plt.figure(j)
+    for i in range(nw):
+        variable = fitinfo['variables'][j]
+#        if variable == 'Vsys' and np.median(newchains[i,:,j]) < -60:
+#            flag[i] = 0
+#        elif variable == 'L3_Kp' and np.median(newchains[i,:,j]) > 0.2:
+#            flag[i] = 0
+#        elif variable == 'Mratio' and np.median(newchains[i,:,j]) > 0.82:
+#            flag[i] = 0
+#        elif variable == 'Rsum' and np.median(newchains[i,:,j]) < 0.6225:
+#            flag[i] = 0
+#        else:
+        plt.plot(newchains[i,:,j])          
+        plt.title(fitinfo['variables'][j])
+
+
+        
+plt.figure(99)
+plt.clf()
+for i in range(nw):
+    plt.plot(newlp[i,:])
+
 #ebr.plot_model_compare(bestvals,datadict,fitinfo,ebin,write=True,outpath=outpath)
 ebr.plot_model(bestvals,datadict,fitinfo,ebin,write=True,outpath=outpath)
 ebr.params_of_interest(chains=chains,lp=lp,outpath=outpath)
