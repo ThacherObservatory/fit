@@ -1760,7 +1760,14 @@ def lnprob(x,datadict,fitinfo,ebin=None,debug=False):
             if np.abs(P) > (120.0/(24.*3600.)):
                 print 'Period out of range!!'
                 return -np.inf
- 
+
+            ########################
+            # Keep cos(i) positive #
+            ########################
+            cosi = parm[eb.PAR_COSI]
+            if cosi < 0:
+                return -np.inf
+
             ###################################################################
             # Fraction of Spots Covered cannot be more that 1 and less than 0 
             ###################################################################

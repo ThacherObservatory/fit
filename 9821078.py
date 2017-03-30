@@ -160,13 +160,13 @@ fitinfo = ebs.fit_params(nwalkers=nw,burnsteps=bs,mcmcsteps=mcs,fit_period=True,
 ebs.ebsim_fit(datadict,fitinfo,ebin,debug=debug,threads=threads,over_disperse=over_disperse)
 
 chains,lp = ebr.get_chains(path=outpath)
+ebr.params_of_interest(chains=chains,lp=lp,outpath=outpath)
 chains = chains[0::thin,:]
 newchains = np.reshape(chains,(nw,mcs/thin,16))
 lp = lp[0::thin]
 newlp = np.reshape(lp,(nw,mcs/thin))
 bestvals = ebr.best_vals(path=outpath,chains=chains,lp=lp)
 datadict,fitinfo,ebin = ebr.get_pickles(path=outpath)
-sys.exit()
 
 plt.ion()
 flag = np.ones(nw)
@@ -193,6 +193,6 @@ plt.clf()
 for i in range(nw):
     plt.plot(newlp[i,:])
 
+
 #ebr.plot_model_compare(bestvals,datadict,fitinfo,ebin,write=True,outpath=outpath)
-ebr.plot_model(bestvals,datadict,fitinfo,ebin,write=True,outpath=outpath)
-ebr.params_of_interest(chains=chains,lp=lp,outpath=outpath)
+ebr.plot_model(bestvals,datadict,fitinfo,ebin,write=True,outpath=outpath,samp=1)

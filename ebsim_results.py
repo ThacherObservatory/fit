@@ -540,7 +540,8 @@ def best_vals(path='./',chains=False,lp=False,bindiv=20.0,
 
 
 def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
-               durfac=5,tag='',samp=5.0,network=None,write=False,outpath='./'):
+               durfac=5,tag='',samp=5.0,network=None,write=False,outpath='./',
+               poff=0.1,soff=0.05):
 
     """
     ----------------------------------------------------------------------
@@ -563,6 +564,7 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
         # Initiate log probabilty variable
     lf = 0
 
+    
     ###################################################
     # Loop through each dataset in the data dictionary.
     for key in datadict.keys():
@@ -585,6 +587,16 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             for nm, vl, unt in zip(eb.dernames, vder, eb.derunits):
                 print "{0:<10} {1:14.6f} {2}".format(nm, vl, unt)
 
+            (ps,pe,ss,se) = eb.phicont(parm)
+            period = parm[eb.PAR_P]
+            #durfac = 10
+    
+            tdur1 = (pe+1 - ps)*period*24.0
+            tdur2 = (se - ss)*period*24.0
+            t01 =  parm[eb.PAR_T0]
+            t02   = t01 + (se+ss)/2*period 
+
+          
 
             ##############################
             # Extract data from dictionary
@@ -610,7 +622,15 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
             # GP spot modeling 
             ##############################
             # Modeling parameters
-            mtime = np.linspace(np.min(time),np.max(time),length(time)*5)
+            mtime = np.linspace(np.min(time),np.max(time),length(time)*samp)
+            # Can't do this for all times; need to keep only data of interest.
+            mfold = ebs.foldtime(mtime,period=period,t0=t01,phase=False)
+            priminds, = np.where((mfold >= -tdur1*durfac/24.) & (mfold <= tdur1*durfac/24.))
+            mfold2 = ebs.foldtime(mtime,period=period,t0=t02,phase=False)
+            secinds, = np.where((mfold2 >= -tdur2*durfac/24.) & (mfold2 <= tdur2*durfac/24.))
+            allinds = np.append(priminds,secinds)
+            mtime = mtime[allinds]
+            mtime = np.sort(mtime)
             
             print 'Starting spot sequence'
             # Spots on primary star
@@ -733,15 +753,15 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                                       ooe1=ooe1e,ooe2=ooe2e)
 
             
-            # Plot the eclipses and the fit
-            (ps,pe,ss,se) = eb.phicont(parm)
-            period = parm[eb.PAR_P]
-            durfac = 10
+#!            # Plot the eclipses and the fit
+#!            (ps,pe,ss,se) = eb.phicont(parm)
+#!            period = parm[eb.PAR_P]
+#!            durfac = 10
             
-            tdur1 = (pe+1 - ps)*period*24.0
-            tdur2 = (se - ss)*period*24.0
-            t01 =  parm[eb.PAR_T0]
-            t02   = t01 + (se+ss)/2*period 
+#!            tdur1 = (pe+1 - ps)*period*24.0
+#!            tdur2 = (se - ss)*period*24.0
+#!            t01 =  parm[eb.PAR_T0]
+#!            t02   = t01 + (se+ss)/2*period 
 
             tfold = ebs.foldtime(time,period=period,t0=t01)
             phase1 = tfold/period
@@ -766,10 +786,11 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 fs = 18
                 gs = gridspec.GridSpec(div, 1,wspace=0)
                 ax1 = plt.subplot(gs[0:div-1, 0])    
-                if fitinfo['do_ooe'][np.int(key[-1])]:
-                    offset = 0.1
-                else:
-                    offset = 0.05
+                #if fitinfo['do_ooe'][np.int(key[-1])]:
+                #    offset = 0.1
+                #else:
+                #    offset = 0.05
+                offset = poff
                 for n in range(neclipse):
                     # plot data
                     ax1.plot(tfold[priminds[ends[n]+1]:priminds[ends[n+1]]]*24.0,
@@ -819,10 +840,11 @@ def plot_model(x,datadict,fitinfo,ebpar,ms=5.0,nbins=100,errorbars=False,
                 fs = 18
                 gs = gridspec.GridSpec(div, 1,wspace=0)
                 ax1 = plt.subplot(gs[0:div-1, 0])    
-                if fitinfo['do_ooe'][np.int(key[-1])]:
-                    offset = 0.02
-                else:
-                    offset = 0.01
+                #if fitinfo['do_ooe'][np.int(key[-1])]:
+                #    offset = 0.02
+                #else:
+                #    offset = 0.01
+                offset = soff
                 for n in range(neclipse):
                     # plot data
                     ax1.plot(tfold2[secinds[ends[n]+1]:secinds[ends[n+1]]]*24.0,
